@@ -9,7 +9,7 @@ from cbj.level import ExitDirection as D
 from cbj.level import load_level, validate
 from cbj.solver import ReplayError, SolverLimitError, replay, solve
 
-from helpers import make_level
+from helpers import make_level, rich_random_level
 
 LEVELS = sorted(Path(__file__).parent.parent.joinpath("data/levels").glob("*.json"))
 
@@ -87,6 +87,48 @@ def test_exit_pruning_matches_full_search_on_random_small_levels():
     assert compared >= 150 and solvable >= 50
 
 
+def test_exit_pruning_matches_full_search_on_rich_random_levels():
+    # Holes, gates on hole rims, repeated colours, L/T/2x2 shapes, 1-3 cell gates.
+    rng = random.Random(7)
+    compared = solvable = 0
+    for _ in range(1500):
+        level = rich_random_level(rng)
+        if validate(level):
+            continue
+        try:
+            full = solve(level, max_states=100_000, prune_exits=False)
+        except SolverLimitError:
+            continue
+        pruned = solve(level)
+        compared += 1
+        assert (pruned is None) == (full is None)
+        if full is not None:
+            solvable += 1
+            assert pruned.min_drags == full.min_drags
+            replay(level, pruned.drags)
+    assert compared >= 250 and solvable >= 100
+
+
+def test_gate_order_in_the_file_changes_the_minimum():
+    # Green 3-bar in column 3 touches the green TOP gate and the green RIGHT gate.
+    # The game only tests the first matching gate in list order:
+    # TOP first  -> the bar exits upward (step down, step back up): 2 drags in total.
+    # RIGHT first -> the right lane check always fails for a 3-tall bar, so it must use
+    #               the bottom-left gate after blue moves out of column 1: 3 drags.
+    blocks = [(C.BLUE, (0, 2), []), (C.GREEN, (2, 1), [(0, 1), (0, 2)])]
+    green_top = (C.GREEN, D.TOP, (2, 3), [])
+    green_bottom = (C.GREEN, D.BOTTOM, (0, 0), [])
+    green_right = (C.GREEN, D.RIGHT, (2, 2), [])
+    blue_top = (C.BLUE, D.TOP, (2, 3), [])
+    top_first = make_level(3, 4, blocks, [green_top, green_bottom, green_right, blue_top])
+    right_first = make_level(3, 4, blocks, [blue_top, green_right, green_bottom, green_top])
+    for lvl, want in ((top_first, 2), (right_first, 3)):
+        sol = solve(lvl)
+        assert sol.min_drags == want
+        assert solve(lvl, prune_exits=False).min_drags == want
+        replay(lvl, sol.drags)
+
+
 def test_level_with_no_gate_for_a_colour_is_unsolvable():
     lvl = make_level(3, 3, [(C.RED, (0, 0), []), (C.BLUE, (2, 2), [])], [(C.RED, D.TOP, (0, 2), [])])
     assert solve(lvl) is None
@@ -108,3 +150,22 @@ def test_replay_rejects_broken_solutions():
     jumpy = replace(drags[1], path=(drags[1].path[0],) + drags[1].path[2:])
     with pytest.raises(ReplayError):
         replay(level, [drags[0], jumpy] + drags[2:])
+
+    # Naming a different gate than the one the game picks.
+    wrong_gate = replace(drags[1], exit_index=(drags[1].exit_index + 1) % len(level.exits))
+    with pytest.raises(ReplayError):
+        replay(level, [drags[0], wrong_gate] + drags[2:])
+
+    # A block that does not exist.
+    with pytest.raises(ReplayError):
+        replay(level, [replace(drags[0], block=99)])
+
+
+def test_replay_accepts_pick_up_and_put_back():
+    # Lifting a block and releasing it on the same cell is legal and changes nothing.
+    level = load_level(Path(__file__).parent.parent / "data/levels/Level_01.json")
+    drags = solve(level).drags
+    noop = replace(drags[0], path=(drags[0].path[0],), exits=False, exit_index=None)
+    assert all(p is None for p in replay(level, [noop] + drags))
+    with pytest.raises(ReplayError):
+        replay(level, [replace(noop, exits=True)] + drags)

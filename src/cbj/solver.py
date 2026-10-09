@@ -2,8 +2,17 @@
 
 A move is one drag: the player picks a block and slides it through free cells.
 On whole cells that is a walk of the block's pivot through 4-adjacent valid
-positions (the movement code slides blocks along axes and the collision box is
-0.7 of a cell, so any free 1-cell corridor is passable).
+positions. BlockMovementService samples the corners of a 0.8-cell box per block
+cell (collisionPadding 0.4 in MovementSettings.asset), so a free 1-cell corridor
+is passable, corners cannot be cut, and every cell the game assigns to a block
+is a position this model also calls valid.
+
+The game checks for an exit once per frame, when the block's rounded pivot cell
+differs from the last one. A fast or diagonal drag can skip a cell, so the game
+may skip a check this model makes. That only removes forced exits, which never
+help, so the minimum drag count is unaffected. A scripted Unity replay must
+still move one cell at a time along an axis and let the pivot settle on each
+cell, or it can exit somewhere the script did not plan.
 
 While dragging, the game runs the exit check each time the pivot enters a
 different cell (rules.py). So a drag ends in one of two ways:
@@ -197,13 +206,20 @@ def replay(level: Level, drags: list[Drag]) -> State:
     """
     state = initial_state(level)
     for k, d in enumerate(drags, start=1):
+        if not 0 <= d.block < len(level.blocks):
+            raise ReplayError(f"drag {k}: no block {d.block}")
         pivot = state[d.block]
         if pivot is None:
             raise ReplayError(f"drag {k}: block {d.block} already exited")
-        if d.path[0] != pivot:
-            raise ReplayError(f"drag {k}: path starts at {d.path[0]}, block is at {pivot}")
-        if len(d.path) < 2:
-            raise ReplayError(f"drag {k}: empty drag")
+        if not d.path or d.path[0] != pivot:
+            raise ReplayError(f"drag {k}: path does not start at the block's cell {pivot}")
+        if len(d.path) == 1:
+            # Picking a block up and putting it back is legal in the game and changes nothing.
+            if d.exits:
+                raise ReplayError(f"drag {k}: a block cannot exit without moving")
+            continue
+        if d.exits and d.exit_index != matching_exit_index(level, d.block, d.end):
+            raise ReplayError(f"drag {k}: exit_index {d.exit_index} is not the gate the game picks at {d.end}")
         occ = occupancy(level, state)
         for i in range(1, len(d.path)):
             a, b = d.path[i - 1], d.path[i]

@@ -92,6 +92,7 @@ class Level:
     blocks: tuple[BlockSpec, ...]
     exits: tuple[ExitSpec, ...]
     name: str = ""
+    inactive_order: tuple[Vec, ...] = ()  # JSON order, kept so a round trip does not reorder the file
 
     def in_bounds(self, cell: Vec) -> bool:
         x, y = cell
@@ -132,14 +133,16 @@ def level_from_dict(d: dict, name: str = "") -> Level:
                 exit_number=int(e.get("exitNumber", 0)),
             )
         )
+    inactive_list = tuple(_vec(c) for c in d.get("inactiveCells", []) or [])
     return Level(
         width=int(d["gridWidth"]),
         height=int(d["gridHeight"]),
         timer=int(d.get("timerCount", 0)),
-        inactive=frozenset(_vec(c) for c in d.get("inactiveCells", []) or []),
+        inactive=frozenset(inactive_list),
         blocks=tuple(blocks),
         exits=tuple(exits),
         name=name,
+        inactive_order=inactive_list,
     )
 
 
@@ -149,7 +152,7 @@ def level_to_dict(level: Level) -> dict:
         "gridWidth": level.width,
         "gridHeight": level.height,
         "timerCount": level.timer,
-        "inactiveCells": [_vec_dict(c) for c in sorted(level.inactive)],
+        "inactiveCells": [_vec_dict(c) for c in (level.inactive_order or sorted(level.inactive))],
         "GridBlockDatas": [
             {
                 "gridPosition": _vec_dict(b.pivot),
@@ -191,19 +194,19 @@ def validate(level: Level) -> list[str]:
             else:
                 seen[c] = i
     for j, e in enumerate(level.exits):
+        dx, dy = DIRECTION_VECTOR[e.direction]
         for c in e.cells:
             if not level.in_bounds(c):
                 problems.append(f"exit {j} cell {c} is out of bounds")
                 continue
-            x, y = c
-            on_edge = {
-                ExitDirection.LEFT: x == 0,
-                ExitDirection.RIGHT: x == level.width - 1,
-                ExitDirection.TOP: y == level.height - 1,
-                ExitDirection.BOTTOM: y == 0,
-            }[e.direction]
-            if not on_edge:
-                problems.append(f"exit {j} cell {c} is not on the {e.direction.name.lower()} edge")
+            if c in level.inactive:
+                problems.append(f"exit {j} cell {c} is on an inactive cell, so no block can reach it")
+                continue
+            # GridManager.NeedsBorder: a side is an edge when it faces the outside of the
+            # grid or an inactive cell, so gates may also sit on the rim of a hole.
+            beyond = (c[0] + dx, c[1] + dy)
+            if level.is_active(beyond):
+                problems.append(f"exit {j} cell {c} does not face an edge on its {e.direction.name.lower()} side")
     return problems
 
 

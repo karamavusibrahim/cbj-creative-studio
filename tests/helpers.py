@@ -23,3 +23,46 @@ def make_level(width, height, blocks, exits, inactive=(), timer=60, name="test")
         ],
     }
     return level_from_dict(d, name=name)
+
+
+# Shapes as offsets added to (0,0): single, bars, 2x2, L, T and a 4-cell L.
+RICH_SHAPES = [
+    [], [(1, 0)], [(0, 1)], [(1, 0), (2, 0)], [(0, 1), (0, 2)], [(1, 0), (0, 1), (1, 1)],
+    [(0, 1), (1, 0)], [(1, 0), (1, 1)], [(-1, 0), (1, 0), (0, 1)], [(0, 1), (0, 2), (1, 0)],
+]
+
+
+def rich_random_level(rng):
+    """Small boards with holes, repeated colours, 1-3 cell gates on outer edges or hole rims."""
+    from cbj.level import BlockColor as C
+    from cbj.level import DIRECTION_VECTOR
+    from cbj.level import ExitDirection as D
+
+    w, h = rng.randint(3, 4), rng.randint(3, 4)
+    inactive = {(rng.randrange(w), rng.randrange(h)) for _ in range(rng.randint(0, 2))}
+    colors = [rng.choice([C.RED, C.BLUE, C.GREEN]) for _ in range(rng.randint(2, 4))]
+    blocks, taken = [], set(inactive)
+    for col in colors:
+        for _ in range(40):
+            offs = rng.choice(RICH_SHAPES)
+            p = (rng.randrange(w), rng.randrange(h))
+            cells = {(p[0] + ox, p[1] + oy) for ox, oy in [(0, 0)] + offs}
+            if all(0 <= x < w and 0 <= y < h for x, y in cells) and not cells & taken:
+                blocks.append((col, p, offs))
+                taken |= cells
+                break
+    exits = []
+    for col in sorted(set(colors)):
+        for _ in range(rng.randint(1, 3)):
+            d = rng.choice(list(D))
+            dx, dy = DIRECTION_VECTOR[d]
+            along = (1, 0) if d in (D.TOP, D.BOTTOM) else (0, 1)
+            starts = [
+                (x, y) for x in range(w) for y in range(h)
+                if (x, y) not in inactive
+                and not (0 <= x + dx < w and 0 <= y + dy < h and (x + dx, y + dy) not in inactive)
+            ]
+            if starts:
+                n = rng.randint(1, 3)
+                exits.append((col, d, rng.choice(starts), [(along[0] * k, along[1] * k) for k in range(1, n)]))
+    return make_level(w, h, blocks, exits, inactive=sorted(inactive))

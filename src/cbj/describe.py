@@ -67,10 +67,10 @@ def cells_text(cells) -> str:
     cols = sorted({c[0] + 1 for c in cells})
     rows = sorted({c[1] + 1 for c in cells})
 
-    def span(v):
-        return f"{v[0]}" if len(v) == 1 else f"{v[0]}-{v[-1]}"
+    def span(word, v):
+        return f"{word} {v[0]}" if len(v) == 1 else f"{word}s {v[0]}-{v[-1]}"
 
-    return f"columns {span(cols)}, rows {span(rows)}"
+    return f"{span('column', cols)}, {span('row', rows)}"
 
 
 def exit_text(level: Level, exit_index: int) -> str:

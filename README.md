@@ -50,9 +50,25 @@ on the top edge, `vY` yellow on the bottom, `R<` red on the left, `>O` orange on
 | Inactive cells do not block an exit lane | `IsPathClear` only fails on a cell holding another block; inactive cells are null |
 | The exit check runs only while a block is dragged, each time its pivot enters a different cell; the first such cell where it passes ends the drag | `InputHandler.DragBlock` |
 | A block already standing at its gate does not leave by itself | same; releasing never triggers an exit |
+| The order of gates in the file matters: a block touching two gates of its colour is only tested against the first | `FindMatchingExit` (test: `test_gate_order_in_the_file_changes_the_minimum`) |
+| A gate may sit on the outer edge or on the rim of a hole | `GridManager.NeedsBorder` treats an inactive neighbour as an edge |
 
 A move in the solver is one drag: the block's pivot walks through 4-adjacent valid
 positions and either stops anywhere or exits at the first cell where the check passes.
+The game's collision box is 0.8 of a cell (`collisionPadding` 0.4), so 1-cell
+corridors are passable and corners cannot be cut; the cell model reaches exactly
+the positions the game reaches.
+
+The solver is breadth-first search with one shortcut: when a block can exit, it
+takes that exit first. This is safe because removing a block never blocks anything
+else. The tests compare it against the full search on the shipped levels and on
+about 550 random boards with holes, repeated colours and gates beside holes.
+
+**Rule for the Unity replay.** The game checks for an exit once per frame, when the
+block's rounded pivot cell changes, so a fast or diagonal drag can skip a cell.
+A scripted replay must move one cell at a time along an axis and let the pivot
+settle on each cell before the next step, and after an exit it must wait for the
+exit animation (about 0.1 s snap plus the slide) before the next drag.
 
 ## Layout
 
