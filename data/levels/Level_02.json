@@ -1,0 +1,98 @@
+{
+    "gridWidth": 5,
+    "gridHeight": 5,
+    "timerCount": 300,
+    "inactiveCells": [],
+    "GridBlockDatas": [
+        {
+            "gridPosition": {
+                "x": 1,
+                "y": 3
+            },
+            "blockColor": 0,
+            "shapeOffsets": [
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 0,
+                    "y": -2
+                },
+                {
+                    "x": 0,
+                    "y": -1
+                }
+            ]
+        },
+        {
+            "gridPosition": {
+                "x": 3,
+                "y": 3
+            },
+            "blockColor": 4,
+            "shapeOffsets": [
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 0,
+                    "y": -1
+                },
+                {
+                    "x": 0,
+                    "y": -2
+                }
+            ]
+        }
+    ],
+    "ExitDatas": [
+        {
+            "exitNumber": 0,
+            "gridPosition": {
+                "x": 2,
+                "y": 4
+            },
+            "requiredColor": 0,
+            "direction": 2,
+            "shapeOffsets": [
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 1,
+                    "y": 0
+                },
+                {
+                    "x": 2,
+                    "y": 0
+                }
+            ]
+        },
+        {
+            "exitNumber": 0,
+            "gridPosition": {
+                "x": 0,
+                "y": 0
+            },
+            "requiredColor": 4,
+            "direction": 3,
+            "shapeOffsets": [
+                {
+                    "x": 0,
+                    "y": 0
+                },
+                {
+                    "x": 1,
+                    "y": 0
+                },
+                {
+                    "x": 2,
+                    "y": 0
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,19 @@
+[project]
+name = "cbj"
+version = "0.1.0"
+description = "Color Block Jam creative tool: level model, rule-exact solver, and creative pipeline"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+cbj = "cbj.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["uv_build>=0.11.24,<0.12.0"]
+build-backend = "uv_build"

@@ -1,0 +1,51 @@
+{
+  "level": "Level_02",
+  "grid": {
+    "width": 5,
+    "height": 5
+  },
+  "timer": 300,
+  "min_drags": 2,
+  "drags": [
+    {
+      "block": 0,
+      "color": "green",
+      "path": [
+        [
+          1,
+          3
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ]
+      ],
+      "exits": true,
+      "exit_index": 0
+    },
+    {
+      "block": 1,
+      "color": "orange",
+      "path": [
+        [
+          3,
+          3
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          2,
+          2
+        ]
+      ],
+      "exits": true,
+      "exit_index": 1
+    }
+  ]
+}

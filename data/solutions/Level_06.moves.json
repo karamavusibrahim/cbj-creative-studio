@@ -1,0 +1,203 @@
+{
+  "level": "Level_06",
+  "grid": {
+    "width": 6,
+    "height": 6
+  },
+  "timer": 300,
+  "min_drags": 8,
+  "drags": [
+    {
+      "block": 4,
+      "color": "purple",
+      "path": [
+        [
+          3,
+          4
+        ],
+        [
+          3,
+          5
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          1,
+          5
+        ],
+        [
+          0,
+          5
+        ]
+      ],
+      "exits": true,
+      "exit_index": 5
+    },
+    {
+      "block": 5,
+      "color": "red",
+      "path": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          1,
+          5
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          3,
+          5
+        ]
+      ],
+      "exits": true,
+      "exit_index": 4
+    },
+    {
+      "block": 6,
+      "color": "yellow",
+      "path": [
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "exits": true,
+      "exit_index": 1
+    },
+    {
+      "block": 7,
+      "color": "blue",
+      "path": [
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "exits": true,
+      "exit_index": 0
+    },
+    {
+      "block": 1,
+      "color": "yellow",
+      "path": [
+        [
+          0,
+          3
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "exits": true,
+      "exit_index": 1
+    },
+    {
+      "block": 0,
+      "color": "dark_green",
+      "path": [
+        [
+          1,
+          2
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "exits": true,
+      "exit_index": 2
+    },
+    {
+      "block": 2,
+      "color": "blue",
+      "path": [
+        [
+          5,
+          3
+        ],
+        [
+          5,
+          2
+        ],
+        [
+          5,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          1
+        ]
+      ],
+      "exits": true,
+      "exit_index": 0
+    },
+    {
+      "block": 3,
+      "color": "green",
+      "path": [
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
+        ]
+      ],
+      "exits": true,
+      "exit_index": 3
+    }
+  ]
+}
