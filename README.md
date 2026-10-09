@@ -62,7 +62,7 @@ the positions the game reaches.
 The solver is breadth-first search with one shortcut: when a block can exit, it
 takes that exit first. This is safe because removing a block never blocks anything
 else. The tests compare it against the full search on the shipped levels and on
-about 550 random boards with holes, repeated colours and gates beside holes.
+561 random boards (311 of them with holes, gates beside holes and repeated colours).
 
 **Rule for the Unity replay.** The game checks for an exit once per frame, when the
 block's rounded pivot cell changes, so a fast or diagonal drag can skip a cell.
