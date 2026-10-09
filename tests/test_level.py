@@ -61,3 +61,9 @@ def test_gate_on_an_inactive_cell_is_flagged():
 def test_round_trip_keeps_inactive_cell_order():
     lvl = make_level(4, 4, [(C.RED, (0, 0), [])], [(C.RED, D.BOTTOM, (0, 0), [])], inactive=[(3, 3), (1, 2), (2, 1)])
     assert [(c["x"], c["y"]) for c in level_to_dict(lvl)["inactiveCells"]] == [(3, 3), (1, 2), (2, 1)]
+
+
+def test_two_gates_on_the_same_cell_side_are_flagged():
+    # The Level Editor cannot build this: one gate per cell side.
+    lvl = make_level(3, 3, [(C.RED, (1, 1), [])], [(C.RED, D.TOP, (1, 2), []), (C.BLUE, D.TOP, (0, 2), [(1, 0)])])
+    assert any("share cell (1, 2) on the top side" in p for p in validate(lvl))

@@ -51,7 +51,7 @@ def rich_random_level(rng):
                 blocks.append((col, p, offs))
                 taken |= cells
                 break
-    exits = []
+    exits, used = [], set()  # one gate per cell side, as in the Level Editor
     for col in sorted(set(colors)):
         for _ in range(rng.randint(1, 3)):
             d = rng.choice(list(D))
@@ -64,5 +64,10 @@ def rich_random_level(rng):
             ]
             if starts:
                 n = rng.randint(1, 3)
-                exits.append((col, d, rng.choice(starts), [(along[0] * k, along[1] * k) for k in range(1, n)]))
+                p = rng.choice(starts)
+                offs = [(along[0] * k, along[1] * k) for k in range(1, n)]
+                cells = [p] + [(p[0] + ox, p[1] + oy) for ox, oy in offs]
+                if not any((c, d) in used for c in cells):
+                    used |= {(c, d) for c in cells}
+                    exits.append((col, d, p, offs))
     return make_level(w, h, blocks, exits, inactive=sorted(inactive))

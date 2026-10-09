@@ -52,6 +52,7 @@ on the top edge, `vY` yellow on the bottom, `R<` red on the left, `>O` orange on
 | A block already standing at its gate does not leave by itself | same; releasing never triggers an exit |
 | The order of gates in the file matters: a block touching two gates of its colour is only tested against the first | `FindMatchingExit` (test: `test_gate_order_in_the_file_changes_the_minimum`) |
 | A gate may sit on the outer edge or on the rim of a hole | `GridManager.NeedsBorder` treats an inactive neighbour as an edge |
+| One gate per cell side (`validate` rejects two) | the Level Editor's `ToggleExitCell` replaces an existing gate on that side |
 
 A move in the solver is one drag: the block's pivot walks through 4-adjacent valid
 positions and either stops anywhere or exits at the first cell where the check passes.
@@ -62,13 +63,15 @@ the positions the game reaches.
 The solver is breadth-first search with one shortcut: when a block can exit, it
 takes that exit first. This is safe because removing a block never blocks anything
 else. The tests compare it against the full search on the shipped levels and on
-561 random boards (311 of them with holes, gates beside holes and repeated colours).
+637 random boards, all buildable in the Level Editor: 250 simple ones and 387 richer
+ones (206 with holes, 73 with a gate on the rim of a hole, 273 with a repeated colour).
 
 **Rule for the Unity replay.** The game checks for an exit once per frame, when the
 block's rounded pivot cell changes, so a fast or diagonal drag can skip a cell.
 A scripted replay must move one cell at a time along an axis and let the pivot
-settle on each cell before the next step, and after an exit it must wait for the
-exit animation (about 0.1 s snap plus the slide) before the next drag.
+settle on each cell before the next step. After an exit, the block's cells are
+freed when the 0.1 s snap ends (`PerformExit`), so the next drag must start after
+that; the slide out takes longer but only delays the win screen.
 
 ## Layout
 
@@ -80,5 +83,6 @@ src/cbj/describe.py  ASCII boards, plain-English steps, move-script JSON
 src/cbj/cli.py       command line
 data/levels/         the six shipped levels (copied unchanged from the Unity project)
 data/solutions/      move scripts for the Unity replay
+reports/             solve table and the Level 3 walkthrough
 tests/               rule tests, level round-trip, solver and replay tests
 ```

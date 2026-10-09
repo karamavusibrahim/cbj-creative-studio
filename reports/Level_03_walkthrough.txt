@@ -1,4 +1,4 @@
-Level_03: solved in 3 drags (3 blocks + 0 repositioning), 4 states, 0.9 ms. Replay check: OK
+Level_03: solved in 3 drags (3 blocks + 0 repositioning), 4 states, 0.2 ms. Replay check: OK
 
 Start:
        ^B ^B ^B      

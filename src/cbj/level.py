@@ -207,6 +207,15 @@ def validate(level: Level) -> list[str]:
             beyond = (c[0] + dx, c[1] + dy)
             if level.is_active(beyond):
                 problems.append(f"exit {j} cell {c} does not face an edge on its {e.direction.name.lower()} side")
+    # The Level Editor keeps at most one gate per cell side (ToggleExitCell replaces it).
+    sides: dict[tuple[Vec, ExitDirection], int] = {}
+    for j, e in enumerate(level.exits):
+        for c in e.cells:
+            key = (c, e.direction)
+            if key in sides:
+                problems.append(f"exits {sides[key]} and {j} share cell {c} on the {e.direction.name.lower()} side")
+            else:
+                sides[key] = j
     return problems
 
 

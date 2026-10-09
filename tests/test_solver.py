@@ -51,18 +51,23 @@ def _random_level(rng: random.Random):
                 blocks.append((col, p, offs))
                 taken |= cells
                 break
-    exits = []
+    exits, used = [], set()  # one gate per cell side, as in the Level Editor
     for col in colors:
         for _ in range(rng.randint(1, 2)):
-            d = rng.choice(list(D))
-            if d in (D.TOP, D.BOTTOM):
-                y = h - 1 if d == D.TOP else 0
-                x = rng.randrange(w - 1)
-                exits.append((col, d, (x, y), [(1, 0)]))
-            else:
-                x = 0 if d == D.LEFT else w - 1
-                y = rng.randrange(h - 1)
-                exits.append((col, d, (x, y), [(0, 1)]))
+            for _ in range(10):
+                d = rng.choice(list(D))
+                if d in (D.TOP, D.BOTTOM):
+                    y = h - 1 if d == D.TOP else 0
+                    x = rng.randrange(w - 1)
+                    p, offs, cells = (x, y), [(1, 0)], [(x, y), (x + 1, y)]
+                else:
+                    x = 0 if d == D.LEFT else w - 1
+                    y = rng.randrange(h - 1)
+                    p, offs, cells = (x, y), [(0, 1)], [(x, y), (x, y + 1)]
+                if not any((c, d) in used for c in cells):
+                    used |= {(c, d) for c in cells}
+                    exits.append((col, d, p, offs))
+                    break
     return make_level(w, h, blocks, exits)
 
 
@@ -110,19 +115,21 @@ def test_exit_pruning_matches_full_search_on_rich_random_levels():
 
 
 def test_gate_order_in_the_file_changes_the_minimum():
-    # Green 3-bar in column 3 touches the green TOP gate and the green RIGHT gate.
+    # 3x3 board, hole at column 1 row 2. R1 is a single red cell at column 1 row 1,
+    # R2 a red 2-cell bar at columns 2-3 row 1. Red gates: bottom (columns 1-2),
+    # left (row 1), right (row 1). R2 touches both the bottom and the right gate.
     # The game only tests the first matching gate in list order:
-    # TOP first  -> the bar exits upward (step down, step back up): 2 drags in total.
-    # RIGHT first -> the right lane check always fails for a 3-tall bar, so it must use
-    #               the bottom-left gate after blue moves out of column 1: 3 drags.
-    blocks = [(C.BLUE, (0, 2), []), (C.GREEN, (2, 1), [(0, 1), (0, 2)])]
-    green_top = (C.GREEN, D.TOP, (2, 3), [])
-    green_bottom = (C.GREEN, D.BOTTOM, (0, 0), [])
-    green_right = (C.GREEN, D.RIGHT, (2, 2), [])
-    blue_top = (C.BLUE, D.TOP, (2, 3), [])
-    top_first = make_level(3, 4, blocks, [green_top, green_bottom, green_right, blue_top])
-    right_first = make_level(3, 4, blocks, [blue_top, green_right, green_bottom, green_top])
-    for lvl, want in ((top_first, 2), (right_first, 3)):
+    # bottom first -> R2's right cell (column 3) is outside the bottom gate, so R2 can
+    #                 never use the right gate; it waits for R1 to leave: 3 drags.
+    # right first  -> R2 steps up and back down to exit right, then R1 exits: 2 drags.
+    blocks = [(C.RED, (0, 0), []), (C.RED, (1, 0), [(1, 0)])]
+    bottom = (C.RED, D.BOTTOM, (0, 0), [(1, 0)])
+    left = (C.RED, D.LEFT, (0, 0), [])
+    right = (C.RED, D.RIGHT, (2, 0), [])
+    bottom_first = make_level(3, 3, blocks, [bottom, left, right], inactive=[(0, 1)])
+    right_first = make_level(3, 3, blocks, [right, left, bottom], inactive=[(0, 1)])
+    for lvl, want in ((bottom_first, 3), (right_first, 2)):
+        assert validate(lvl) == []  # buildable in the Level Editor
         sol = solve(lvl)
         assert sol.min_drags == want
         assert solve(lvl, prune_exits=False).min_drags == want
