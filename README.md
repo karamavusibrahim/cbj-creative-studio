@@ -22,6 +22,7 @@ uv run cbj show  data/levels/Level_03.json                  # draw the board
 uv run cbj solve data/levels/Level_03.json                  # minimum-drag solution, step by step
 uv run cbj solve data/levels/Level_03.json --json out.json  # also write the move script
 uv run cbj table data/levels --md reports/solve_table.md --scripts data/solutions
+uv run cbj difficulty data/levels                           # how hard: minimum solution + a naive player
 uv run cbj check data/levels/Level_03.json data/solutions/Level_03.moves.json  # verify a move script
 uv run cbj build-player                                     # once: build the Unity recording player
 uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json  # record it in the game
@@ -46,6 +47,32 @@ on the top edge, `vY` yellow on the bottom, `R<` red on the left, `>O` orange on
 | Level_06 | 6x6 | 8 | 8 | 0 | 24 |
 
 "Extra drags" are drags that move a block out of the way instead of exiting it.
+
+## Difficulty
+
+`cbj difficulty` adds two kinds of numbers. From the solver: minimum drags,
+repositioning drags, how many blocks can leave with their first drag, and how
+many different first drags there are. From a simulated naive player (the
+"simulated human" idea used to rate puzzle difficulty): it takes an exit
+whenever one is available, otherwise drags a random block to a random reachable
+cell, 200 seeded runs.
+
+| level | min drags | extra drags | exits at start | naive player mean (p90) |
+|---|---|---|---|---|
+| Level_01 | 2 | 0 | 2 | 2.0 (2) |
+| Level_02 | 2 | 0 | 2 | 2.0 (2) |
+| Level_03 | 3 | 0 | 2 | 3.0 (3) |
+| Level_04 | 4 | 1 | 0 | 5.0 (7) |
+| Level_05 | 5 | 0 | 2 | 5.0 (5) |
+| Level_06 | 8 | 0 | 4 | 8.0 (8) |
+
+The shipped levels are tutorial-easy: on five of them an exit is always
+available, so even the naive player never wastes a drag. Only Level 4 needs a
+block moved out of the way first. A "difficult level" request therefore needs
+generated levels. No easy/hard labels are assigned; those need calibration
+against real player data. The naive player's wasted drags are also the
+believable mistakes a near-fail creative can show. `solve(level, start=...)`
+solves from any mid-game position.
 
 ## Rules as implemented (from the Unity source)
 
@@ -112,11 +139,17 @@ deeply nested JSON and five smaller issues; the last 11 tests cover those, and
 ## Recording in the real game (Unity CreativeRunner)
 
 `cbj render` plays a move script in the real game and records it as a 1080x1920,
-30 fps video. Nothing is redrawn or faked: the level is the game's own LevelData,
-and every drag goes through the game's own `BlockMovementService`,
+30 fps video. The game's rule code is untouched: the level is the game's own
+LevelData, and every drag goes through the game's own `BlockMovementService`,
 `BlockGridService` and `ExitService`, one frame at a time, exactly as
-`InputHandler` drives them from the mouse. Only the mouse is replaced, by a
-scripted finger.
+`InputHandler` drives them from the mouse. What the runner does change is
+listed here:
+- the mouse is a scripted finger;
+- the camera is re-fitted for the 9:16 frame;
+- the HUD is drawn through the camera at a phone's scale;
+- button fades are instant and particle seeds fixed, for repeatability;
+- the level badge shows the level's number;
+- the clock stops when the last block starts to leave (below).
 
 ```
 uv run cbj build-player     # ~35 s; needs Unity 6000.3.5f1 and the project at ../CBJ
@@ -124,7 +157,34 @@ uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json
 uv run cbj render data/levels/Level_05.json                  # no script: solve, then record
 uv run cbj render LEVEL MOVES --end cut --drags 2            # stop after drag 2 (cliffhanger)
 uv run cbj render LEVEL MOVES --end fail --drags 2           # wait for the timer to run out
+uv run cbj render LEVEL MOVES --speed 2 --pause 1.6 --start-hold 2.5 --end-hold 3   # slower, longer
+uv run cbj render LEVEL MOVES --zoom 1.1 --pan-y -0.5 --intro  # framing; --intro eases in from pulled back
+uv run cbj render LEVEL MOVES --timer 20 --hide RestartButton  # clock override, hide a HUD part
 ```
+
+Length: the shipped levels record in 5-13 s at the default pacing; Level 6 at
+`--speed 2 --pause 1.6` records 29.3 s (in 42 s). A 30-60 s ad comes from slower
+pacing, bigger generated levels, several levels, and the hook and end card.
+
+Camera: zoom 1 is the game's own framing. Above about 1.1, a board that already
+fills the width loses its side gates. Changing only the camera leaves the game
+identical: `cbj compare` then reports the same game state with a different
+finger path on screen and different pixels.
+
+**The clock fix.** The game keeps its clock running while the last block slides
+out, and counts the win only when the slide ends. If time runs out during that
+half second, the game shows "Out of Time!" and then "Level Completed". The
+recorder stops the clock the moment the last block starts to leave, which is
+when the player has solved the level (`stop_clock_on_last_exit`, on by default),
+and `cbj render` rejects any recording that shows both screens. A Unity test
+keeps the original behaviour on record.
+
+Event data for the compositor: `result.json` has each drag's frames, cells and
+gate number, the first touch, the clock stop, win or fail frame, the frame
+each block disappears, and the HUD's rectangles (caption safe zones).
+`frames.json` has, per frame, the timer, the finger and every block's position
+in video pixels, and a pixel hash. The game itself has no audio; sound effects
+are added by the compositor at these frames.
 
 `build-player` copies the Unity project into `build/unity-project`, adds
 `unity/CreativeRunner`, and builds `build/CBJRunner.app`. The original project
@@ -195,10 +255,16 @@ editor is busy importing, close the editor or delete `build/unity-project` and
 build again.
 
 `tests/test_render.py` checks jobs, recordings and comparisons without Unity.
-`tests/test_unity_render.py` starts the player 15 times (about 3 minutes): six
-levels cleared, a repeat render, a blocked drag, an unplanned exit, a path off
-the board, a dead ffmpeg, a bad job, the fail screen between drags and in the
-middle of one:
+`tests/test_unity_render.py` has 20 tests and starts the player 22 times (about
+3.5 minutes):
+- six levels cleared;
+- a repeat render;
+- a camera-only change;
+- a blocked drag, an unplanned exit, a path off the board;
+- a dead ffmpeg, a bad job, bad camera keys, an unknown object to hide;
+- the fail screen between drags and in the middle of one;
+- the game's fail-then-win bug and the recorder's fix;
+- the compositor event data:
 
 ```
 CBJ_UNITY=1 uv run pytest tests/test_unity_render.py
@@ -211,7 +277,8 @@ src/cbj/level.py     LevelData model, JSON round-trip, validation
 src/cbj/rules.py     occupancy, valid positions, exit check
 src/cbj/solver.py    drag outcomes, BFS solver, replay checker
 src/cbj/describe.py  ASCII boards, plain-English steps, move-script JSON
-src/cbj/render.py    render jobs, running the Unity player, checking recordings
+src/cbj/difficulty.py difficulty numbers and the simulated naive player
+src/cbj/render.py    render jobs, camera, running the Unity player, checking and comparing recordings
 src/cbj/cli.py       command line
 unity/CreativeRunner Unity scripts copied into the project copy by build-player
 data/levels/         the six shipped levels (copied unchanged from the Unity project)
