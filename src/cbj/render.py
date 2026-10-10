@@ -68,20 +68,33 @@ class Pacing:
 
 @dataclass(frozen=True)
 class DragPacing:
-    """Pacing for one drag, overriding the Pacing defaults (scenario scripts set these per beat)."""
+    """Pacing for one drag, overriding the Pacing defaults (scenario scripts set these per beat).
+
+    push_cells: after the last cell, the finger presses on this far (0-0.45 cells). Against a
+    block in the way, the game holds the block where it is: a player pushing into a blocker.
+    push_dir: (dx, dy), one cell along an axis; None pushes the way the path last moved.
+    hold_s: the finger stays down at the end of the drag before letting go."""
 
     pause_before_s: float
     pickup_s: float
     cells_per_s: float
+    push_cells: float = 0.0
+    hold_s: float = 0.0
+    push_dir: tuple[int, int] | None = None
 
     def check(self, fps: int, k: int) -> None:
-        for name in ("pause_before_s", "pickup_s"):
+        for name in ("pause_before_s", "pickup_s", "hold_s"):
             v = getattr(self, name)
             if not (isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v < float("inf")):
                 raise ValueError(f"drag {k}: {name} must be zero or more, got {v!r}")
         if not (isinstance(self.cells_per_s, (int, float)) and 0 < self.cells_per_s <= fps / 2):
             raise ValueError(f"drag {k}: cells_per_s must be above 0 and at most fps/2 ({fps / 2:g}), "
                              f"got {self.cells_per_s!r}")
+        # Past half a cell the pivot would round into the next cell, which the script did not plan.
+        if not (isinstance(self.push_cells, (int, float)) and 0 <= self.push_cells <= 0.45):
+            raise ValueError(f"drag {k}: push_cells must be 0 to 0.45, got {self.push_cells!r}")
+        if self.push_dir is not None and (len(self.push_dir) != 2 or sorted(map(abs, self.push_dir)) != [0, 1]):
+            raise ValueError(f"drag {k}: push_dir must be one cell along an axis, got {self.push_dir!r}")
 
 
 @dataclass(frozen=True)
@@ -158,8 +171,11 @@ def make_job(
     if drag_pacing is not None:
         if len(drag_pacing) != len(drags):
             raise ValueError(f"drag_pacing has {len(drag_pacing)} entries for {len(drags)} drags")
-        for k, dp in enumerate(drag_pacing, start=1):
+        for k, (d, dp) in enumerate(zip(drags, drag_pacing), start=1):
             dp.check(pacing.fps, k)
+            if dp.push_cells and (d.exits or (len(d.path) < 2 and dp.push_dir is None)):
+                raise ValueError(f"drag {k}: push_cells needs a drag that does not exit, and a direction "
+                                 f"(a path that moves, or push_dir)")
     else:
         drag_pacing = [DragPacing(pacing.pause_before_s if k else 0.0, pacing.pickup_s, pacing.cells_per_s)
                        for k in range(len(drags))]
@@ -220,6 +236,10 @@ def make_job(
                 "pause_before_s": dp.pause_before_s,
                 "pickup_s": dp.pickup_s,
                 "cells_per_s": dp.cells_per_s,
+                "push_cells": dp.push_cells,
+                "push_dx": dp.push_dir[0] if dp.push_dir else 0,
+                "push_dy": dp.push_dir[1] if dp.push_dir else 0,
+                "hold_s": dp.hold_s,
             }
             for d, dp in zip(drags, drag_pacing)
         ],
@@ -234,7 +254,7 @@ def estimate_seconds(level: Level, drags: list[Drag], pacing: Pacing,
                        for k in range(len(drags))]
     t = pacing.start_hold_s + pacing.end_hold_s + 1.0
     for d, dp in zip(drags, drag_pacing):
-        t += dp.pause_before_s + dp.pickup_s + d.cells_moved / dp.cells_per_s + 0.2
+        t += dp.pause_before_s + dp.pickup_s + d.cells_moved / dp.cells_per_s + dp.hold_s + 0.2
     return t
 
 

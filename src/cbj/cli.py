@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -201,14 +202,20 @@ def _cmd_render(args) -> int:
     camera = (Camera.intro(args.zoom, 0.0, args.pan_y, seconds=args.start_hold or 1.0)
               if args.intro else Camera(args.zoom, 0.0, args.pan_y))
     job = make_job(level, args.level, drags, out, pacing, end_mode=args.end, size=args.size, camera=camera,
-                   timer=args.timer, hide=tuple(args.hide), stop_clock_on_last_exit=not args.stock)
-    print(f"{level.name}: {len(drags)} drags, end mode '{args.end}'. Recording in Unity...")
+                   timer=args.timer, hide=tuple(args.hide), stop_clock_on_last_exit=not args.stock,
+                   capture=not args.dry_run)
+    doing = "Dry run (timing only, no video)" if args.dry_run else "Recording"
+    print(f"{level.name}: {len(drags)} drags, end mode '{args.end}'. {doing} in Unity...")
     t0 = time.perf_counter()
     result = run_player(job, app=PLAYER_STOCK if args.stock else None)
     dt = time.perf_counter() - t0
     print(f"Status: {result['status']} {result['message']}".rstrip())
-    print(f"Video: {result['video']} ({result['frames']} frames, {result['duration_s']:.2f} s "
-          f"at {result['fps']} fps, {result['width']}x{result['height']}), recorded in {dt:.0f} s")
+    if args.dry_run:
+        print(f"Dry run: {result['frames']} frames, {result['duration_s']:.2f} s at {result['fps']} fps "
+              f"(the same frames a recording would have), in {dt:.0f} s; timing in {out / 'frames.json'}")
+    else:
+        print(f"Video: {result['video']} ({result['frames']} frames, {result['duration_s']:.2f} s "
+              f"at {result['fps']} fps, {result['width']}x{result['height']}), recorded in {dt:.0f} s")
     labels = block_labels(level)
     for d in result["drags"]:
         start, end = d["start_frame"] / result["fps"], max(d["end_frame"], 0) / result["fps"]
@@ -242,32 +249,48 @@ def _cmd_compare(args) -> int:
 
 def _cmd_scenario(args) -> int:
     from .difficulty import rate
-    from .play import END_MODE, plan, run
+    from .play import END_MODE, plan, run, time_out_allowed
+    from .render import level_label
     level = load_level(args.level)
+    d = rate(level)
     if args.ending == "time_out":
         if not args.allow_fail:
             raise ValueError("a time-out ending is opt-in (social tests or an explicit fail request); "
                              "add --allow-fail")
-        d = rate(level)
-        if d is not None and d.extra_drags == 0 and d.naive_ratio <= 1.0:
-            print("Note: this level is easy (no repositioning needed), so a time-out on it can look "
-                  "staged. Use it as a demo only.")
-    mistakes = args.mistakes if args.mistakes is not None else (1 if args.ending in ("near_fail", "time_out") else 0)
-    script = plan(level, args.ending, mistakes=mistakes, seed=args.seed, left=args.left)
+        ok, why = time_out_allowed(d)
+        if not ok:
+            raise ValueError(f"{level.name} is too easy for a believable time-out: {why}")
+    script = plan(level, args.ending, mistakes=args.mistakes, seed=args.seed, left=args.left,
+                  hesitations=args.hesitations)
     labels = block_labels(level)
-    print(f"{level.name}: {args.ending} ({END_MODE[args.ending]} ending), {mistakes} mistake(s), seed {args.seed}")
+    n_mistakes = sum(b.kind == "mistake" for b in script.beats)
+    print(f"{level.name}: {args.ending} ({END_MODE[args.ending]} ending), {n_mistakes} mistake(s), seed {args.seed}")
+    if d is not None:
+        print(f"  difficulty: {d.min_drags} drags minimum ({d.extra_drags} repositioning), naive player "
+              f"{d.naive_mean:.1f} drags ({d.naive_ratio:.2f}x)")
     for k, b in enumerate(script.beats, start=1):
-        print(f"  {k:2d}. {b.kind:9s} {labels[b.drag.block]:3s} {b.note}")
+        extra = f", push {b.push_cells} + hold {b.hold_f} f" if b.push_cells else ""
+        print(f"  {k:2d}. {b.kind:8s} {labels[b.drag.block]:3s} pause {b.pause:14s} {b.pause_f:2d} f, "
+              f"{b.frames_per_cell} f/cell{extra}  {b.note}")
+    label = args.label if args.label is not None else level_label(level)
+    if args.label is None and not re.fullmatch(r"Level_\d+", level.name):
+        print(f"  note: the HUD will show \"Level {label}\" (from the file name); set --label for the "
+              f"number the ad should show")
     if args.plan_only:
         return 0
     out = Path(args.out or f"renders/{level.name}_{args.ending}")
-    print("Dry run, clock fit, then recording in Unity...")
-    result = run(level, args.level, script, out, left=args.left, hide=tuple(args.hide))
-    m = script.measured
+    print("Dry run, fit (pauses only), then recording in Unity...")
+    result = run(level, args.level, script, out, length_s=args.length, difficulty=d, label=label,
+                 hide=tuple(args.hide))
+    m, fit = script.measured, script.fit
     timer = f"{script.timer_s} s" if script.timer_s is not None else "the level's own"
     print(f"Status: {result['status']} {result['message']}".rstrip())
     print(f"Video: {result['video']} ({m['frames']} frames, {m['duration_s']:.2f} s); clock {timer}, "
           f"{m['clock_left_s']:.2f} s left at the end")
+    changed = sum(1 for c in fit["pause_changes_f"] if c)
+    print(f"Fit: dry run {fit['dry_frames']} frames, {changed} pause(s) changed "
+          f"({sum(fit['pause_changes_f']):+d} frames); recording matched the prediction"
+          if not any("predicted" in p for p in result["problems"]) else "Fit: see problems")
     print(f"Script: {out / 'play.json'}")
     for p in result["problems"]:
         print(f"  PROBLEM: {p}")
@@ -334,15 +357,21 @@ def main(argv: list[str] | None = None) -> int:
                         "running during the last exit slide and can show both endings")
     s.add_argument("--hide", action="append", default=[], metavar="NAME",
                    help="hide a game object by name, e.g. RestartButton (repeatable)")
+    s.add_argument("--dry-run", action="store_true",
+                   help="play and log the timing (frames.json, result.json) without filming; a few seconds")
     s.set_defaults(func=_cmd_render)
 
     s = sub.add_parser("scenario", help="human-looking play toward an ending (win, near-fail, ...), recorded")
     s.add_argument("level")
     s.add_argument("--ending", choices=["win", "near_fail", "cliffhanger", "time_out"], default="near_fail")
     s.add_argument("--mistakes", type=int, help="believable mistakes, 0-3 (default 1 for near_fail and time_out)")
-    s.add_argument("--seed", type=int, default=0, help="picks among the most believable mistakes")
-    s.add_argument("--left", type=int, default=1, help="blocks left on the board for cliffhanger and time_out")
-    s.add_argument("--allow-fail", action="store_true", help="required for time_out (opt-in, social tests)")
+    s.add_argument("--hesitations", type=int, help="pick a block up and put it back (default 2 for near_fail)")
+    s.add_argument("--seed", type=int, default=0, help="picks the mistakes and hesitations; nothing else")
+    s.add_argument("--left", type=int, help="blocks left at a cliffhanger's cut (default 2)")
+    s.add_argument("--length", type=float, help="video length in seconds, reached by changing pauses only")
+    s.add_argument("--label", type=int, help="the number in the HUD's Level badge (default: from the file name)")
+    s.add_argument("--allow-fail", action="store_true",
+                   help="required for time_out (opt-in, social tests; hard levels only)")
     s.add_argument("--plan-only", action="store_true", help="print the beats, do not start Unity")
     s.add_argument("--hide", action="append", default=["RestartButton"], metavar="NAME")
     s.add_argument("-o", "--out", help="output folder (default: renders/<level>_<ending>)")

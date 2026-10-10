@@ -7,7 +7,8 @@ import pytest
 from cbj.level import BlockColor as C
 from cbj.level import ExitDirection as D
 from cbj.level import load_level, validate
-from cbj.solver import ReplayError, SolverLimitError, replay, solve
+from cbj.rules import initial_state
+from cbj.solver import ReplayError, SolverLimitError, apply_drag, replay, solve, solve_fast
 
 from helpers import make_level, rich_random_level
 
@@ -176,3 +177,57 @@ def test_replay_accepts_pick_up_and_put_back():
     assert all(p is None for p in replay(level, [noop] + drags))
     with pytest.raises(ReplayError):
         replay(level, [replace(noop, exits=True)] + drags)
+
+
+# Minimum drags of the generated levels, found by solve() (5 s for the runner-up, so not re-run here).
+GEN_MINIMUM = {"narrow_center_01": 9, "narrow_center_02_runner_up": 8}
+GEN_DIR = Path(__file__).parent.parent.joinpath("data/levels/gen")
+
+
+@pytest.mark.parametrize("path", LEVELS, ids=lambda p: p.stem)
+def test_fast_solver_finds_the_same_minimum(path):
+    level = load_level(path)
+    a, b = solve(level), solve_fast(level)
+    assert b.min_drags == a.min_drags and b.extra_drags == a.extra_drags
+    assert all(p is None for p in replay(level, b.drags))
+    assert b.states_explored <= a.states_explored
+
+
+@pytest.mark.parametrize("name", sorted(GEN_MINIMUM))
+def test_fast_solver_on_the_generated_levels(name):
+    level = load_level(GEN_DIR / f"{name}.json")
+    b = solve_fast(level)
+    assert b.min_drags == GEN_MINIMUM[name]
+    assert all(p is None for p in replay(level, b.drags))
+    assert b.states_explored < 2000  # solve() needs 43k and 115k
+
+
+def test_fast_solver_matches_from_every_position_along_a_solution():
+    # Along a minimum solution, the drags still needed after k drags are exactly total - k.
+    level = load_level(GEN_DIR / "narrow_center_01.json")
+    sol = solve_fast(level)
+    state = initial_state(level)
+    for k, d in enumerate(sol.drags):
+        assert solve_fast(level, start=state).min_drags == sol.min_drags - k
+        state = apply_drag(state, d)
+
+
+def test_fast_solver_matches_full_search_on_rich_random_levels():
+    rng = random.Random(11)
+    compared = solvable = 0
+    for _ in range(1500):
+        level = rich_random_level(rng)
+        if validate(level):
+            continue
+        try:
+            full = solve(level, max_states=100_000, prune_exits=False)
+        except SolverLimitError:
+            continue
+        fast = solve_fast(level)
+        compared += 1
+        assert (fast is None) == (full is None)
+        if full is not None:
+            solvable += 1
+            assert fast.min_drags == full.min_drags
+            assert all(p is None for p in replay(level, fast.drags))
+    assert compared >= 250 and solvable >= 100

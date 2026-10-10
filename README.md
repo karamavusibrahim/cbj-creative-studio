@@ -27,6 +27,7 @@ uv run cbj check data/levels/Level_03.json data/solutions/Level_03.moves.json  #
 uv run cbj build-player                                     # once: build the Unity recording player
 uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json  # record it in the game
 uv run cbj compare renders/Level_03 renders/Level_03_b       # how close two recordings are
+uv run cbj scenario data/levels/gen/narrow_center_01.json --ending near_fail   # human play toward an ending
 ```
 
 Errors print one line, `cbj: <reason>`, and exit with code 1.
@@ -288,6 +289,60 @@ build again.
 CBJ_UNITY=1 uv run pytest tests/test_unity_render.py
 ```
 
+## Scenario scripts: human play toward an ending
+
+`cbj render` plays the solver's shortest solution, which looks like a robot. `cbj scenario`
+plays the level the way a person does in the ads, toward a requested ending, and records it:
+
+```
+uv run cbj scenario LEVEL --ending win|near_fail|cliffhanger|time_out --plan-only   # print the beats
+uv run cbj scenario LEVEL --ending near_fail [--mistakes 1] [--hesitations 2] [--seed 0] [--length 22] [--label 147]
+uv run cbj scenario LEVEL --ending time_out --allow-fail      # opt-in; refused on easy levels
+```
+
+| ending | what the viewer sees | clock |
+|---|---|---|
+| `win` (S3) | a clean solve; the closing drags speed up | kept above 0:50 (no red flashing) |
+| `near_fail` (S4) | 1 mistake, 2 hesitations (one on the last block), a quick finish | 00:01 left when the last block starts leaving |
+| `cliffhanger` (S1) | play until two blocks block each other; the last one is pushed into its blocker; cut | 00:08 at the cut |
+| `time_out` (S5) | 1 mistake, a long stuck pause, the last block races for its gate and the clock runs out one cell short | 0:00, fail screen |
+
+**Mistakes** follow the winning "I can't reach <colour>" ads: a trapped block dragged toward
+its gate until another block stops it, and the finger keeps pressing (`blocked`); a block that
+must move, moved the wrong way (`wrong_way`); or at most one one-cell nudge (`fidget`). Every
+mistake costs the player 1 or 2 extra drags (measured by the solver; 0 would be progress), comes
+in drags 1-3, and never in the last two drags. A block parked at a gate of another colour is
+never used: it reads as not knowing the rules. After a mistake the solver re-plans.
+
+**Pacing** is in whole frames, chosen by what the player is doing: confident 0.35-0.6 s before
+an exit they can see, thinking 0.9-1.6 s before a repositioning drag, stuck 1.8-2.5 s after
+the last mistake, 0.3-0.45 s for the closing drags. Finger speeds are exact (4, 5, 6 or 8
+frames per cell). Each pause grows by a frame per cell the finger travels to the next block.
+
+**Exact timing, pauses only.** A dry run of the real game (`capture=False`, about 4 s) logs every
+frame. A pause shifts every later frame by exactly its length, so the clock and `--length` are
+fitted by moving pauses inside their ranges, never by changing speeds (slow fingers read as slow
+motion). The recording must then land on the predicted frame for every drag; `cbj scenario`
+reports a problem if it does not. The fitted values, the predicted and measured frames, and the
+level's difficulty numbers go into `play.json` next to the video.
+
+**Repeatable.** The seed picks the mistakes and hesitations, nothing else. The same level,
+ending and seed give the same `play.json`.
+
+**Runner support.** A drag can end with the finger pressing on past its last cell
+(`push_cells`, at most 0.45 so the block's cell cannot change; the game holds the block at the
+blocker) and staying down (`hold_s`). `push_dir` lets a block that cannot move at all be pressed
+into its neighbour. The runner logs the frame on which each cell was entered (`cell_frames`).
+
+**The narrow-centre level.** `data/levels/gen/narrow_center_01.json` is the case's example
+prompt ("a difficult level with a narrow center section... the player almost fails"): a 6x8
+hourglass with a two-lane waist, 7 blocks, 9 minimum drags (2 repositioning), naive player 1.29x
+the minimum. Its cliffhanger is two blocks head-on in the waist.
+
+**Speed.** Planning solves many positions, so it uses `solve_fast`, an A* search (lower bound:
+blocks left), which gives the same minimum as `solve` (tests compare them on every level and
+1,500 random boards) while searching 589 positions instead of 43,446 on the narrow level.
+
 ## Layout
 
 ```
@@ -297,10 +352,12 @@ src/cbj/solver.py    drag outcomes, BFS solver, replay checker
 src/cbj/describe.py  ASCII boards, plain-English steps, move-script JSON
 src/cbj/difficulty.py difficulty numbers and the simulated naive player
 src/cbj/render.py    render jobs, camera, running the Unity player, checking and comparing recordings
+src/cbj/play.py      scenario scripts: mistakes, hesitations, pacing, endings, pause-only fitting
 src/cbj/cli.py       command line
 unity/CreativeRunner Unity scripts copied into the project copy by build-player
 unity/game-patch     the game fix: Rollic's originals, the patched files, game.patch
 data/levels/         the six shipped levels (copied unchanged from the Unity project)
+data/levels/gen/     generated levels (the narrow-centre hourglass)
 data/solutions/      move scripts for the Unity replay
 reports/             solve table and the Level 3 walkthrough
 tests/               rule, level, solver, replay, failure-mode and render tests

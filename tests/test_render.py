@@ -396,3 +396,29 @@ def test_bad_per_drag_pacing_is_refused(tmp_path, dp, msg):
     level, drags = level3()
     with pytest.raises(ValueError, match=msg):
         make_job(level, LEVEL_03, drags, tmp_path, ffmpeg="/usr/bin/true", drag_pacing=dp)
+
+
+def test_push_and_hold_go_into_the_job(tmp_path):
+    level, drags = level3()
+    stay = Drag(drags[0].block, drags[0].path[:1], False)  # pick up and put back
+    dp = [DragPacing(0, 0.1, 6, push_cells=0.3, hold_s=0.8, push_dir=(0, 1))]
+    job = make_job(level, LEVEL_03, [stay], tmp_path, end_mode="cut", ffmpeg="/usr/bin/true", drag_pacing=dp)
+    d = job["drags"][0]
+    assert (d["push_cells"], d["push_dx"], d["push_dy"], d["hold_s"]) == (0.3, 0, 1, 0.8)
+    plain = make_job(level, LEVEL_03, drags, tmp_path, ffmpeg="/usr/bin/true")["drags"][0]
+    assert (plain["push_cells"], plain["push_dx"], plain["push_dy"], plain["hold_s"]) == (0.0, 0, 0, 0.0)
+
+
+@pytest.mark.parametrize("dp,exits,msg", [
+    (DragPacing(0, 0.1, 6, push_cells=0.5), False, "push_cells must be 0 to 0.45"),
+    (DragPacing(0, 0.1, 6, push_cells=0.3, push_dir=(1, 1)), False, "one cell along an axis"),
+    (DragPacing(0, 0.1, 6, push_cells=0.3), False, "a direction"),  # no move and no push_dir
+    (DragPacing(0, 0.1, 6, push_cells=0.3, push_dir=(0, 1)), True, "does not exit"),
+    (DragPacing(0, 0.1, 6, hold_s=-1), False, "hold_s must be zero or more"),
+])
+def test_bad_push_or_hold_is_refused(tmp_path, dp, exits, msg):
+    level, drags = level3()
+    d = drags[0] if exits else Drag(drags[0].block, drags[0].path[:1], False)
+    with pytest.raises(ValueError, match=msg):
+        make_job(level, LEVEL_03, [d], tmp_path, end_mode="win" if exits else "cut", ffmpeg="/usr/bin/true",
+                 drag_pacing=[dp])

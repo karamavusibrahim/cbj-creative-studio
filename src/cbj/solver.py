@@ -250,6 +250,73 @@ def solve(level: Level, max_states: int = 2_000_000, prune_exits: bool = True,
     return None
 
 
+def solve_fast(level: Level, start: State | None = None, max_states: int = 2_000_000) -> Solution | None:
+    """The same minimum as solve(), usually with far fewer positions searched (A*).
+
+    Every block on the board needs at least one more drag, and a drag removes at most one
+    block, so "blocks left" never overestimates the drags still needed. With f = drags so far
+    + blocks left, an exit leaves f unchanged and a repositioning drag raises it by one. So the
+    search is a 0-1 breadth-first search on f: it only visits positions reachable with no more
+    repositioning drags than the answer needs, where solve() visits every position up to the
+    answer's depth. Exit-first pruning applies as in solve(). The two always agree on the
+    number of drags (tests check this); the drags themselves may differ between equally short
+    solutions. Scenario planning uses this, since it solves many positions per plan."""
+    if not isinstance(max_states, int) or isinstance(max_states, bool) or max_states < 1:
+        raise ValueError(f"max_states must be a positive integer, got {max_states!r}")
+    cell_limit = max(max_states, MAX_GRID * MAX_GRID)
+    if start is None:
+        start = initial_state(level)
+    elif len(start) != len(level.blocks):
+        raise ValueError(f"start has {len(start)} entries, the level has {len(level.blocks)} blocks")
+    blocks_left = sum(p is not None for p in start)
+    if blocks_left == 0:
+        return Solution(level.name, [], 1, 0)
+
+    depth: dict[State, int] = {start: 0}
+    parent: dict[State, tuple[State, Drag] | None] = {start: None}
+    done: set[State] = set()
+    queue: deque[State] = deque([start])
+    while queue:
+        s = queue.popleft()
+        if s in done:
+            continue
+        done.add(s)
+        if _is_goal(s):
+            drags: list[Drag] = []
+            cur = s
+            while parent[cur] is not None:
+                prev, drag = parent[cur]  # type: ignore[misc]
+                drags.append(_with_full_path(level, prev, drag))
+                cur = prev
+            drags.reverse()
+            return Solution(level.name, drags, len(depth), blocks_left)
+        occ = occupancy(level, s)
+        candidates: list[Drag] = []
+        for bid, pivot in enumerate(s):
+            if pivot is None:
+                continue
+            outs = drag_outcomes(level, s, bid, occ, paths=False, first_exit_only=True, cell_limit=cell_limit)
+            exits = [o for o in outs if o.exits]
+            if exits:
+                candidates = [exits[0]]
+                break
+            candidates.extend(outs)
+        for d in candidates:
+            ns = apply_drag(s, d)
+            nd = depth[s] + 1
+            if ns in done or depth.get(ns, nd + 1) <= nd:
+                continue
+            depth[ns] = nd
+            parent[ns] = (s, d)
+            if d.exits:
+                queue.appendleft(ns)  # f unchanged
+            else:
+                queue.append(ns)  # f + 1
+            if len(depth) > max_states:
+                raise SolverLimitError(f"{level.name or 'level'}: more than {max_states} states, stopped")
+    return None
+
+
 def _is_int(v) -> bool:
     return isinstance(v, int) and not isinstance(v, bool)
 

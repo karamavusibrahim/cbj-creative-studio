@@ -233,3 +233,32 @@ def test_a_dry_run_has_the_same_timing_as_a_recording(tmp_path):
     assert [(d["start_frame"], d["exit_frame"], d["end_frame"]) for d in dry["drags"]] == \
            [(d["start_frame"], d["exit_frame"], d["end_frame"]) for d in full["drags"]]
     assert not (tmp_path / "dry" / "gameplay.mp4").exists()
+
+
+NARROW = PROJ / "data/levels/gen/narrow_center_01.json"
+
+
+@pytest.mark.parametrize("ending", ["win", "near_fail", "cliffhanger", "time_out"])
+def test_scenario_endings_land_on_the_predicted_frames(tmp_path, ending):
+    # Dry run, pause-only fit, recording; the recording must match the prediction frame for frame.
+    from cbj.play import plan, run
+    level = load_level(NARROW)
+    script = plan(level, ending)
+    r = run(level, NARROW, script, tmp_path / ending, size=(270, 480), hide=("RestartButton",))
+    assert r["problems"] == []
+    m = script.measured
+    play = json.loads((tmp_path / ending / "play.json").read_text())
+    assert play["measured"]["problems"] == [] and play["fit"]["dry_frames"] > 0
+    if ending == "win":
+        assert r["status"] == "cleared" and m["clock_left_s"] >= 50  # never in the red
+    if ending == "near_fail":
+        assert r["status"] == "cleared" and 1.3 <= m["clock_left_s"] <= 1.7  # the HUD shows 00:01
+        mistake = next(d for d, b in zip(r["drags"], script.beats) if b.kind == "mistake")
+        assert mistake["result"] == "placed"  # pushed into its blocker, still on its planned cell
+    if ending == "cliffhanger":
+        assert r["status"] == "unresolved" and 5 <= m["clock_left_s"] <= 12
+        assert r["drags"][-1]["result"] == "placed" and r["drags"][-1]["cells"] == []  # the push moved no cell
+    if ending == "time_out":
+        assert r["status"] == "failed" and r["drags"][-1]["result"] == "interrupted"
+        last = r["drags"][-1]
+        assert last["cell_frames"] and abs(r["fail_frame"] - last["cell_frames"][-1]) <= 2

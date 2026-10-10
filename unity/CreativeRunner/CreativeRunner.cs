@@ -34,6 +34,10 @@ public class RenderDrag
     public float pause_before_s = 0.4f;
     public float pickup_s = 0.12f;
     public float cells_per_s = 6f;
+    public float push_cells; // after the last cell, press on this far (0-0.45 cells), e.g. into a blocker
+    public int push_dx; // push direction in cells; 0, 0 = the way the path last moved
+    public int push_dy;
+    public float hold_s; // keep the finger down at the end before letting go
 }
 
 [Serializable]
@@ -99,6 +103,7 @@ public class DragRecord
     public float timer_start;
     public float timer_end;
     public List<RenderCell> cells = new List<RenderCell>(); // pivot cells entered, in order
+    public List<int> cell_frames = new List<int>(); // the frame on which each of those cells was entered
     public string result; // "exit", "placed", or what went wrong
 }
 
@@ -272,6 +277,15 @@ public class CreativeRunner : MonoBehaviour
                 throw new Exception($"drag {i + 1}: pause_before_s and pickup_s must be zero or more");
             if (!(d.cells_per_s > 0f) || d.cells_per_s > j.fps / 2f)
                 throw new Exception($"drag {i + 1}: cells_per_s must be above 0 and at most fps/2 ({j.fps / 2f})");
+            // Past 0.5 cells the pivot would round into the next cell, which the script did not plan.
+            if (!NonNegative(d.hold_s) || !NonNegative(d.push_cells) || d.push_cells > 0.45f)
+                throw new Exception($"drag {i + 1}: hold_s must be zero or more and push_cells 0 to 0.45");
+            bool dir = Mathf.Abs(d.push_dx) + Mathf.Abs(d.push_dy) == 1;
+            if (d.push_dx != 0 || d.push_dy != 0 ? !dir : false)
+                throw new Exception($"drag {i + 1}: push_dx, push_dy must be one step along an axis");
+            if (d.push_cells > 0f && (d.exits || (d.path.Count < 2 && !dir)))
+                throw new Exception($"drag {i + 1}: push_cells needs a drag that does not exit, and a direction "
+                                    + "(a path that moves, or push_dx/push_dy)");
         }
     }
 
@@ -485,6 +499,30 @@ public class CreativeRunner : MonoBehaviour
             }
         }
 
+        // Press on past the last cell, as a player pushes a block against the one in its way. The
+        // game stops the block at the blocker (BlockMovementService), so its cell does not change.
+        if (d.push_cells > 0f && !exitTriggered && result.status == null)
+        {
+            Vector2Int endCell = ToCell(d.path[d.path.Count - 1]);
+            Vector2Int step = d.push_dx != 0 || d.push_dy != 0 ? new Vector2Int(d.push_dx, d.push_dy)
+                : endCell - ToCell(d.path[d.path.Count - 2]);
+            // Grid x is world +X and grid y world +Z (BlockMovementService.IsPositionValid).
+            Vector3 last = CellWorld(endCell);
+            Vector3 pushed = last + new Vector3(step.x, 0f, step.y) * (d.push_cells * grid.CellSpacing);
+            int n = Mathf.Max(1, Mathf.RoundToInt(d.push_cells * framesPerCell));
+            for (int f = 1; f <= n && result.status == null; f++)
+            {
+                finger = Vector3.Lerp(last, pushed, (float)f / n);
+                if (Step(b, initialY, rec)) break;
+                yield return null;
+            }
+        }
+        for (int f = 0; f < Frames(d.hold_s) && !exitTriggered && result.status == null; f++)
+        {
+            Step(b, initialY, rec);
+            yield return null;
+        }
+
         fingerDown = false;
         if (exitTriggered)
         {
@@ -539,6 +577,7 @@ public class CreativeRunner : MonoBehaviour
         if (g == Pivot(b)) return false;
         gridService.UpdateBlockPosition(b, g);
         rec.cells.Add(new RenderCell { x = g.x, y = g.y });
+        rec.cell_frames.Add(frame);
         if (!exitService.CanBlockExit(b, g)) return false;
 
         // InputHandler.HandleExitDuringDrag: snap to the cell, then the game's exit animation.
