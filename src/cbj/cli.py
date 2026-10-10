@@ -1,9 +1,11 @@
-"""Command line: `cbj show|solve|table`.
+"""Command line: `cbj show|solve|table|check|build-player|render`.
 
     uv run cbj show  data/levels/Level_03.json
     uv run cbj solve data/levels/Level_03.json [--json out.json]
     uv run cbj table data/levels [--md reports/solve_table.md]
     uv run cbj check data/levels/Level_03.json data/solutions/Level_03.moves.json
+    uv run cbj build-player
+    uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json
 
 Errors print one line, "cbj: <reason>", and exit with code 1.
 """
@@ -12,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -105,9 +108,8 @@ def _cmd_table(args) -> int:
     return 0 if not failed and all(r[3] != "UNSOLVABLE" for r in rows) else 1
 
 
-def _cmd_check(args) -> int:
-    level = load_level(args.level)
-    path = Path(args.moves)
+def _load_moves(level, moves_path) -> list:
+    path = Path(moves_path)
     if not path.is_file():
         raise ValueError(f"{path}: no such file")
     try:
@@ -121,9 +123,14 @@ def _cmd_check(args) -> int:
             raise ValueError(f"{path.name}: this script is for {script.get('level')} "
                              f"({g.get('width')}x{g.get('height')}), not {level.name} ({level.width}x{level.height})")
     try:
-        drags = script_to_drags(script)
+        return script_to_drags(script)
     except ValueError as e:
         raise ValueError(f"{path.name}: {e}") from None
+
+
+def _cmd_check(args) -> int:
+    level = load_level(args.level)
+    drags = _load_moves(level, args.moves)
     final = replay(level, drags)
     left = sum(p is not None for p in final)
     if left:
@@ -131,6 +138,63 @@ def _cmd_check(args) -> int:
         return 1
     print(f"{level.name}: {len(drags)} drags, all legal, board cleared")
     return 0
+
+
+def _cmd_build_player(args) -> int:
+    from .render import build_player
+    print(f"Copying {args.project} into build/ and building the runner player (about a minute)...")
+    app = build_player(Path(args.project), args.unity)
+    print(f"Player built: {app}")
+    return 0
+
+
+def _size(text: str) -> tuple[int, int]:
+    try:
+        w, h = (int(v) for v in text.lower().split("x"))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"size must look like 1080x1920, got {text!r}") from None
+    return w, h
+
+
+def _cmd_render(args) -> int:
+    from .render import Pacing, make_job, run_player
+    level = load_level(args.level)
+    if args.moves:
+        drags = _load_moves(level, args.moves)
+    else:
+        sol = solve(level)
+        if sol is None:
+            raise ValueError(f"{level.name}: unsolvable, nothing to render")
+        drags = sol.drags
+    if args.drags is not None:
+        if args.drags < 1:
+            raise ValueError("--drags must be 1 or more")
+        drags = drags[: args.drags]
+    out = Path(args.out or f"renders/{level.name}")
+    pacing = Pacing(fps=args.fps, cells_per_s=args.speed)
+    job = make_job(level, args.level, drags, out, pacing, end_mode=args.end, size=args.size)
+    print(f"{level.name}: {len(drags)} drags, end mode '{args.end}'. Recording in Unity...")
+    t0 = time.perf_counter()
+    result = run_player(job)
+    dt = time.perf_counter() - t0
+    print(f"Status: {result['status']} {result['message']}".rstrip())
+    print(f"Video: {result['video']} ({result['frames']} frames, {result['duration_s']:.2f} s "
+          f"at {result['fps']} fps, {result['width']}x{result['height']}), recorded in {dt:.0f} s")
+    labels = block_labels(level)
+    for d in result["drags"]:
+        start, end = d["start_frame"] / result["fps"], max(d["end_frame"], 0) / result["fps"]
+        print(f"  drag {d['index'] + 1}: block {labels[d['block']]}, {len(d['cells'])} cells, "
+              f"{d['result']}, {start:.2f}-{end:.2f} s, timer {_clock(d['timer_start'])} -> {_clock(d['timer_end'])}")
+    if result["win_frame"] >= 0:
+        print(f"  win screen at {result['win_frame'] / result['fps']:.2f} s, timer {_clock(result['timer_end'])}")
+    for p in result["problems"]:
+        print(f"  PROBLEM: {p}")
+    return 0 if not result["problems"] else 1
+
+
+def _clock(seconds: float) -> str:
+    s = max(0, int(seconds))
+    return f"{s // 60:02d}:{s % 60:02d}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -151,6 +215,25 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("moves")
     s.set_defaults(func=_cmd_check)
 
+    s = sub.add_parser("build-player", help="build the Unity player that records move scripts")
+    s.add_argument("--project", default=str(Path(__file__).resolve().parents[3] / "CBJ"),
+                   help="the Unity project to copy (default: ../CBJ)")
+    s.add_argument("--unity", default="/Applications/Unity/Hub/Editor/6000.3.5f1/Unity.app/Contents/MacOS/Unity")
+    s.set_defaults(func=_cmd_build_player)
+
+    s = sub.add_parser("render", help="record a move script in the real game as a 9:16 video")
+    s.add_argument("level")
+    s.add_argument("moves", nargs="?", help="move script (default: solve the level)")
+    s.add_argument("-o", "--out", help="output folder (default: renders/<level>)")
+    s.add_argument("--end", choices=["win", "cut", "fail"], default="win",
+                   help="win: play to the win screen; cut: stop after the last drag; "
+                        "fail: wait for the timer to run out")
+    s.add_argument("--drags", type=int, help="play only the first N drags (use with --end cut)")
+    s.add_argument("--fps", type=int, default=30)
+    s.add_argument("--speed", type=float, default=6.0, help="finger speed in cells per second")
+    s.add_argument("--size", type=_size, default=(1080, 1920), help="video size, default 1080x1920")
+    s.set_defaults(func=_cmd_render)
+
     s = sub.add_parser("table", help="solve every level in a folder")
     s.add_argument("dir")
     s.add_argument("--md", help="also write the table as markdown")
@@ -160,7 +243,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     try:
         return args.func(args)
-    except (ValueError, OSError, SolverLimitError, RecursionError) as e:
+    except (ValueError, OSError, SolverLimitError, RecursionError, subprocess.SubprocessError) as e:
         print(f"cbj: {e}", file=sys.stderr)
         return 1
 

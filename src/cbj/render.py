@@ -1,0 +1,240 @@
+"""Record a move script in the real game.
+
+The Unity side is unity/CreativeRunner: it loads the level, replays each drag through the
+game's own movement, grid and exit code on a fixed time step, and pipes the frames to ffmpeg.
+This module checks the script against the rules, writes the runner's job file, starts the
+player, and checks what came back.
+
+    uv run cbj build-player     # once: copy of the Unity project + macOS player in build/
+    uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+
+from .level import Level
+from .solver import Drag, replay
+
+REPO = Path(__file__).resolve().parents[2]
+RUNNER_SRC = REPO / "unity" / "CreativeRunner"
+BUILD_DIR = REPO / "build"
+BUILD_PROJECT = BUILD_DIR / "unity-project"
+PLAYER_APP = BUILD_DIR / "CBJRunner.app"
+DEFAULT_PROJECT = REPO.parent / "CBJ"
+DEFAULT_UNITY = "/Applications/Unity/Hub/Editor/6000.3.5f1/Unity.app/Contents/MacOS/Unity"
+END_MODES = ("win", "cut", "fail")
+EXPECTED_STATUS = {"win": "cleared", "cut": "unresolved", "fail": "failed"}
+
+
+@dataclass(frozen=True)
+class Pacing:
+    """Plain, steady play. Scenario pacing (hesitation, wrong moves) builds on this later."""
+
+    fps: int = 30
+    start_hold_s: float = 1.0  # board on screen before the first touch
+    pause_before_s: float = 0.45  # between drags
+    pickup_s: float = 0.12  # finger down before the block moves
+    cells_per_s: float = 6.0  # finger speed while dragging
+    end_hold_s: float = 2.5  # after the win screen (or after the last drag for "cut")
+
+    def check(self) -> None:
+        if not isinstance(self.fps, int) or isinstance(self.fps, bool) or not 1 <= self.fps <= 120:
+            raise ValueError(f"fps must be an integer from 1 to 120, got {self.fps!r}")
+        if not self.cells_per_s > 0:
+            raise ValueError(f"cells_per_s must be positive, got {self.cells_per_s!r}")
+        for name in ("start_hold_s", "pause_before_s", "pickup_s", "end_hold_s"):
+            v = getattr(self, name)
+            if not v >= 0:
+                raise ValueError(f"{name} must be zero or more, got {v!r}")
+
+
+def level_label(level: Level) -> int:
+    """The number the game shows in its "Level" badge: Level_03 -> 3."""
+    m = re.search(r"(\d+)$", level.name)
+    return int(m.group(1)) if m else 1
+
+
+def make_job(
+    level: Level,
+    level_path: str | Path,
+    drags: list[Drag],
+    out_dir: str | Path,
+    pacing: Pacing = Pacing(),
+    end_mode: str = "win",
+    label: int | None = None,
+    size: tuple[int, int] = (1080, 1920),
+    ffmpeg: str | None = None,
+) -> dict:
+    """Job file for CreativeRunner. Raises ValueError if the drags break a rule, or if
+    end_mode is "win" and the drags do not clear the board."""
+    if end_mode not in END_MODES:
+        raise ValueError(f"end must be one of {', '.join(END_MODES)}, got {end_mode!r}")
+    pacing.check()
+    final = replay(level, drags)
+    left = sum(p is not None for p in final)
+    if end_mode == "win" and left:
+        raise ValueError(f"the drags leave {left} block(s) on the board, so there is no win "
+                         f"to wait for; use end mode 'cut'")
+    if end_mode == "fail" and not left:
+        raise ValueError("the drags clear the board, so the timer cannot run out; "
+                         "a fail ending needs at least one block left")
+    if not drags:
+        raise ValueError("no drags to play")
+    w, h = size
+    if w < 16 or h < 16 or w % 2 or h % 2:
+        raise ValueError(f"video size must be even and at least 16x16, got {w}x{h}")
+    ffmpeg = ffmpeg or shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise ValueError("ffmpeg not found on PATH")
+    return {
+        "level_path": str(Path(level_path).resolve()),
+        "level_label": level_label(level) if label is None else label,
+        "out_dir": str(Path(out_dir).resolve()),
+        "ffmpeg": ffmpeg,
+        "video_name": "gameplay.mp4",
+        "fps": pacing.fps,
+        "width": w,
+        "height": h,
+        "msaa": 4,
+        "crf": 16,
+        "frame_hashes": True,
+        "start_hold_s": pacing.start_hold_s,
+        "end_hold_s": pacing.end_hold_s,
+        "max_seconds": round(estimate_seconds(level, drags, pacing) * 2 + 30
+                             + (level.timer if end_mode == "fail" else 0), 1),
+        "end_mode": end_mode,
+        "drags": [
+            {
+                "block": d.block,
+                "path": [{"x": x, "y": y} for x, y in d.path],
+                "exits": d.exits,
+                "pause_before_s": pacing.pause_before_s if k else 0.0,
+                "pickup_s": pacing.pickup_s,
+                "cells_per_s": pacing.cells_per_s,
+            }
+            for k, d in enumerate(drags)
+        ],
+    }
+
+
+def estimate_seconds(level: Level, drags: list[Drag], pacing: Pacing) -> float:
+    """Rough video length: holds, pauses and finger travel, plus a second for the last exit."""
+    t = pacing.start_hold_s + pacing.end_hold_s + 1.0
+    for k, d in enumerate(drags):
+        t += (pacing.pause_before_s if k else 0.0) + pacing.pickup_s + d.cells_moved / pacing.cells_per_s + 0.2
+    return t
+
+
+def player_binary(app: Path | None = None) -> Path:
+    app = Path(app or PLAYER_APP)
+    macos = app / "Contents" / "MacOS"
+    bins = sorted(p for p in macos.iterdir() if p.is_file()) if macos.is_dir() else []
+    if not bins:
+        raise ValueError(f"{app}: no player build; run `cbj build-player` first")
+    return bins[0]
+
+
+def run_player(job: dict, app: Path | None = None, timeout: float = 900) -> dict:
+    """Write job.json, run the player, and return the checked result."""
+    out = Path(job["out_dir"])
+    out.mkdir(parents=True, exist_ok=True)
+    for stale in ("result.json", "frames.json", job["video_name"]):
+        (out / stale).unlink(missing_ok=True)
+    job_path = out / "job.json"
+    job_path.write_text(json.dumps(job, indent=2))
+    cmd = [str(player_binary(app)), "-cbjJob", str(job_path),
+           "-screen-fullscreen", "0", "-screen-width", "270", "-screen-height", "480",
+           "-logFile", str(out / "player.log")]
+    try:
+        proc = subprocess.run(cmd, timeout=timeout, capture_output=True, text=True)
+    except subprocess.TimeoutExpired:
+        raise ValueError(f"the player did not finish within {timeout:.0f} s; see {out / 'player.log'}") from None
+    if not (out / "result.json").is_file():
+        raise ValueError(f"the player exited with {proc.returncode} and wrote no result; "
+                         f"see {out / 'player.log'}")
+    return check_render(out)
+
+
+def check_render(out_dir: str | Path) -> dict:
+    """Read result.json and frames.json and cross-check them with each other and the video.
+    Adds a "problems" list; an empty list means the recording is consistent."""
+    out = Path(out_dir)
+    result = json.loads((out / "result.json").read_text())
+    frames = json.loads((out / "frames.json").read_text()).get("frames", [])
+    problems = []
+    if len(frames) != result.get("frames"):
+        problems.append(f"frames.json has {len(frames)} frames, result.json says {result.get('frames')}")
+    if [f.get("frame") for f in frames] != list(range(len(frames))):
+        problems.append("frames.json is not numbered 0, 1, 2, ...")
+    expected = EXPECTED_STATUS.get(result.get("end_mode"))
+    if result.get("status") != expected:
+        problems.append(f"status is {result.get('status')!r} ({result.get('message')}), "
+                        f"expected {expected!r}")
+    for d in result.get("drags", []):
+        if d.get("result") not in ("exit", "placed"):
+            problems.append(f"drag {d.get('index', 0) + 1}: {d.get('result')}")
+    video = out / Path(result.get("video") or "gameplay.mp4").name
+    if not video.is_file():
+        problems.append(f"no video at {video}")
+    else:
+        probe = probe_video(video)
+        result["probe"] = probe
+        if probe.get("frames") != result.get("frames"):
+            problems.append(f"video has {probe.get('frames')} frames, the runner wrote {result.get('frames')}")
+        if (probe.get("width"), probe.get("height")) != (result.get("width"), result.get("height")):
+            problems.append(f"video is {probe.get('width')}x{probe.get('height')}, "
+                            f"expected {result.get('width')}x{result.get('height')}")
+    result["problems"] = problems
+    return result
+
+
+def probe_video(path: Path) -> dict:
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return {}
+    cmd = [ffprobe, "-v", "error", "-select_streams", "v:0", "-count_frames",
+           "-show_entries", "stream=width,height,nb_read_frames,r_frame_rate,codec_name,pix_fmt",
+           "-of", "json", str(path)]
+    stream = json.loads(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)["streams"][0]
+    num, den = (int(v) for v in stream["r_frame_rate"].split("/"))
+    return {
+        "width": stream["width"],
+        "height": stream["height"],
+        "frames": int(stream["nb_read_frames"]),
+        "fps": num / den,
+        "codec": stream["codec_name"],
+        "pix_fmt": stream["pix_fmt"],
+    }
+
+
+def build_player(project: Path = DEFAULT_PROJECT, unity: str = DEFAULT_UNITY) -> Path:
+    """Copy the Unity project into build/, add the runner scripts, and build the macOS player.
+    The original project is never modified, so it can stay open in the editor."""
+    project = Path(project).expanduser().resolve()
+    if not (project / "Assets").is_dir() or not (project / "ProjectSettings").is_dir():
+        raise ValueError(f"{project}: not a Unity project")
+    if not Path(unity).is_file():
+        raise ValueError(f"{unity}: Unity editor not found")
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    excludes = ["Temp/", "Logs/", "UserSettings/", "Builds/", "Assets/CreativeRunner/", "Assets/CreativeRunner.meta"]
+    cmd = ["rsync", "-a", "--delete"] + [f"--exclude={e}" for e in excludes] + [f"{project}/", f"{BUILD_PROJECT}/"]
+    subprocess.run(cmd, check=True)
+    dst = BUILD_PROJECT / "Assets" / "CreativeRunner"
+    shutil.rmtree(dst, ignore_errors=True)
+    shutil.copytree(RUNNER_SRC, dst, ignore=shutil.ignore_patterns("*.meta"))
+    log = BUILD_DIR / "build.log"
+    shutil.rmtree(PLAYER_APP, ignore_errors=True)
+    cmd = [unity, "-batchmode", "-quit", "-projectPath", str(BUILD_PROJECT),
+           "-executeMethod", "CreativeRunnerBuild.BuildMac", "-cbjOut", str(PLAYER_APP), "-logFile", str(log)]
+    proc = subprocess.run(cmd)
+    if proc.returncode != 0 or not PLAYER_APP.is_dir():
+        errors = [ln for ln in log.read_text(errors="replace").splitlines() if "error CS" in ln][:10]
+        detail = ("\n" + "\n".join(errors)) if errors else ""
+        raise ValueError(f"Unity build failed (exit {proc.returncode}); see {log}{detail}")
+    return PLAYER_APP
