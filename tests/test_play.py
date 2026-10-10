@@ -311,6 +311,22 @@ def test_a_script_too_short_to_fit_is_refused_clearly(narrow, plans):
         fit_clock(script, narrow, script.beats, {"clock_stopped_frame": 480}, dry_frames(500))  # 15.0 s
 
 
+@pytest.mark.parametrize("target", [19.5, 20.0, 20.5, 21.0, 22.0])
+def test_the_clock_fit_keeps_a_fitted_length(narrow, plans, target):
+    # A real dry run (the game's float clock). For 20.5 s, clocks of 18 s and 19 s both leave
+    # 1.50 s; the smaller pause change (-1 frame) must win over +29, or the clock fit would
+    # undo --length (it did before the fix: 644 frames instead of 614).
+    real = json.loads((PROJ / "tests/data/nc01_near_fail_dry.json").read_text())
+    frames = [{"frame": i, "timer": t} for i, t in enumerate(real["timers"])]
+    dry = {"clock_stopped_frame": real["clock_stopped_frame"]}
+    script = replace(plans["near_fail"])
+    script.beats = fit_length(script.beats, real["frames"], target)
+    beats, timer, fit = fit_clock(script, narrow, plans["near_fail"].beats, dry, frames)
+    total = real["frames"] + sum(b.pause_f - a.pause_f for a, b in zip(plans["near_fail"].beats, beats))
+    assert abs(fit["delta_f"]) <= 15 and abs(total - target * FPS) <= 15
+    assert NEAR_FAIL_RANGE_S[0] <= fit["clock_left_s"] <= NEAR_FAIL_RANGE_S[1]
+
+
 def test_time_out_clock_runs_out_on_the_planned_frame(narrow, plans):
     script = replace(plans["time_out"])
     last = len(script.beats) - 1

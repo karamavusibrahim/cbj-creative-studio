@@ -721,7 +721,10 @@ def fit_clock(script: PlayScript, level: Level, dry_beats: list[Beat], dry: dict
         options = []
         for timer in {max(2, math.floor(e + NEAR_FAIL_LEFT_S)), max(2, math.ceil(e + NEAR_FAIL_LEFT_S))}:
             for delta in range(math.ceil((timer - e - hi) * FPS - 1e-6), math.floor((timer - e - lo) * FPS + 1e-6) + 1):
-                options.append((abs(timer - e - delta / FPS - NEAR_FAIL_LEFT_S), abs(delta), timer, delta))
+                # Compare in whole frames, so equally good options tie exactly and the smaller
+                # change to the pauses (and to the length) wins, not floating-point noise.
+                off = round(abs(timer - e - delta / FPS - NEAR_FAIL_LEFT_S) * FPS)
+                options.append((off, abs(delta), timer, delta))
         return _first_fit(beats, sorted(options), _fit_indices(beats, last),
                           lambda timer, delta: {"delta_f": delta, "clock_left_s": round(timer - e - delta / FPS, 3)})
 
