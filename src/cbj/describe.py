@@ -167,3 +167,27 @@ def solution_to_script(level: Level, sol: Solution) -> dict:
             for d in sol.drags
         ],
     }
+
+
+def script_to_drags(script: dict) -> list[Drag]:
+    """Inverse of solution_to_script. Raises ValueError on a malformed script;
+    whether the moves are legal is checked by solver.replay."""
+    if not isinstance(script, dict) or not isinstance(script.get("drags"), list):
+        raise ValueError("move script must be an object with a 'drags' list")
+    drags = []
+    for k, d in enumerate(script["drags"], start=1):
+        if not isinstance(d, dict):
+            raise ValueError(f"drag {k} must be an object")
+        missing = [f for f in ("block", "path", "exits") if f not in d]
+        if missing:
+            raise ValueError(f"drag {k} is missing {', '.join(missing)}")
+        path = d["path"]
+        if not isinstance(path, list):
+            raise ValueError(f"drag {k}: path must be a list of [x, y] cells")
+        cells = []
+        for c in path:
+            if not (isinstance(c, list) and len(c) == 2 and all(isinstance(v, int) and not isinstance(v, bool) for v in c)):
+                raise ValueError(f"drag {k}: path cell {c!r} is not [x, y] with integers")
+            cells.append((c[0], c[1]))
+        drags.append(Drag(d["block"], tuple(cells), d["exits"], d.get("exit_index")))
+    return drags

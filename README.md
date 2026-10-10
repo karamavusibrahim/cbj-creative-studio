@@ -21,7 +21,10 @@ uv run cbj show  data/levels/Level_03.json                  # draw the board
 uv run cbj solve data/levels/Level_03.json                  # minimum-drag solution, step by step
 uv run cbj solve data/levels/Level_03.json --json out.json  # also write the move script
 uv run cbj table data/levels --md reports/solve_table.md --scripts data/solutions
+uv run cbj check data/levels/Level_03.json data/solutions/Level_03.moves.json  # verify a move script
 ```
+
+Errors print one line, `cbj: <reason>`, and exit with code 1.
 
 Boards print with 1-based columns (`c1..`) and rows (`r1..`) from the bottom-left,
 matching what you see in Unity. Gates are drawn on the edges: `^B` is a blue gate
@@ -72,6 +75,26 @@ A scripted replay must move one cell at a time along an axis and let the pivot
 settle on each cell before the next step. After an exit, the block's cells are
 freed when the 0.1 s snap ends (`PerformExit`), so the next drag must start after
 that; the slide out takes longer but only delays the win screen.
+
+## Failure handling
+
+Fable 5.1 attacked the system with 101 bad inputs (broken files, impossible and
+unsolvable levels, edge sizes, huge boards, illegal and tampered move scripts,
+CLI misuse). The fixes that came out of it:
+
+- Level files are parsed strictly. Missing fields, wrong types (`"4"`, `4.5`,
+  `true`), unknown colours or directions, and non-JSON files raise a `ValueError`
+  that names the file and the field. Nothing is silently coerced.
+- `validate` also rejects boards larger than the Level Editor's 12x12.
+- `solve` rejects a bad `max_states`, and stops with `SolverLimitError` when the
+  search grows too large or a single drag reaches too many cells.
+- `replay` rejects anything that is not a well-formed drag; `script_to_drags`
+  reads a saved move script.
+- The CLI never shows a Python traceback for bad input. `cbj table` reports a
+  bad file as an `ERROR` row and keeps going.
+
+`tests/test_failure_modes.py` holds 60 of these cases; 44 of them fail on the
+code before the fixes.
 
 ## Layout
 

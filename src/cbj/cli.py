@@ -3,6 +3,9 @@
     uv run cbj show  data/levels/Level_03.json
     uv run cbj solve data/levels/Level_03.json [--json out.json]
     uv run cbj table data/levels [--md reports/solve_table.md]
+    uv run cbj check data/levels/Level_03.json data/solutions/Level_03.moves.json
+
+Errors print one line, "cbj: <reason>", and exit with code 1.
 """
 
 from __future__ import annotations
@@ -13,10 +16,10 @@ import sys
 import time
 from pathlib import Path
 
-from .describe import block_labels, describe_drag, render, shape_name, solution_to_script
+from .describe import block_labels, describe_drag, render, script_to_drags, shape_name, solution_to_script
 from .level import load_level
 from .rules import initial_state
-from .solver import apply_drag, replay, solve
+from .solver import SolverLimitError, apply_drag, replay, solve
 
 
 def _cmd_show(args) -> int:
@@ -55,11 +58,22 @@ def _cmd_solve(args) -> int:
 
 
 def _cmd_table(args) -> int:
+    folder = Path(args.dir)
+    if not folder.is_dir():
+        raise ValueError(f"{folder}: no such folder")
     rows = []
-    for path in sorted(Path(args.dir).glob("*.json")):
-        level = load_level(path)
-        t0 = time.perf_counter()
-        sol = solve(level)
+    failed = False
+    for path in sorted(folder.glob("*.json")):
+        try:
+            level = load_level(path)
+            t0 = time.perf_counter()
+            sol = solve(level)
+        except (ValueError, SolverLimitError) as e:
+            # One bad file must not hide the results for the others.
+            print(f"cbj: {e}", file=sys.stderr)
+            rows.append((path.stem, "-", "-", "ERROR", "-", "-", "-", "-", "-"))
+            failed = True
+            continue
         dt = (time.perf_counter() - t0) * 1000
         if sol is None:
             rows.append((level.name, f"{level.width}x{level.height}", len(level.blocks), "UNSOLVABLE",
@@ -82,7 +96,31 @@ def _cmd_table(args) -> int:
     if args.md:
         Path(args.md).parent.mkdir(parents=True, exist_ok=True)
         Path(args.md).write_text(text + "\n")
-    return 0 if all(r[3] != "UNSOLVABLE" for r in rows) else 1
+    if not rows:
+        print(f"cbj: no .json level files in {folder}", file=sys.stderr)
+    return 0 if not failed and all(r[3] != "UNSOLVABLE" for r in rows) else 1
+
+
+def _cmd_check(args) -> int:
+    level = load_level(args.level)
+    path = Path(args.moves)
+    if not path.is_file():
+        raise ValueError(f"{path}: no such file")
+    try:
+        script = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{path.name}: not valid JSON ({e.msg}, line {e.lineno})") from None
+    try:
+        drags = script_to_drags(script)
+    except ValueError as e:
+        raise ValueError(f"{path.name}: {e}") from None
+    final = replay(level, drags)
+    left = sum(p is not None for p in final)
+    if left:
+        print(f"{level.name}: {len(drags)} drags are legal, but {left} block(s) are still on the board")
+        return 1
+    print(f"{level.name}: {len(drags)} drags, all legal, board cleared")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -98,6 +136,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--json", help="write the move script for the Unity replay")
     s.set_defaults(func=_cmd_solve)
 
+    s = sub.add_parser("check", help="check a move script against a level, cell by cell")
+    s.add_argument("level")
+    s.add_argument("moves")
+    s.set_defaults(func=_cmd_check)
+
     s = sub.add_parser("table", help="solve every level in a folder")
     s.add_argument("dir")
     s.add_argument("--md", help="also write the table as markdown")
@@ -105,7 +148,11 @@ def main(argv: list[str] | None = None) -> int:
     s.set_defaults(func=_cmd_table)
 
     args = p.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except (ValueError, OSError, SolverLimitError) as e:
+        print(f"cbj: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

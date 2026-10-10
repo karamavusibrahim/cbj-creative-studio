@@ -102,8 +102,54 @@ class Level:
         return self.in_bounds(cell) and cell not in self.inactive
 
 
-def _vec(d: dict) -> Vec:
-    return (int(d["x"]), int(d["y"]))
+# The Level Editor's width and height sliders run 1..12 (LevelEditorWindow IntSlider).
+MAX_GRID = 12
+
+
+def _is_int(v) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _int(d: dict, key: str, where: str, default: int | None = None) -> int:
+    """An int field. JsonUtility never writes strings, floats or booleans into an int field."""
+    v = d.get(key)
+    if v is None:
+        if default is not None and key not in d:
+            return default
+        raise ValueError(f"{where}{key} is missing")
+    if not _is_int(v):
+        raise ValueError(f"{where}{key} must be an integer, got {v!r}")
+    return v
+
+
+def _vec(v, where: str) -> Vec:
+    if not (isinstance(v, dict) and _is_int(v.get("x")) and _is_int(v.get("y"))):
+        raise ValueError(f"{where} needs integer x and y, got {v!r}")
+    return (v["x"], v["y"])
+
+
+def _list(d: dict, key: str, where: str) -> list:
+    """A list field; missing or null means empty, as JsonUtility leaves the default list."""
+    v = d.get(key)
+    if v is None:
+        return []
+    if not isinstance(v, list):
+        raise ValueError(f"{where}{key} must be a list, got {type(v).__name__}")
+    return v
+
+
+def _obj(v, where: str) -> dict:
+    if not isinstance(v, dict):
+        raise ValueError(f"{where} must be an object, got {v!r}")
+    return v
+
+
+def _enum(enum_type, value: int, where: str):
+    try:
+        return enum_type(value)
+    except ValueError:
+        names = ", ".join(f"{m.value} {m.name.lower()}" for m in enum_type)
+        raise ValueError(f"{where} {value} is not one of: {names}") from None
 
 
 def _vec_dict(v: Vec) -> dict:
@@ -111,33 +157,44 @@ def _vec_dict(v: Vec) -> dict:
 
 
 def level_from_dict(d: dict, name: str = "") -> Level:
+    """Parse level JSON. Raises ValueError naming the field for anything malformed."""
+    if not isinstance(d, dict):
+        raise ValueError(f"level JSON must be an object, got {type(d).__name__}")
     blocks = []
-    for b in d.get("GridBlockDatas", []) or []:
-        raw = tuple(_vec(o) for o in b.get("shapeOffsets", []) or [])
+    for i, b in enumerate(_list(d, "GridBlockDatas", "")):
+        w = f"GridBlockDatas[{i}]."
+        b = _obj(b, w.rstrip("."))
+        raw = tuple(_vec(o, f"{w}shapeOffsets[{k}]") for k, o in enumerate(_list(b, "shapeOffsets", w)))
+        if "gridPosition" not in b:
+            raise ValueError(f"{w}gridPosition is missing")
         blocks.append(
             BlockSpec(
-                color=BlockColor(int(b["blockColor"])),
-                pivot=_vec(b["gridPosition"]),
+                color=_enum(BlockColor, _int(b, "blockColor", w), f"{w}blockColor"),
+                pivot=_vec(b["gridPosition"], f"{w}gridPosition"),
                 offsets=normalize_block_offsets(list(raw)),
                 raw_offsets=raw,
             )
         )
     exits = []
-    for e in d.get("ExitDatas", []) or []:
+    for j, e in enumerate(_list(d, "ExitDatas", "")):
+        w = f"ExitDatas[{j}]."
+        e = _obj(e, w.rstrip("."))
+        if "gridPosition" not in e:
+            raise ValueError(f"{w}gridPosition is missing")
         exits.append(
             ExitSpec(
-                color=BlockColor(int(e["requiredColor"])),
-                direction=ExitDirection(int(e["direction"])),
-                pivot=_vec(e["gridPosition"]),
-                raw_offsets=tuple(_vec(o) for o in e.get("shapeOffsets", []) or []),
-                exit_number=int(e.get("exitNumber", 0)),
+                color=_enum(BlockColor, _int(e, "requiredColor", w), f"{w}requiredColor"),
+                direction=_enum(ExitDirection, _int(e, "direction", w), f"{w}direction"),
+                pivot=_vec(e["gridPosition"], f"{w}gridPosition"),
+                raw_offsets=tuple(_vec(o, f"{w}shapeOffsets[{k}]") for k, o in enumerate(_list(e, "shapeOffsets", w))),
+                exit_number=_int(e, "exitNumber", w, default=0),
             )
         )
-    inactive_list = tuple(_vec(c) for c in d.get("inactiveCells", []) or [])
+    inactive_list = tuple(_vec(c, f"inactiveCells[{k}]") for k, c in enumerate(_list(d, "inactiveCells", "")))
     return Level(
-        width=int(d["gridWidth"]),
-        height=int(d["gridHeight"]),
-        timer=int(d.get("timerCount", 0)),
+        width=_int(d, "gridWidth", ""),
+        height=_int(d, "gridHeight", ""),
+        timer=_int(d, "timerCount", "", default=0),
         inactive=frozenset(inactive_list),
         blocks=tuple(blocks),
         exits=tuple(exits),
@@ -179,12 +236,17 @@ def validate(level: Level) -> list[str]:
     problems: list[str] = []
     if level.width <= 0 or level.height <= 0:
         problems.append(f"grid must be positive, got {level.width}x{level.height}")
+        return problems
+    if level.width > MAX_GRID or level.height > MAX_GRID:
+        problems.append(f"grid {level.width}x{level.height} is larger than the Level Editor's {MAX_GRID}x{MAX_GRID}")
+        return problems
     for c in level.inactive:
         if not level.in_bounds(c):
             problems.append(f"inactive cell {c} is out of bounds")
     seen: dict[Vec, int] = {}
     for i, b in enumerate(level.blocks):
-        for c in b.cells_at(b.pivot):
+        # dict.fromkeys: a repeated offset is the same cell (ItemFactory writes it twice), not an overlap.
+        for c in dict.fromkeys(b.cells_at(b.pivot)):
             if not level.in_bounds(c):
                 problems.append(f"block {i} cell {c} is out of bounds")
             elif c in level.inactive:
@@ -220,8 +282,22 @@ def validate(level: Level) -> list[str]:
 
 
 def load_level(path: str | Path, strict: bool = True) -> Level:
+    """Read a level file. Every problem is raised as ValueError starting with the file name."""
     path = Path(path)
-    level = level_from_dict(json.loads(path.read_text()), name=path.stem)
+    if not path.exists():
+        raise ValueError(f"{path}: no such file")
+    if not path.is_file():
+        raise ValueError(f"{path}: not a file")
+    try:
+        data = json.loads(path.read_text())
+    except UnicodeDecodeError:
+        raise ValueError(f"{path.name}: not a text file") from None
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{path.name}: not valid JSON ({e.msg}, line {e.lineno})") from None
+    try:
+        level = level_from_dict(data, name=path.stem)
+    except ValueError as e:
+        raise ValueError(f"{path.name}: {e}") from None
     if strict:
         problems = validate(level)
         if problems:
