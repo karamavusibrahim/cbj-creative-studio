@@ -46,8 +46,11 @@ class Pacing:
     def check(self) -> None:
         if not isinstance(self.fps, int) or isinstance(self.fps, bool) or not 1 <= self.fps <= 120:
             raise ValueError(f"fps must be an integer from 1 to 120, got {self.fps!r}")
-        if not self.cells_per_s > 0:
-            raise ValueError(f"cells_per_s must be positive, got {self.cells_per_s!r}")
+        if not 0 < self.cells_per_s <= self.fps / 2:
+            # Faster than half a cell per frame and the block can land on a cell boundary,
+            # where the game's per-frame exit check may see a different cell.
+            raise ValueError(f"cells_per_s must be above 0 and at most fps/2 ({self.fps / 2:g}), "
+                             f"got {self.cells_per_s!r}")
         for name in ("start_hold_s", "pause_before_s", "pickup_s", "end_hold_s"):
             v = getattr(self, name)
             if not v >= 0:
@@ -81,6 +84,9 @@ def make_job(
     if end_mode == "win" and left:
         raise ValueError(f"the drags leave {left} block(s) on the board, so there is no win "
                          f"to wait for; use end mode 'cut'")
+    if end_mode == "cut" and not left:
+        raise ValueError("the drags clear the board, so the video would end on the win screen; "
+                         "use end mode 'win', or fewer drags for a cliffhanger")
     if end_mode == "fail" and not left:
         raise ValueError("the drags clear the board, so the timer cannot run out; "
                          "a fail ending needs at least one block left")
@@ -146,6 +152,8 @@ def run_player(job: dict, app: Path | None = None, timeout: float = 900) -> dict
     out.mkdir(parents=True, exist_ok=True)
     for stale in ("result.json", "frames.json", job["video_name"]):
         (out / stale).unlink(missing_ok=True)
+    for still in out.glob("[0-9][0-9]_*.png"):  # 00_start.png, 01_drag.png, ..., 99_end.png
+        still.unlink()
     job_path = out / "job.json"
     job_path.write_text(json.dumps(job, indent=2))
     cmd = [str(player_binary(app)), "-cbjJob", str(job_path),
@@ -177,7 +185,7 @@ def check_render(out_dir: str | Path) -> dict:
         problems.append(f"status is {result.get('status')!r} ({result.get('message')}), "
                         f"expected {expected!r}")
     for d in result.get("drags", []):
-        if d.get("result") not in ("exit", "placed"):
+        if d.get("result") not in ("exit", "placed", "interrupted"):
             problems.append(f"drag {d.get('index', 0) + 1}: {d.get('result')}")
     video = out / Path(result.get("video") or "gameplay.mp4").name
     if not video.is_file():
@@ -211,6 +219,49 @@ def probe_video(path: Path) -> dict:
         "codec": stream["codec_name"],
         "pix_fmt": stream["pix_fmt"],
     }
+
+
+def compare_recordings(a: str | Path, b: str | Path) -> dict:
+    """How close two recordings are. The game state (timer, finger, drags) must match exactly.
+    Pixels match in nearly every frame; the rest differ by a few pixels from the graphics
+    driver, so pixel closeness is measured as PSNR (identical frames count as infinite)."""
+    a, b = Path(a), Path(b)
+    ra = json.loads((a / "result.json").read_text())
+    rb = json.loads((b / "result.json").read_text())
+    fa = json.loads((a / "frames.json").read_text())["frames"]
+    fb = json.loads((b / "frames.json").read_text())["frames"]
+    state_keys = ("timer", "finger", "finger_x", "finger_y")
+    state_diff = [x["frame"] for x, y in zip(fa, fb)
+                  if any(abs(x.get(k, 0) - y.get(k, 0)) > 1e-4 for k in state_keys)]
+    drag_keys = ("block", "cells", "result", "start_frame", "exit_frame", "end_frame")
+    drags_equal = [{k: d.get(k) for k in drag_keys} for d in ra["drags"]] == \
+                  [{k: d.get(k) for k in drag_keys} for d in rb["drags"]]
+    same_length = len(fa) == len(fb)
+    out = {
+        "frames": (len(fa), len(fb)),
+        "state_equal": same_length and not state_diff and drags_equal and ra["status"] == rb["status"]
+                       and ra.get("win_frame") == rb.get("win_frame") and ra.get("fail_frame") == rb.get("fail_frame"),
+        "state_diff_frames": state_diff[:20],
+        "identical_frames": sum(x.get("hash") == y.get("hash") for x, y in zip(fa, fb)),
+        "min_psnr_db": None,
+        "worst_frames": [],
+    }
+    va, vb = a / Path(ra["video"]).name, b / Path(rb["video"]).name
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg and va.is_file() and vb.is_file() and same_length:
+        stats = b / "psnr.log"
+        subprocess.run([ffmpeg, "-v", "error", "-i", str(va), "-i", str(vb),
+                        "-lavfi", f"psnr=stats_file={stats}", "-f", "null", "-"], check=True)
+        psnr = []
+        for line in stats.read_text().splitlines():
+            m = re.search(r"n:(\d+).*psnr_avg:(\S+)", line)
+            if m:
+                psnr.append((int(m.group(1)) - 1, float(m.group(2))))  # "inf" parses as inf
+        stats.unlink()
+        worst = sorted(psnr, key=lambda t: t[1])
+        out["min_psnr_db"] = worst[0][1] if worst else None
+        out["worst_frames"] = [(n, round(v, 1)) for n, v in worst[:3] if v != float("inf")]
+    return out
 
 
 def build_player(project: Path = DEFAULT_PROJECT, unity: str = DEFAULT_UNITY) -> Path:

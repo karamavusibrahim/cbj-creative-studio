@@ -12,7 +12,8 @@ uv sync
 uv run pytest
 ```
 
-Python 3.12, no runtime dependencies.
+Python 3.12, no runtime dependencies. Recording videos also needs ffmpeg on PATH
+and Unity 6000.3.5f1 (see "Recording in the real game").
 
 ## Commands
 
@@ -22,6 +23,9 @@ uv run cbj solve data/levels/Level_03.json                  # minimum-drag solut
 uv run cbj solve data/levels/Level_03.json --json out.json  # also write the move script
 uv run cbj table data/levels --md reports/solve_table.md --scripts data/solutions
 uv run cbj check data/levels/Level_03.json data/solutions/Level_03.moves.json  # verify a move script
+uv run cbj build-player                                     # once: build the Unity recording player
+uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json  # record it in the game
+uv run cbj compare renders/Level_03 renders/Level_03_b       # how close two recordings are
 ```
 
 Errors print one line, `cbj: <reason>`, and exit with code 1.
@@ -105,6 +109,101 @@ move-script reader that did not exist yet. A third Fable review found a crash on
 deeply nested JSON and five smaller issues; the last 11 tests cover those, and
 10 of them fail on the code before that round.
 
+## Recording in the real game (Unity CreativeRunner)
+
+`cbj render` plays a move script in the real game and records it as a 1080x1920,
+30 fps video. Nothing is redrawn or faked: the level is the game's own LevelData,
+and every drag goes through the game's own `BlockMovementService`,
+`BlockGridService` and `ExitService`, one frame at a time, exactly as
+`InputHandler` drives them from the mouse. Only the mouse is replaced, by a
+scripted finger.
+
+```
+uv run cbj build-player     # ~35 s; needs Unity 6000.3.5f1 and the project at ../CBJ
+uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json
+uv run cbj render data/levels/Level_05.json                  # no script: solve, then record
+uv run cbj render LEVEL MOVES --end cut --drags 2            # stop after drag 2 (cliffhanger)
+uv run cbj render LEVEL MOVES --end fail --drags 2           # wait for the timer to run out
+```
+
+`build-player` copies the Unity project into `build/unity-project`, adds
+`unity/CreativeRunner`, and builds `build/CBJRunner.app`. The original project
+is never modified, so it can stay open in the editor. The runner script does
+nothing unless the player is started with `-cbjJob <job.json>`.
+
+How a recording works:
+
+1. `make_job` checks the script with `replay` first, so an illegal script is
+   refused before Unity starts, and writes `job.json` (level path, timings, drags).
+2. The player loads the level, fits the camera to a 9:16 frame with the game's
+   own fit formula, and draws the UI through the camera at the scale a 1080-wide
+   phone uses.
+3. Time runs on a fixed step (`Time.captureDeltaTime`), so a frame is always
+   1/30 s of game time however long it takes to render. The timer, the exit
+   slide and the win animation all run on that clock.
+4. For each drag the finger picks the block up, moves one cell at a time along
+   the planned pivot path, and waits at corners until the block catches up, so
+   the game's per-frame exit check sees the same cells the solver planned.
+5. After each drag the runner compares the cells the block actually entered, and
+   whether it exited, with the script. Any difference stops the recording with
+   status `mismatch` and the reason.
+6. Frames are read back from the GPU and piped to ffmpeg. `frames.json` stores,
+   for every frame, the MD5 of the raw pixels, the game timer and the finger's
+   position in video pixels (for a hand overlay later). `result.json` stores the
+   status, the frame of the first touch, each drag's frames, the win or fail
+   frame, and the timer at each point.
+
+Statuses: `cleared` (win screen), `unresolved` (`--end cut`), `failed` (the
+game's fail screen; play stops there, as it does for a player, and a drag cut
+short by it is marked `interrupted`), `mismatch`, `timeout`, `error`. A broken
+job, a path cell off the board, or ffmpeg dying mid-recording ends the run with
+`error` or `mismatch` and a reason; the player never hangs. `cbj render` then
+cross-checks `result.json`, `frames.json` and an ffprobe of the video, and
+prints any problem.
+
+`make_job` refuses scripts that cannot give the asked ending (`win` needs a
+cleared board, `cut` and `fail` need a block left) and a finger faster than
+half a cell per frame (15 cells/s at 30 fps), the limit above which the block
+could land on a cell boundary when the game checks for an exit.
+
+Results: the solver's scripts clear all six shipped levels in the game, with
+every drag entering exactly the planned cells.
+
+**Repeatability.** The same job gives the same game every time: the timer,
+finger position, cells entered, exit frames and ending are identical frame for
+frame. The pixels are identical in nearly every frame, but not all: across
+repeated 270x480 renders of Level 6, one or two frames per run differed by a
+few pixels (worst frame about 45 dB PSNR, invisible to the eye), at random
+positions. Logging every particle's state showed the simulation identical in
+those frames, and the difference stayed with MSAA off and shaders warmed up,
+so it comes from below the game, in the graphics driver. Full-size renders
+usually match on every frame. `cbj compare A B` therefore reports the game
+state, the count of identical frames and the lowest frame PSNR, and the
+controlled-editing proof will compare with that tolerance rather than demand
+bit-identical frames. Two real sources of variation were fixed on the way:
+particle systems picked a new random seed every run (the runner fixes each
+seed), and Unity UI button fades run on real time (the runner makes them
+instant).
+
+**Known differences from a phone.** The drag follows the game's own
+`Lerp(..., deltaTime * dragSpeed)`, so at 30 fps the block trails the finger a
+little more tightly than on a 60 Hz phone; render with `--fps 60` for the
+phone's feel. The game's 1.5 s camera glide at level start is not played: the
+video opens on the fitted board. `build-player` copies the project's
+`Library/` folder to keep builds at about 35 s; if a build fails while the
+editor is busy importing, close the editor or delete `build/unity-project` and
+build again.
+
+`tests/test_render.py` checks jobs, recordings and comparisons without Unity.
+`tests/test_unity_render.py` starts the player 15 times (about 3 minutes): six
+levels cleared, a repeat render, a blocked drag, an unplanned exit, a path off
+the board, a dead ffmpeg, a bad job, the fail screen between drags and in the
+middle of one:
+
+```
+CBJ_UNITY=1 uv run pytest tests/test_unity_render.py
+```
+
 ## Layout
 
 ```
@@ -112,9 +211,12 @@ src/cbj/level.py     LevelData model, JSON round-trip, validation
 src/cbj/rules.py     occupancy, valid positions, exit check
 src/cbj/solver.py    drag outcomes, BFS solver, replay checker
 src/cbj/describe.py  ASCII boards, plain-English steps, move-script JSON
+src/cbj/render.py    render jobs, running the Unity player, checking recordings
 src/cbj/cli.py       command line
+unity/CreativeRunner Unity scripts copied into the project copy by build-player
 data/levels/         the six shipped levels (copied unchanged from the Unity project)
 data/solutions/      move scripts for the Unity replay
 reports/             solve table and the Level 3 walkthrough
-tests/               rule tests, level round-trip, solver and replay tests
+tests/               rule, level, solver, replay, failure-mode and render tests
+build/, renders/     player build and recordings (not in git)
 ```

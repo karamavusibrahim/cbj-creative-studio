@@ -11,7 +11,7 @@ import pytest
 from cbj import cli, render
 from cbj.describe import script_to_drags
 from cbj.level import load_level
-from cbj.render import Pacing, check_render, level_label, make_job, player_binary
+from cbj.render import Pacing, check_render, compare_recordings, level_label, make_job, player_binary, run_player
 from cbj.solver import Drag, ReplayError
 
 PROJ = Path(__file__).parent.parent
@@ -80,6 +80,12 @@ def test_win_ending_needs_a_cleared_board(tmp_path):
     assert len(job["drags"]) == 2
 
 
+def test_cut_ending_needs_a_block_left(tmp_path):
+    level, drags = level3()
+    with pytest.raises(ValueError, match="use end mode 'win'"):
+        make_job(level, LEVEL_03, drags, tmp_path, end_mode="cut", ffmpeg="/usr/bin/true")
+
+
 def test_fail_ending_needs_a_block_left_and_waits_for_the_timer(tmp_path):
     level, drags = level3()
     with pytest.raises(ValueError, match="at least one block left"):
@@ -94,6 +100,9 @@ def test_fail_ending_needs_a_block_left_and_waits_for_the_timer(tmp_path):
     ({"pacing": Pacing(fps=True)}, "fps"),
     ({"pacing": Pacing(fps=24.0)}, "fps"),
     ({"pacing": Pacing(cells_per_s=0)}, "cells_per_s"),
+    ({"pacing": Pacing(cells_per_s=16)}, "at most fps/2"),
+    ({"pacing": Pacing(fps=10, cells_per_s=6)}, "at most fps/2"),
+    ({"pacing": Pacing(cells_per_s=float("nan"))}, "cells_per_s"),
     ({"pacing": Pacing(pause_before_s=-1)}, "pause_before_s"),
     ({"pacing": Pacing(end_hold_s=float("nan"))}, "end_hold_s"),
     ({"size": (1081, 1920)}, "even"),
@@ -102,6 +111,10 @@ def test_fail_ending_needs_a_block_left_and_waits_for_the_timer(tmp_path):
 def test_job_rejects_bad_settings(tmp_path, kw, msg):
     with pytest.raises(ValueError, match=msg):
         job3(tmp_path, **kw)
+
+
+def test_finger_speed_up_to_half_a_cell_per_frame_is_allowed(tmp_path):
+    assert job3(tmp_path, pacing=Pacing(cells_per_s=15))["drags"][0]["cells_per_s"] == 15
 
 
 def test_job_needs_drags(tmp_path):
@@ -119,6 +132,18 @@ def test_level_label():
 def test_missing_player_says_how_to_build_it(tmp_path):
     with pytest.raises(ValueError, match="cbj build-player"):
         player_binary(tmp_path / "nothing.app")
+
+
+def test_run_removes_old_stills_but_not_other_files(tmp_path):
+    job = job3(tmp_path)
+    out = Path(job["out_dir"])
+    out.mkdir(parents=True)
+    (out / "03_drag.png").write_bytes(b"old")
+    (out / "my_notes.png").write_bytes(b"keep")
+    with pytest.raises(ValueError, match="cbj build-player"):
+        run_player(job, app=tmp_path / "nothing.app")
+    assert not (out / "03_drag.png").exists()
+    assert (out / "my_notes.png").exists()
 
 
 def test_cli_render_without_a_player_prints_one_line(tmp_path, monkeypatch, capsys):
@@ -147,7 +172,7 @@ def test_cli_render_bad_size_is_a_usage_error(capsys):
 # ---------- check_render on recordings written by hand ----------
 
 def fake_recording(out: Path, frames=6, status="cleared", end_mode="win", drag_result="exit",
-                   video_frames=None, size=(64, 112)):
+                   video_frames=None, size=(64, 112), color="blue", timer=300.0):
     out.mkdir(parents=True, exist_ok=True)
     w, h = size
     result = {
@@ -156,11 +181,12 @@ def fake_recording(out: Path, frames=6, status="cleared", end_mode="win", drag_r
         "drags": [{"index": 0, "result": drag_result}],
     }
     (out / "result.json").write_text(json.dumps(result))
-    log = {"frames": [{"frame": i, "hash": f"{i:032x}"} for i in range(frames)]}
+    log = {"frames": [{"frame": i, "hash": f"{i:032x}", "timer": timer, "finger": False,
+                       "finger_x": 0, "finger_y": 0} for i in range(frames)]}
     (out / "frames.json").write_text(json.dumps(log))
     n = frames if video_frames is None else video_frames
     if n:
-        subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", f"color=c=blue:s={w}x{h}:r=30",
+        subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", f"color=c={color}:s={w}x{h}:r=30",
                         "-frames:v", str(n), "-pix_fmt", "yuv420p", str(out / "gameplay.mp4")], check=True)
     return out
 
@@ -181,6 +207,7 @@ def test_check_render_accepts_a_consistent_recording(tmp_path):
     ({"status": "unresolved"}, "expected 'cleared'"),
     ({"end_mode": "fail", "status": "failed"}, None),
     ({"end_mode": "cut", "status": "unresolved"}, None),
+    ({"end_mode": "fail", "status": "failed", "drag_result": "interrupted"}, None),
     ({"drag_result": "mismatch: block 0 entered no new cell"}, "drag 1: mismatch"),
     ({"video_frames": 5}, "video has 5 frames"),
     ({"video_frames": 0}, "no video"),
@@ -202,3 +229,32 @@ def test_check_render_notices_a_frame_log_gap(tmp_path):
     problems = check_render(out)["problems"]
     assert any("frames.json has 5 frames" in p for p in problems)
     assert any("not numbered" in p for p in problems)
+
+
+@needs_ffmpeg
+def test_compare_identical_recordings(tmp_path):
+    a = fake_recording(tmp_path / "a")
+    b = fake_recording(tmp_path / "b")
+    c = compare_recordings(a, b)
+    assert c["state_equal"] and c["identical_frames"] == 6
+    assert c["min_psnr_db"] == float("inf")
+
+
+@needs_ffmpeg
+def test_compare_finds_a_state_difference_and_a_pixel_difference(tmp_path):
+    a = fake_recording(tmp_path / "a")
+    b = fake_recording(tmp_path / "b", timer=299.0, color="red")
+    c = compare_recordings(a, b)
+    assert not c["state_equal"] and c["state_diff_frames"][:2] == [0, 1]
+    assert c["min_psnr_db"] < 20
+
+
+@needs_ffmpeg
+def test_cli_compare(tmp_path, capsys):
+    a = fake_recording(tmp_path / "a")
+    b = fake_recording(tmp_path / "b")
+    assert cli.main(["compare", str(a), str(b)]) == 0
+    out = capsys.readouterr().out
+    assert "game state (timer, finger, drags, ending): identical" in out
+    assert cli.main(["compare", str(a), str(tmp_path / "nothing")]) == 1
+    assert "no recording" in capsys.readouterr().err

@@ -1,4 +1,4 @@
-"""Command line: `cbj show|solve|table|check|build-player|render`.
+"""Command line: `cbj show|solve|table|check|build-player|render|compare`.
 
     uv run cbj show  data/levels/Level_03.json
     uv run cbj solve data/levels/Level_03.json [--json out.json]
@@ -192,6 +192,23 @@ def _cmd_render(args) -> int:
     return 0 if not result["problems"] else 1
 
 
+def _cmd_compare(args) -> int:
+    from .render import compare_recordings
+    for d in (args.a, args.b):
+        if not (Path(d) / "result.json").is_file():
+            raise ValueError(f"{d}: no recording (result.json) there")
+    c = compare_recordings(args.a, args.b)
+    na, nb = c["frames"]
+    print(f"frames: {na} vs {nb}")
+    print("game state (timer, finger, drags, ending): " + ("identical" if c["state_equal"] else
+          f"DIFFERENT (first frames: {c['state_diff_frames']})"))
+    print(f"identical frames: {c['identical_frames']} of {min(na, nb)}")
+    if c["min_psnr_db"] is not None:
+        low = "inf (all identical)" if c["min_psnr_db"] == float("inf") else f"{c['min_psnr_db']:.1f} dB"
+        print(f"lowest frame PSNR: {low}" + (f", worst frames {c['worst_frames']}" if c["worst_frames"] else ""))
+    return 0 if c["state_equal"] else 1
+
+
 def _clock(seconds: float) -> str:
     s = max(0, int(seconds))
     return f"{s // 60:02d}:{s % 60:02d}"
@@ -233,6 +250,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--speed", type=float, default=6.0, help="finger speed in cells per second")
     s.add_argument("--size", type=_size, default=(1080, 1920), help="video size, default 1080x1920")
     s.set_defaults(func=_cmd_render)
+
+    s = sub.add_parser("compare", help="compare two recordings: game state, frames, PSNR")
+    s.add_argument("a")
+    s.add_argument("b")
+    s.set_defaults(func=_cmd_compare)
 
     s = sub.add_parser("table", help="solve every level in a folder")
     s.add_argument("dir")

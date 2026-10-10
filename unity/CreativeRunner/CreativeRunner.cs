@@ -144,6 +144,8 @@ public class CreativeRunner : MonoBehaviour
     bool scriptDone;
     bool finished;
     bool fingerDown;
+    string captureError;
+    int doneFrames;
     Vector3 finger;
     bool exitTriggered;
     bool exitPerformed;
@@ -163,8 +165,8 @@ public class CreativeRunner : MonoBehaviour
             job = JsonUtility.FromJson<RenderJob>(File.ReadAllText(path));
             if (job == null) throw new Exception("job file is empty");
             if (string.IsNullOrEmpty(job.out_dir)) throw new Exception("job has no out_dir");
-            if (job.fps < 1 || job.width < 16 || job.height < 16) throw new Exception("bad fps or size");
             Directory.CreateDirectory(job.out_dir);
+            CheckJob(job);
             var level = JsonUtility.FromJson<LevelData>(File.ReadAllText(job.level_path));
             if (level == null || level.gridWidth < 1 || level.gridHeight < 1)
                 throw new Exception("level file has no grid: " + job.level_path);
@@ -182,6 +184,30 @@ public class CreativeRunner : MonoBehaviour
         Time.captureDeltaTime = 1f / Mathf.Max(1, job.fps);
         UnityEngine.Random.InitState(1234);
     }
+
+    // cbj's make_job is the main gate; this only stops a hand-written job from being half-played.
+    static void CheckJob(RenderJob j)
+    {
+        if (j.fps < 1 || j.fps > 120) throw new Exception($"fps must be 1-120, got {j.fps}");
+        if (j.width < 16 || j.height < 16 || j.width % 2 != 0 || j.height % 2 != 0)
+            throw new Exception($"size must be even and at least 16x16, got {j.width}x{j.height}");
+        if (j.end_mode != "win" && j.end_mode != "cut" && j.end_mode != "fail")
+            throw new Exception($"end_mode must be win, cut or fail, got '{j.end_mode}'");
+        if (j.drags == null || j.drags.Count == 0) throw new Exception("the job has no drags");
+        if (!NonNegative(j.start_hold_s) || !NonNegative(j.end_hold_s) || !(j.max_seconds > 0f))
+            throw new Exception("start_hold_s and end_hold_s must be zero or more, max_seconds positive");
+        for (int i = 0; i < j.drags.Count; i++)
+        {
+            var d = j.drags[i];
+            if (d.path == null || d.path.Count == 0) throw new Exception($"drag {i + 1} has an empty path");
+            if (!NonNegative(d.pause_before_s) || !NonNegative(d.pickup_s))
+                throw new Exception($"drag {i + 1}: pause_before_s and pickup_s must be zero or more");
+            if (!(d.cells_per_s > 0f) || d.cells_per_s > j.fps / 2f)
+                throw new Exception($"drag {i + 1}: cells_per_s must be above 0 and at most fps/2 ({j.fps / 2f})");
+        }
+    }
+
+    static bool NonNegative(float v) => v >= 0f && !float.IsInfinity(v);
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void AfterSceneLoad()
@@ -209,6 +235,13 @@ public class CreativeRunner : MonoBehaviour
             GameManager.Instance.OnBoardGenerated += () => boardReady = true;
         if (LevelManager.Instance != null)
             LevelManager.Instance.OnLevelCompleted += _ => { if (result.win_frame < 0) result.win_frame = frame; };
+    }
+
+    // Safety net: if the capture loop has died, the script still ends with result.json.
+    void Update()
+    {
+        if (!scriptDone || finished) return;
+        if (++doneFrames > 10) Finish();
     }
 
     void OnDestroy()
@@ -321,9 +354,15 @@ public class CreativeRunner : MonoBehaviour
             Mismatch(rec, $"block {d.block} is at {Pivot(b)}, the script expects {start}");
             yield break;
         }
-        for (int i = 1; i < d.path.Count; i++)
+        for (int i = 0; i < d.path.Count; i++)
         {
-            Vector2Int step = ToCell(d.path[i]) - ToCell(d.path[i - 1]);
+            Vector2Int c = ToCell(d.path[i]);
+            if (!grid.IsInBounds(c.x, c.y) || !grid.IsCellActive(c.x, c.y))
+            {
+                Mismatch(rec, $"path cell ({c.x},{c.y}) is not an active cell on the board");
+                yield break;
+            }
+            Vector2Int step = i > 0 ? c - ToCell(d.path[i - 1]) : Vector2Int.right;
             if (Mathf.Abs(step.x) + Mathf.Abs(step.y) != 1)
             {
                 Mismatch(rec, $"path step {i} is not to a neighbouring cell");
@@ -346,7 +385,7 @@ public class CreativeRunner : MonoBehaviour
         exitTriggered = false;
         exitPerformed = false;
 
-        for (int f = 0; f < Frames(d.pickup_s); f++)
+        for (int f = 0; f < Frames(d.pickup_s) && result.status == null; f++)
         {
             Step(b, initialY, rec);
             yield return null;
@@ -394,6 +433,15 @@ public class CreativeRunner : MonoBehaviour
             rec.result = "placed";
         }
 
+        rec.end_frame = frame;
+        rec.timer_end = Timer();
+        if (result.status != null)
+        {
+            // The fail screen (or a stop) cut the drag short; there is nothing to compare.
+            if (!exitTriggered) rec.result = "interrupted";
+            yield break;
+        }
+
         // Did the game do what the solver planned?
         var planned = d.path.GetRange(1, d.path.Count - 1);
         if (!SameCells(rec.cells, planned))
@@ -402,8 +450,6 @@ public class CreativeRunner : MonoBehaviour
             Mismatch(rec, $"block {d.block} did not exit at {CellsText(planned)}");
         else if (!d.exits && exitTriggered)
             Mismatch(rec, $"block {d.block} exited, the script did not plan an exit");
-        rec.end_frame = frame;
-        rec.timer_end = Timer();
     }
 
     // One frame of InputHandler.DragBlock with the finger in place of the mouse.
@@ -595,7 +641,7 @@ public class CreativeRunner : MonoBehaviour
     }
 
     // Particle systems pick a new random seed on every run; fix each one's seed by its place in
-    // the hierarchy so two renders of the same job match frame for frame.
+    // the hierarchy so every particle follows the same path in every render of the same job.
     void SeedParticles()
     {
         foreach (var ps in FindObjectsByType<ParticleSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None))
@@ -629,8 +675,21 @@ public class CreativeRunner : MonoBehaviour
         while (true)
         {
             yield return endOfFrame;
-            SeedParticles();
-            Capture();
+            try
+            {
+                SeedParticles();
+                Capture();
+            }
+            catch (Exception e)
+            {
+                captureError = "capture failed: " + e.Message;
+            }
+            if (captureError != null)
+            {
+                if (main != null) StopCoroutine(main);
+                SetStatus("error", captureError);
+                break;
+            }
             if (result.fail_frame < 0 && failMenu != null && failMenu.gameObject.activeInHierarchy)
             {
                 // The game shows its fail screen; play stops here, as it does for a player.
@@ -655,7 +714,20 @@ public class CreativeRunner : MonoBehaviour
         readTex.ReadPixels(new Rect(0, 0, job.width, job.height), 0, 0, false);
         RenderTexture.active = prev;
         readTex.GetRawTextureData<byte>().CopyTo(buffer);
-        ffmpegIn.Write(buffer, 0, buffer.Length);
+        if (ffmpeg.HasExited)
+        {
+            captureError = $"ffmpeg exited with {ffmpeg.ExitCode} while recording";
+            return;
+        }
+        try
+        {
+            ffmpegIn.Write(buffer, 0, buffer.Length);
+        }
+        catch (Exception e)
+        {
+            captureError = "ffmpeg stopped taking frames: " + e.Message;
+            return;
+        }
 
         var rec = new FrameRecord { frame = frame, timer = Timer(), finger = fingerDown };
         if (fingerDown)
@@ -689,8 +761,11 @@ public class CreativeRunner : MonoBehaviour
         {
             try
             {
-                ffmpegIn.Flush();
-                ffmpeg.StandardInput.Close();
+                if (!ffmpeg.HasExited)
+                {
+                    ffmpegIn.Flush();
+                    ffmpeg.StandardInput.Close();
+                }
                 if (!ffmpeg.WaitForExit(300000)) SetStatus("error", "ffmpeg did not finish");
                 else if (ffmpeg.ExitCode != 0) SetStatus("error", $"ffmpeg exited with {ffmpeg.ExitCode}");
             }
