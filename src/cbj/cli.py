@@ -1,4 +1,4 @@
-"""Command line: `cbj show|solve|table|difficulty|check|build-player|render|compare`.
+"""Command line: `cbj show|solve|table|difficulty|check|build-player|render|scenario|rerun|compare`.
 
     uv run cbj show  data/levels/Level_03.json
     uv run cbj solve data/levels/Level_03.json [--json out.json]
@@ -228,6 +228,21 @@ def _cmd_render(args) -> int:
     return 0 if not result["problems"] else 1
 
 
+def _cmd_rerun(args) -> int:
+    from .render import compare_recordings, rerun
+    print(f"Recording {args.folder} again into {args.out} from its job.json and level.json...")
+    result = rerun(args.folder, args.out)
+    print(f"Status: {result['status']} {result['message']}".rstrip())
+    print(f"Video: {result['video']} ({result['frames']} frames, {result['duration_s']:.2f} s)")
+    c = compare_recordings(args.folder, args.out)
+    print("game state against the original: " + ("identical" if c["state_equal"] else
+          f"DIFFERENT (first frames: {c['state_diff_frames']})"))
+    print(f"identical frames: {c['identical_frames']} of {min(c['frames'])}")
+    for p in result["problems"]:
+        print(f"  PROBLEM: {p}")
+    return 0 if c["state_equal"] and not result["problems"] else 1
+
+
 def _cmd_compare(args) -> int:
     from .render import compare_recordings
     for d in (args.a, args.b):
@@ -279,6 +294,8 @@ def _cmd_scenario(args) -> int:
         print(f"  note: the HUD will show \"Level {label}\" (from the file name); set --label for the "
               f"number the ad should show")
     if args.plan_only:
+        if args.length is not None:
+            print("  note: --length is fitted after the dry run, so these are the pauses before fitting")
         return 0
     out = Path(args.out or f"renders/{level.name}_{args.ending}")
     print("Dry run, fit (pauses only), then recording in Unity...")
@@ -379,6 +396,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="hide another game object (RestartButton is always hidden)")
     s.add_argument("-o", "--out", help="output folder (default: renders/<level>_<ending>)")
     s.set_defaults(func=_cmd_scenario)
+
+    s = sub.add_parser("rerun", help="record a finished recording again from its folder, and compare")
+    s.add_argument("folder", help="a recording folder (job.json, result.json, level.json)")
+    s.add_argument("-o", "--out", required=True, help="a new folder for the second recording")
+    s.set_defaults(func=_cmd_rerun)
 
     s = sub.add_parser("compare", help="compare two recordings: game state, frames, PSNR")
     s.add_argument("a")

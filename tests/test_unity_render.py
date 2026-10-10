@@ -264,3 +264,14 @@ def test_scenario_endings_land_on_the_predicted_frames(tmp_path, ending):
         assert r["status"] == "failed" and r["drags"][-1]["result"] == "interrupted"
         last = r["drags"][-1]
         assert last["cell_frames"] and abs(r["fail_frame"] - last["cell_frames"][-1]) <= 2
+        frames = json.loads((tmp_path / ending / "frames.json").read_text())["frames"]
+        assert frames[last["start_frame"]]["timer"] >= 1.4  # the HUD shows 00:01 for ~0.5 s at the grab
+        assert play["fit"]["predicted_frames"] is None  # the fail screen, not the dry run, ends it
+
+
+def test_rerun_from_the_folder_alone_gives_the_same_game(tmp_path):
+    from cbj.render import rerun
+    first = run_player(job_for("03", tmp_path / "first", size=(270, 480)))
+    again = rerun(tmp_path / "first", tmp_path / "again")
+    assert first["problems"] == [] and again["problems"] == []
+    assert compare_recordings(tmp_path / "first", tmp_path / "again")["state_equal"]

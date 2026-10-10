@@ -290,6 +290,23 @@ def run_player(job: dict, app: Path | None = None, timeout: float = 900) -> dict
     return check_render(out)
 
 
+def rerun(folder: str | Path, out_dir: str | Path) -> dict:
+    """Record a finished recording again, into another folder, from the folder alone: job.json
+    is the runner's exact input and level.json (written by `cbj scenario`) the level with the
+    clock the ad used. Uses the stock player if the original was recorded with it."""
+    folder, out = Path(folder).resolve(), Path(out_dir).resolve()
+    if not (folder / "job.json").is_file() or not (folder / "result.json").is_file():
+        raise ValueError(f"{folder}: no recording (job.json and result.json) there")
+    if out == folder:
+        raise ValueError("rerun into a different folder, so the two recordings can be compared")
+    job = json.loads((folder / "job.json").read_text())
+    if (folder / "level.json").is_file():
+        job["level_path"] = str(folder / "level.json")
+    job["out_dir"] = str(out)
+    stock = json.loads((folder / "result.json").read_text()).get("game_patched") is False
+    return run_player(job, app=PLAYER_STOCK if stock else None)
+
+
 def check_render(out_dir: str | Path) -> dict:
     """Read result.json and frames.json and cross-check them with each other and the video.
     Adds a "problems" list; an empty list means the recording is consistent."""

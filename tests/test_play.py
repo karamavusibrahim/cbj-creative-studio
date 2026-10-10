@@ -13,7 +13,7 @@ from cbj.level import load_level
 from cbj.play import (CALM_MARGIN_S, CASCADE_DRAGS, CLIFF_LEFT_S, DRY_TIMER_S, ENDINGS, FPS, MIN_PAUSE_F,
                       NEAR_FAIL_LEFT_S, NEAR_FAIL_RANGE_S, PAUSES, PlayScript, _can_exit_now, blocked_attempts,
                       bumps, check_ending, fit_clock, fit_length, length_range, mistake_options, plan, predict,
-                      spread, time_out_allowed)
+                      spread, time_out_allowed, TIME_OUT_TOUCH_F)
 from cbj.rules import initial_state, occupancy
 from cbj.solver import apply_drag, drag_outcomes, replay, solve_fast
 
@@ -189,8 +189,42 @@ def test_cliffhanger_set_up_drags_into_a_blocker_are_played_as_attempts(narrow, 
 def test_the_time_out_race_starts_with_a_second_on_the_clock(plans):
     short = plans["time_out"].beats[-1]
     assert short.pause == "thinking"  # no long stare with one block left
-    # The clock hits zero as the block enters its last cell, which is at least 1 s after the touch.
-    assert short.pickup_f + short.drag.cells_moved * short.frames_per_cell >= FPS
+    # The clock hits zero as the block enters its last cell (half-way into the last step), about
+    # 1.5 s after the touch, so 00:01 shows for half a second (the Unity test checks the frames).
+    race = short.drag.cells_moved * short.frames_per_cell - short.frames_per_cell // 2
+    assert short.pickup_f + race >= TIME_OUT_TOUCH_F >= FPS + 15
+
+
+def test_a_time_out_needs_a_race_of_two_cells():
+    level = load_level(PROJ / "data/levels/Level_06.json")  # its last exit is one cell
+    with pytest.raises(ValueError, match="one cell from its gate"):
+        plan(level, "time_out")
+
+
+@pytest.mark.parametrize("name", ["Level_04", "Level_05", "Level_06"])
+def test_shipped_level_cliffhangers_cut_on_a_real_puzzle(name):
+    level = load_level(PROJ / f"data/levels/{name}.json")
+    script = plan(level, "cliffhanger")
+    assert script.beats[-1].kind == "bump"
+    sol = solve_fast(level, start=replay(level, script.drags[:-1]))
+    assert sol.extra_drags >= 1  # "can you see the move?" has a move to see
+
+
+@pytest.mark.parametrize("name", ["Level_04", "Level_05", "Level_06", "gen/narrow_center_01"])
+def test_every_mistake_gets_a_reaction(name):
+    level = load_level(PROJ / f"data/levels/{name}.json")
+    for ending in ("near_fail", "time_out"):
+        for seed in range(5):
+            try:
+                beats = plan(level, ending, seed=seed).beats
+            except ValueError:
+                continue  # a time-out refused on this level
+            for i, b in enumerate(beats):
+                if b.kind == "mistake":
+                    nxt = beats[i + 1]
+                    assert nxt.kind == "hesitate" or nxt.pause_f >= PAUSES["after_mistake"][0], (ending, seed, i)
+                    if nxt.pause == "stuck":
+                        assert not nxt.drag.exits  # never a long stare before an obvious exit
 
 
 @pytest.mark.parametrize("name", ["Level_01", "Level_03"])
@@ -222,6 +256,8 @@ def test_bad_plan_arguments_are_refused(narrow):
         plan(narrow, "time_out", left=2)
     with pytest.raises(ValueError, match="left must be"):
         plan(narrow, "cliffhanger", left=7)
+    with pytest.raises(ValueError, match="clears the board"):
+        plan(narrow, "win", left=2)
 
 
 def test_play_json_round_trips(narrow, plans):
@@ -321,10 +357,11 @@ def test_the_clock_fit_keeps_a_fitted_length(narrow, plans, target):
     dry = {"clock_stopped_frame": real["clock_stopped_frame"]}
     script = replace(plans["near_fail"])
     script.beats = fit_length(script.beats, real["frames"], target)
-    beats, timer, fit = fit_clock(script, narrow, plans["near_fail"].beats, dry, frames)
-    total = real["frames"] + sum(b.pause_f - a.pause_f for a, b in zip(plans["near_fail"].beats, beats))
-    assert abs(fit["delta_f"]) <= 15 and abs(total - target * FPS) <= 15
-    assert NEAR_FAIL_RANGE_S[0] <= fit["clock_left_s"] <= NEAR_FAIL_RANGE_S[1]
+    for keep in (False, True):
+        beats, timer, fit = fit_clock(script, narrow, plans["near_fail"].beats, dry, frames, keep_length=keep)
+        total = real["frames"] + sum(b.pause_f - a.pause_f for a, b in zip(plans["near_fail"].beats, beats))
+        assert abs(fit["delta_f"]) <= (9 if keep else 15) and abs(total - target * FPS) <= (9 if keep else 15)
+        assert NEAR_FAIL_RANGE_S[0] <= fit["clock_left_s"] <= NEAR_FAIL_RANGE_S[1]
 
 
 def test_time_out_clock_runs_out_on_the_planned_frame(narrow, plans):
@@ -399,6 +436,20 @@ def test_cli_plan_only_prints_the_beats_and_the_label_note(capsys):
     out = capsys.readouterr().out
     assert "mistake" in out and "hesitate" in out and "naive player" in out
     assert "--label" in out  # the file name has no level number
+
+
+def test_cli_length_with_plan_only_says_it_is_not_applied(capsys):
+    assert cli.main(["scenario", str(NARROW), "--ending", "win", "--length", "15", "--plan-only"]) == 0
+    assert "fitted after the dry run" in capsys.readouterr().out
+
+
+def test_rerun_refuses_a_folder_without_a_recording_or_the_same_folder(tmp_path):
+    with pytest.raises(ValueError, match="no recording"):
+        render.rerun(tmp_path, tmp_path / "again")
+    (tmp_path / "job.json").write_text("{}")
+    (tmp_path / "result.json").write_text("{}")
+    with pytest.raises(ValueError, match="different folder"):
+        render.rerun(tmp_path, tmp_path)
 
 
 def test_cli_render_dry_run_films_nothing(monkeypatch, capsys):

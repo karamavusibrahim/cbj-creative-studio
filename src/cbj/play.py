@@ -58,7 +58,7 @@ TRAVEL_CELLS_PER_F = 2  # a pause grows a frame per two cells the finger travels
 HESITATE_HOLD_F = 21  # lift, hold 0.7 s, put down
 MISTAKE_PUSH_CELLS, MISTAKE_HOLD_F = 0.3, 8  # a blocked attempt presses into the blocker
 BUMP_PUSH_CELLS, BUMP_HOLD_F = 0.35, 24  # the cliffhanger's last beat: 0.8 s against the blocker
-LIFT_HOLD_F = 45  # a time-out on a one-cell exit: the clock runs out with the block in hand
+TIME_OUT_TOUCH_F = 45  # a time-out's last block is grabbed this many frames before the clock hits zero
 CASCADE_DRAGS = 3
 
 NEAR_FAIL_LEFT_S = 1.5  # clock left when the last block starts leaving: the HUD shows 00:01
@@ -348,8 +348,8 @@ def to_cliffhanger(level: Level, start: State, left: int, max_states: int = CLIF
         tick = 0
         while heap and len(parent) < per_set:
             others, d0, _, s = heapq.heappop(heap)
-            if best is not None and d0 >= best[1] + (0 if best[0] else 1):
-                continue
+            if best is not None and best[0] == 0 and d0 >= best[1]:
+                continue  # a real puzzle is already in hand at this depth or less
             if others == 0:
                 if not bumps(level, s):
                     continue
@@ -444,6 +444,8 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
             raise ValueError("a time-out ends with exactly one block left, one cell short of its gate")
         left = 1
     else:
+        if left not in (None, 0):
+            raise ValueError(f"left applies to cliffhanger and time_out; a {ending} clears the board")
         left = 0
     if n_blocks < 2 and ending != "win":
         raise ValueError(f"{level.name}: a single-block level has no room for {ending}")
@@ -477,11 +479,9 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
                 next_slot = len(steps) + 2  # at least two ordinary drags between mistakes
                 continue
         d = todo.pop(0)
-        # The player takes any obvious exit first, then stops to work out the real fix: the
-        # first repositioning drag after a mistake is the "realize" beat.
-        role = "realize" if realize and not d.exits else "solve"
-        realize &= d.exits
-        steps.append(("solve", d, role, _solve_note(level, d)))
+        # Every mistake gets a reaction: the drag right after it is the "realize" beat.
+        steps.append(("solve", d, "realize" if realize else "solve", _solve_note(level, d)))
+        realize = False
         state = apply_drag(state, d)
     if made < mistakes:
         # An easy board may have no believable mistake (every block can just leave); play on
@@ -508,12 +508,11 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
         if not last.exits or _left(states[len(steps)]) != 1:
             raise ValueError(f"{level.name}: the plan does not end with the last block leaving")
         name = _name(level, last.block)
-        if last.cells_moved >= 2:
-            short = Drag(last.block, last.path[:-1], False)
-            steps.append(("short", short, "short", f"{name} races for its gate; time runs out one cell short"))
-        else:
-            short = Drag(last.block, last.path[:1], False)
-            steps.append(("short", short, "lift", f"{name} is picked up, one cell from its gate, as time runs out"))
+        if last.cells_moved < 2:
+            raise ValueError(f"{level.name}: the last block is one cell from its gate, so there is no race to "
+                             f"cut short; a time-out needs a last exit of at least two cells")
+        short = Drag(last.block, last.path[:-1], False)
+        steps.append(("short", short, "short", f"{name} races for its gate; time runs out one cell short"))
 
     # 3. Pacing, chosen by what the player is doing.
     last_realize = max((i for i, s in enumerate(steps) if s[2] == "realize"), default=-1)
@@ -525,17 +524,21 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
             push = dict(push_cells=MISTAKE_PUSH_CELLS, hold_f=MISTAKE_HOLD_F) if role == "blocked" else {}
             b = _beat(kind, d, "before_mistake", CONFIDENT, PICKUP_QUICK, note, **push)
         elif role == "realize":
-            stuck = i == last_realize and ending in ("near_fail", "time_out")
+            # The long "stuck" stare goes before the real fix after the last mistake; before an
+            # obvious exit the pause is the shorter "noticing it did not help".
+            stuck = i == last_realize and not d.exits and ending in ("near_fail", "time_out")
             b = _beat("solve", d, "stuck" if stuck else "after_mistake", CAREFUL, PICKUP_CAREFUL, note)
         elif kind == "bump":
             b = _beat("bump", d, "thinking", CAREFUL, PICKUP_NORMAL, note, push_cells=BUMP_PUSH_CELLS,
                       hold_f=BUMP_HOLD_F, push_dir=extra[0] if extra else None)
         elif kind == "short":
-            # The clock reaches zero as the block enters its last cell. Hold the pick-up long
-            # enough that the race starts with a second on the clock, so the HUD turns from
-            # 00:01 to 00:00 during the race (it shows whole seconds, rounded down).
-            race_f = d.cells_moved * NORMAL
-            pickup = LIFT_HOLD_F if role == "lift" else max(PICKUP_NORMAL, FPS + 3 - race_f)
+            # The clock reaches zero as the block enters its last cell; the runner counts a cell
+            # as entered half-way through the step into it. The HUD shows whole seconds rounded
+            # down, so the last second always reads 00:00. Hold the pick-up so the touch comes
+            # with about 1.5 s left: the viewer sees 00:01 for half a second as the player grabs
+            # the block, then it turns 00:00 and the block races.
+            race_f = d.cells_moved * NORMAL - NORMAL // 2
+            pickup = max(PICKUP_NORMAL, TIME_OUT_TOUCH_F - race_f)
             b = _beat("short", d, "thinking", NORMAL, pickup, note)
         elif kind == "hesitate":
             b = _beat("hesitate", d, "hesitate", NORMAL, HESITATE_HOLD_F, note)
@@ -566,7 +569,7 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
             spots += [k for k in range(1, late) if beats[k].pause == "after_mistake"]
         if n > len(spots):
             spots += [k for k in range(1, max(2, late)) if k not in spots and beats[k].pause != "stuck"]
-        chosen = sorted(rng.sample(spots, n)) if 0 < n <= len(spots) else []
+        chosen = sorted(rng.sample(spots, min(n, len(spots)))) if n > 0 and spots else []
         final_block = beats[-1].drag.block if ending == "near_fail" else None
         for k in chosen:
             others = [bid for bid, p in enumerate(states[k])
@@ -695,9 +698,11 @@ def _fit_indices(beats: list[Beat], upto: int) -> list[int]:
 
 
 def fit_clock(script: PlayScript, level: Level, dry_beats: list[Beat], dry: dict,
-              frames: list[dict]) -> tuple[list[Beat], int | None, dict]:
+              frames: list[dict], keep_length: bool = False) -> tuple[list[Beat], int | None, dict]:
     """The clock that makes the game show the ending, from a dry run timed with DRY_TIMER_S.
-    Returns the beats (some pauses moved by a few frames), the timer, and what was fitted."""
+    Returns the beats (some pauses moved by a few frames), the timer, and what was fitted.
+    keep_length: a length was fitted, so for a near-fail take the smallest pause change that
+    still shows 00:01 (anywhere in 1.3-1.7 s) rather than exactly 1.5 s."""
     beats = script.beats
     last = len(beats) - 1
 
@@ -725,6 +730,8 @@ def fit_clock(script: PlayScript, level: Level, dry_beats: list[Beat], dry: dict
                 # change to the pauses (and to the length) wins, not floating-point noise.
                 off = round(abs(timer - e - delta / FPS - NEAR_FAIL_LEFT_S) * FPS)
                 options.append((off, abs(delta), timer, delta))
+        if keep_length:
+            options = [(abs(delta), off, timer, delta) for off, _, timer, delta in options]
         return _first_fit(beats, sorted(options), _fit_indices(beats, last),
                           lambda timer, delta: {"delta_f": delta, "clock_left_s": round(timer - e - delta / FPS, 3)})
 
@@ -736,10 +743,9 @@ def fit_clock(script: PlayScript, level: Level, dry_beats: list[Beat], dry: dict
     # time_out: the clock reaches zero on the frame the last block enters its final cell (or,
     # for a lift, part-way through the hold).
     d = dry["drags"][last]
-    if d.get("cell_frames"):
-        target = d["cell_frames"][-1]
-    else:
-        target = d["start_frame"] + beats[last].pickup_f - 10
+    if not d.get("cell_frames"):
+        raise ValueError("the dry run's last drag entered no cell; a time-out needs a race")
+    target = d["cell_frames"][-1]
     e = elapsed(target) + _shift(dry_beats, beats, last) / FPS
     options = [(abs(round((t - e) * FPS)), 0, t, round((t - e) * FPS)) for t in {max(1, math.floor(e)), math.ceil(e)}]
     order = [last] + [i for i in _fit_indices(beats, last) if i != last]  # the pause before the last drag first
@@ -847,11 +853,15 @@ def run(level: Level, level_path: str | Path, script: PlayScript, out_dir: str |
     if length_s is not None:
         script.beats = fit_length(script.beats, dry["frames"], length_s)
         fit["length_s"] = length_s
-    script.beats, script.timer_s, clock = fit_clock(script, level, dry_beats, dry, frames)
+    script.beats, script.timer_s, clock = fit_clock(script, level, dry_beats, dry, frames,
+                                                    keep_length=length_s is not None)
     fit.update(clock)
     fit["pause_changes_f"] = [b.pause_f - a.pause_f for a, b in zip(dry_beats, script.beats)]
     predicted = predict(dry, dry_beats, script.beats)
-    fit["predicted_frames"] = dry["frames"] + _shift(dry_beats, script.beats, len(script.beats) - 1)
+    # A time-out ends at the fail screen, so its length is not the dry run's: its fail frame is
+    # what is predicted and checked (fail_target_frame).
+    fit["predicted_frames"] = (None if script.ending == "time_out"
+                               else dry["frames"] + _shift(dry_beats, script.beats, len(script.beats) - 1))
     script.fit = fit
     script.difficulty = difficulty_dict(difficulty)
     from .render import level_label

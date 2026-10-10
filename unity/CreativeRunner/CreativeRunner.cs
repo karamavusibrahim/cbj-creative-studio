@@ -520,7 +520,7 @@ public class CreativeRunner : MonoBehaviour
         }
         for (int f = 0; f < Frames(d.hold_s) && !exitTriggered && result.status == null; f++)
         {
-            Step(b, initialY, rec);
+            if (Step(b, initialY, rec)) break;
             yield return null;
         }
 
