@@ -86,15 +86,24 @@ CLI misuse). The fixes that came out of it:
   `true`), unknown colours or directions, and non-JSON files raise a `ValueError`
   that names the file and the field. Nothing is silently coerced.
 - `validate` also rejects boards larger than the Level Editor's 12x12.
-- `solve` rejects a bad `max_states`, and stops with `SolverLimitError` when the
-  search grows too large or a single drag reaches too many cells.
+- `solve` rejects a bad `max_states`, and stops with `SolverLimitError` when more
+  than `max_states` positions are stored or a single drag reaches more than
+  max(`max_states`, 144) cells. 144 is a full 12x12 board, so the second limit
+  never changes a real level's result; it only stops a huge board from stalling.
 - `replay` rejects anything that is not a well-formed drag; `script_to_drags`
   reads a saved move script.
+- Files with a UTF-8 byte-order mark load; JSON nested too deeply or with
+  integers too long to parse is a `ValueError` naming the file.
+- `cbj check` refuses a move script made for a different level.
 - The CLI never shows a Python traceback for bad input. `cbj table` reports a
-  bad file as an `ERROR` row and keeps going.
+  bad file as an `ERROR` row and keeps going, and prints the table before
+  writing any files.
 
-`tests/test_failure_modes.py` holds 60 of these cases; 44 of them fail on the
-code before the fixes.
+`tests/test_failure_modes.py` holds 71 tests. The first 60 came from the
+adversarial run: 38 failed on the code before the fixes, and 6 more test the
+move-script reader that did not exist yet. A third Fable review found a crash on
+deeply nested JSON and five smaller issues; the last 11 tests cover those, and
+10 of them fail on the code before that round.
 
 ## Layout
 

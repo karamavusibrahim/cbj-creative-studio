@@ -159,7 +159,8 @@ def drag_outcomes(
             parent[n] = p
             if cell_limit is not None and len(parent) > cell_limit:
                 raise SolverLimitError(
-                    f"{level.name or 'level'}: one drag reaches more than {cell_limit} cells, stopped")
+                    f"{level.name or 'level'}: one drag reaches more than {cell_limit} cells, stopped "
+                    f"(the cell limit is max(max_states, 144); raise max_states to search further)")
             if can_block_exit(level, block_id, n, occ):
                 outcomes.append(Drag(block_id, path(n), True, matching_exit_index(level, block_id, n)))
                 if first_exit_only:
@@ -191,7 +192,10 @@ def _is_goal(state: State) -> bool:
 def solve(level: Level, max_states: int = 2_000_000, prune_exits: bool = True) -> Solution | None:
     """Breadth-first search over drags. Returns a minimum-drag solution, or None if unsolvable.
 
-    Raises SolverLimitError as soon as more than `max_states` positions are stored.
+    Raises SolverLimitError as soon as more than `max_states` positions are stored,
+    or when a single drag reaches more than max(max_states, 144) cells. The second
+    limit stops one huge board from stalling the search; 144 is a full 12x12 board,
+    the Level Editor's maximum, so it never changes the result for a real level.
     """
     if not isinstance(max_states, int) or isinstance(max_states, bool) or max_states < 1:
         raise ValueError(f"max_states must be a positive integer, got {max_states!r}")
@@ -271,6 +275,8 @@ def replay(level: Level, drags: list[Drag]) -> State:
     valid position, the exit check fails on every entered cell except the last
     one of an exiting drag, and passes there.
     """
+    if not isinstance(drags, (list, tuple)):
+        raise ReplayError(f"expected a list of drags, got {type(drags).__name__}")
     state = initial_state(level)
     for k, d in enumerate(drags, start=1):
         d = _checked_drag(d, k)

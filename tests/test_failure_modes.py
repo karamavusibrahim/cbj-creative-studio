@@ -117,17 +117,24 @@ def test_colour_without_a_gate_is_unsolvable():
 
 
 # ---------------------------------------------------------------- solver limits
-def test_max_states_bounds_the_work_on_a_huge_corridor():
+def test_cell_limit_stops_a_single_drag_on_a_huge_corridor():
     def alarm(*_):
         raise TimeoutError("solve did not return within 5 s")
 
     signal.signal(signal.SIGALRM, alarm)
     signal.alarm(5)
     try:
-        with pytest.raises(SolverLimitError, match="more than"):
+        with pytest.raises(SolverLimitError, match="more than 144 cells"):
             solve(make_level(100_000, 1, [(C.RED, (0, 0), [])], []), max_states=100)
     finally:
         signal.alarm(0)
+
+
+def test_state_limit_stops_a_search_on_a_real_size_board():
+    # Open 12x12 board, three blocks, no gates: unsolvable, and the positions explode.
+    lvl = make_level(12, 12, [(C.RED, (0, 0), []), (C.BLUE, (5, 5), []), (C.GREEN, (11, 11), [])], [])
+    with pytest.raises(SolverLimitError, match="more than 5 states"):
+        solve(lvl, max_states=5)
 
 
 @pytest.mark.parametrize("bad", [-1, 0, True, 2.5])
@@ -255,3 +262,73 @@ def test_cli_check_flags_an_incomplete_script(tmp_path):
     short.write_text(json.dumps(script))
     r = cbj("check", str(LEVEL_03), str(short))
     assert r.returncode == 1 and "still on the board" in r.stdout
+
+
+# ---------------------------------------------------------------- found in the third Fable review
+DEEP = "[" * 100_000 + "]" * 100_000
+
+
+def test_load_level_deeply_nested_json_is_a_value_error_naming_the_file(tmp_path):
+    p = tmp_path / "deep.json"
+    p.write_text(DEEP)
+    with pytest.raises(ValueError, match="deep.json"):
+        load_level(p)
+
+
+def test_cli_solve_deeply_nested_json_has_no_traceback(tmp_path):
+    p = tmp_path / "deep.json"
+    p.write_text(DEEP)
+    r = cbj("solve", str(p))
+    assert r.returncode == 1 and "Traceback" not in r.stderr and r.stderr.startswith("cbj: ")
+
+
+def test_cli_table_keeps_going_past_a_deeply_nested_file(tmp_path):
+    (tmp_path / "Level_01.json").write_text(LEVEL_01.read_text())
+    (tmp_path / "Level_deep.json").write_text(DEEP)
+    r = cbj("table", str(tmp_path))
+    assert "Traceback" not in r.stderr
+    assert "| Level_01 |" in r.stdout and "| Level_deep |" in r.stdout and "ERROR" in r.stdout
+    assert r.returncode == 1
+
+
+def test_load_level_huge_integer_literal_names_the_file(tmp_path):
+    p = tmp_path / "bigint.json"
+    p.write_text('{"gridWidth": ' + "9" * 5000 + ', "gridHeight": 3}')
+    with pytest.raises(ValueError, match="bigint.json"):
+        load_level(p)
+
+
+@pytest.mark.parametrize("field", ["timerCount", "gridWidth"])
+def test_null_int_field_is_not_reported_as_missing(field):
+    d = json.loads(LEVEL_01.read_text())
+    d[field] = None
+    with pytest.raises(ValueError) as e:
+        level_from_dict(d)
+    assert field in str(e.value) and "missing" not in str(e.value)
+
+
+def test_cli_check_rejects_a_script_for_a_different_level():
+    r = cbj("check", str(LEVEL_01), str(PROJ / "data/solutions/Level_02.moves.json"))
+    assert r.returncode == 1 and "Level_02" in r.stderr and "Traceback" not in r.stderr
+
+
+def test_replay_of_a_non_list_is_a_replay_error():
+    with pytest.raises(ReplayError):
+        replay(BASE, None)
+
+
+def test_file_with_a_utf8_byte_order_mark_loads(tmp_path):
+    p = tmp_path / "Level_bom.json"
+    p.write_bytes(b"\xef\xbb\xbf" + LEVEL_01.read_bytes())
+    assert load_level(p).width == 4
+
+
+def test_cli_table_prints_results_even_if_writing_scripts_fails(tmp_path):
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)
+    try:
+        r = cbj("table", str(PROJ / "data/levels"), "--scripts", str(locked / "out"))
+    finally:
+        locked.chmod(0o700)
+    assert r.returncode == 1 and "| Level_06 |" in r.stdout and r.stderr.startswith("cbj: ")

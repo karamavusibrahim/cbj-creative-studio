@@ -62,6 +62,7 @@ def _cmd_table(args) -> int:
     if not folder.is_dir():
         raise ValueError(f"{folder}: no such folder")
     rows = []
+    scripts = []
     failed = False
     for path in sorted(folder.glob("*.json")):
         try:
@@ -83,16 +84,19 @@ def _cmd_table(args) -> int:
         shapes = ", ".join(sorted({shape_name(level, i) for i in range(len(level.blocks))}))
         rows.append((level.name, f"{level.width}x{level.height}", len(level.blocks), sol.min_drags,
                      sol.extra_drags, sol.cells_dragged, level.timer, sol.states_explored, f"{dt:.0f}"))
-        if args.scripts:
-            out = Path(args.scripts) / f"{level.name}.moves.json"
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(json.dumps(solution_to_script(level, sol), indent=2))
+        scripts.append((level, sol))
     header = ("level", "grid", "blocks", "min drags", "extra drags", "cells dragged", "timer (s)",
               "states", "ms")
     md = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     md += ["| " + " | ".join(str(c) for c in r) + " |" for r in rows]
     text = "\n".join(md)
     print(text)
+    # Files are written after the table is printed, so a write error cannot hide the results.
+    if args.scripts:
+        for level, sol in scripts:
+            out = Path(args.scripts) / f"{level.name}.moves.json"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(solution_to_script(level, sol), indent=2))
     if args.md:
         Path(args.md).parent.mkdir(parents=True, exist_ok=True)
         Path(args.md).write_text(text + "\n")
@@ -110,6 +114,12 @@ def _cmd_check(args) -> int:
         script = json.loads(path.read_text())
     except json.JSONDecodeError as e:
         raise ValueError(f"{path.name}: not valid JSON ({e.msg}, line {e.lineno})") from None
+    if isinstance(script, dict):
+        want = {"width": level.width, "height": level.height}
+        if script.get("level") not in (None, level.name) or script.get("grid", want) != want:
+            g = script.get("grid") or {}
+            raise ValueError(f"{path.name}: this script is for {script.get('level')} "
+                             f"({g.get('width')}x{g.get('height')}), not {level.name} ({level.width}x{level.height})")
     try:
         drags = script_to_drags(script)
     except ValueError as e:
@@ -150,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     try:
         return args.func(args)
-    except (ValueError, OSError, SolverLimitError) as e:
+    except (ValueError, OSError, SolverLimitError, RecursionError) as e:
         print(f"cbj: {e}", file=sys.stderr)
         return 1
 

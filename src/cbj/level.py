@@ -112,11 +112,11 @@ def _is_int(v) -> bool:
 
 def _int(d: dict, key: str, where: str, default: int | None = None) -> int:
     """An int field. JsonUtility never writes strings, floats or booleans into an int field."""
-    v = d.get(key)
-    if v is None:
-        if default is not None and key not in d:
+    if key not in d:
+        if default is not None:
             return default
         raise ValueError(f"{where}{key} is missing")
+    v = d[key]
     if not _is_int(v):
         raise ValueError(f"{where}{key} must be an integer, got {v!r}")
     return v
@@ -289,11 +289,15 @@ def load_level(path: str | Path, strict: bool = True) -> Level:
     if not path.is_file():
         raise ValueError(f"{path}: not a file")
     try:
-        data = json.loads(path.read_text())
+        # utf-8-sig also accepts a file saved with a byte-order mark by a text editor.
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except UnicodeDecodeError:
         raise ValueError(f"{path.name}: not a text file") from None
     except json.JSONDecodeError as e:
         raise ValueError(f"{path.name}: not valid JSON ({e.msg}, line {e.lineno})") from None
+    except (ValueError, RecursionError) as e:
+        # e.g. integers longer than Python's digit limit, or nesting deeper than the parser allows
+        raise ValueError(f"{path.name}: not valid JSON ({type(e).__name__}: {str(e)[:120]})") from None
     try:
         level = level_from_dict(data, name=path.stem)
     except ValueError as e:
