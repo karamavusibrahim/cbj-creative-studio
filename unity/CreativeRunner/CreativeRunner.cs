@@ -30,6 +30,7 @@ public class RenderDrag
     public int block;
     public List<RenderCell> path = new List<RenderCell>();
     public bool exits;
+    public int exit_index = -1; // which gate, from the script (for the compositor)
     public float pause_before_s = 0.4f;
     public float pickup_s = 0.12f;
     public float cells_per_s = 6f;
@@ -71,6 +72,13 @@ public class RenderJob
     public float end_hold_s = 2f;
     public float max_seconds = 120f;
     public RenderCamera camera = new RenderCamera();
+    public int timer_s = -1; // overrides the level's timerCount when 0 or more
+    // The game keeps its clock running during the last block's exit slide and counts the win
+    // only when the slide ends, so time can run out after the level is solved: the game then
+    // shows "Out of Time!" followed by "Level Completed". With this on (the default) the clock
+    // stops the moment the last block starts to leave, which is when the player has solved it.
+    public bool stop_clock_on_last_exit = true;
+    public List<string> hide = new List<string>(); // GameObjects to hide by name, e.g. "RestartButton"
     public string end_mode = "win"; // "win": wait for the win screen; "cut": stop after the last drag;
                                     // "fail": wait for the timer to run out
     public List<RenderDrag> drags = new List<RenderDrag>();
@@ -82,6 +90,7 @@ public class DragRecord
     public int index;
     public int block;
     public bool planned_exit;
+    public int exit_index = -1;
     public int start_frame;
     public int exit_frame = -1;
     public int end_frame = -1;
@@ -103,6 +112,7 @@ public class RenderResult
     public int height;
     public float duration_s;
     public int first_touch_frame = -1;
+    public int clock_stopped_frame = -1; // the last block started to leave and the clock stopped
     public int win_frame = -1;
     public int fail_frame = -1;
     public float timer_start;
@@ -110,6 +120,18 @@ public class RenderResult
     public string video;
     public List<string> stills = new List<string>();
     public List<DragRecord> drags = new List<DragRecord>();
+    public List<int> block_gone_frames = new List<int>(); // per block: first frame without it, or -1
+    public List<UiRect> ui_rects = new List<UiRect>(); // HUD parts in video pixels, for caption safe zones
+}
+
+[Serializable]
+public class UiRect
+{
+    public string name;
+    public float x; // left, pixels from the left
+    public float y; // top, pixels from the top
+    public float w;
+    public float h;
 }
 
 [Serializable]
@@ -120,6 +142,7 @@ public class FrameRecord
     public bool finger;
     public float finger_x; // pixels from the left of the video
     public float finger_y; // pixels from the top of the video
+    public List<float> blocks = new List<float>(); // x, y per block (its pivot) in video pixels; -1, -1 once gone
     public string hash; // MD5 of the raw RGBA frame
 }
 
@@ -147,6 +170,8 @@ public class CreativeRunner : MonoBehaviour
     IBlockGridService gridService;
     ExitService exitService;
     FieldInfo remainingTimeField;
+    FieldInfo timerRunningField;
+    readonly HashSet<Block> leaving = new HashSet<Block>();
     FailMenu failMenu;
     Camera cam;
     readonly List<Block> blocks = new List<Block>();
@@ -193,6 +218,7 @@ public class CreativeRunner : MonoBehaviour
             var level = JsonUtility.FromJson<LevelData>(File.ReadAllText(job.level_path));
             if (level == null || level.gridWidth < 1 || level.gridHeight < 1)
                 throw new Exception("level file has no grid: " + job.level_path);
+            if (job.timer_s >= 0) level.timerCount = job.timer_s;
             LevelManager.EditorTestLevelData = level;
             PlayerPrefs.SetInt("Editor_IsTesting", 0);
         }
@@ -217,6 +243,8 @@ public class CreativeRunner : MonoBehaviour
         if (j.end_mode != "win" && j.end_mode != "cut" && j.end_mode != "fail")
             throw new Exception($"end_mode must be win, cut or fail, got '{j.end_mode}'");
         if (j.drags == null || j.drags.Count == 0) throw new Exception("the job has no drags");
+        if (j.timer_s < -1) throw new Exception($"timer_s must be -1 (use the level's) or 0 and up, got {j.timer_s}");
+        if (j.hide == null) j.hide = new List<string>();
         if (j.camera == null) j.camera = new RenderCamera();
         if (!Positive(j.camera.zoom) || !Finite(j.camera.pan_x) || !Finite(j.camera.pan_y))
             throw new Exception("camera zoom must be positive and pans finite");
@@ -367,6 +395,7 @@ public class CreativeRunner : MonoBehaviour
             index = index,
             block = d.block,
             planned_exit = d.exits,
+            exit_index = d.exit_index,
             start_frame = frame,
             timer_start = Timer(),
         };
@@ -506,6 +535,18 @@ public class CreativeRunner : MonoBehaviour
 
         // InputHandler.HandleExitDuringDrag: snap to the cell, then the game's exit animation.
         exitTriggered = true;
+        leaving.Add(b);
+        if (job.stop_clock_on_last_exit && result.status == null)
+        {
+            bool last = true;
+            foreach (var other in blocks)
+                if (other != null && !leaving.Contains(other)) last = false;
+            if (last)
+            {
+                timerRunningField.SetValue(GameManager.Instance, false);
+                result.clock_stopped_frame = frame;
+            }
+        }
         Vector3 snap = grid.GetCell(g.x, g.y).transform.position;
         snap.y = initialY;
         SetOutline(b, false);
@@ -541,6 +582,8 @@ public class CreativeRunner : MonoBehaviour
         gridService = new BlockGridService(grid);
         exitService = new ExitService(grid, GameManager.Instance);
         remainingTimeField = typeof(GameManager).GetField("remainingTime", BindingFlags.Instance | BindingFlags.NonPublic);
+        timerRunningField = typeof(GameManager).GetField("isTimerRunning", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (job.stop_clock_on_last_exit && timerRunningField == null) return "GameManager.isTimerRunning not found";
         failMenu = FindFirstObjectByType<FailMenu>(FindObjectsInactive.Include);
         cam = Camera.main;
         if (cam == null) return "no main camera";
@@ -558,6 +601,18 @@ public class CreativeRunner : MonoBehaviour
         }
 
         if (UIManager.Instance != null) UIManager.Instance.UpdateLevel(job.level_label);
+        foreach (string name in job.hide)
+        {
+            bool found = false;
+            foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (t.name != name) continue;
+                t.gameObject.SetActive(false);
+                found = true;
+            }
+            if (!found) return $"hide: no object named '{name}'";
+        }
+        for (int i = 0; i < blocks.Count; i++) result.block_gone_frames.Add(-1);
         // Button colour fades run on real time (Graphic.CrossFadeColor ignores the time scale),
         // so a fade caught mid-way differs between runs. Make them instant.
         foreach (var sel in FindObjectsByType<Selectable>(FindObjectsInactive.Include, FindObjectsSortMode.None))
@@ -823,6 +878,20 @@ public class CreativeRunner : MonoBehaviour
             rec.finger_x = p.x;
             rec.finger_y = job.height - p.y;
         }
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            if (blocks[i] == null)
+            {
+                if (result.block_gone_frames[i] < 0) result.block_gone_frames[i] = frame;
+                rec.blocks.Add(-1f);
+                rec.blocks.Add(-1f);
+                continue;
+            }
+            Vector3 bp = cam.WorldToScreenPoint(blocks[i].transform.position);
+            rec.blocks.Add(bp.x);
+            rec.blocks.Add(job.height - bp.y);
+        }
+        if (frame == 0) LogUiRects();
         if (job.frame_hashes) rec.hash = Hex(md5.ComputeHash(buffer));
         frameLog.frames.Add(rec);
 
@@ -833,6 +902,26 @@ public class CreativeRunner : MonoBehaviour
         }
         Graphics.Blit(rt, (RenderTexture)null); // live preview in the player window
         frame++;
+    }
+
+    void LogUiRects()
+    {
+        var corners = new Vector3[4];
+        foreach (string name in new[] { "MainBar", "LevelCircle", "TimerBackground", "RestartButton" })
+        {
+            var go = GameObject.Find(name);
+            if (go == null || !(go.transform is RectTransform rtf)) continue;
+            rtf.GetWorldCorners(corners);
+            float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+            foreach (var c in corners)
+            {
+                Vector3 sp = cam.WorldToScreenPoint(c);
+                float sy = job.height - sp.y;
+                x0 = Mathf.Min(x0, sp.x); x1 = Mathf.Max(x1, sp.x);
+                y0 = Mathf.Min(y0, sy); y1 = Mathf.Max(y1, sy);
+            }
+            result.ui_rects.Add(new UiRect { name = name, x = x0, y = y0, w = x1 - x0, h = y1 - y0 });
+        }
     }
 
     void Finish()
@@ -871,6 +960,8 @@ public class CreativeRunner : MonoBehaviour
         result.duration_s = (float)frame / Mathf.Max(1, job.fps);
         result.timer_end = Timer();
         if (result.status == null) SetStatus("error", "the script stopped early");
+        if (result.status == "failed" && result.win_frame > result.fail_frame && result.fail_frame >= 0)
+            result.message += "; it ran out during the last block's exit slide, and the game then showed the win screen too";
         if (!string.IsNullOrEmpty(job.out_dir) && Directory.Exists(job.out_dir))
         {
             File.WriteAllText(Path.Combine(job.out_dir, "result.json"), JsonUtility.ToJson(result, true));

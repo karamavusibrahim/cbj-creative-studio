@@ -313,3 +313,34 @@ def test_cli_pacing_and_camera_flags_reach_the_job(tmp_path, monkeypatch):
     assert seen["drags"][0]["cells_per_s"] == 4
     assert seen["camera"]["keys"][0]["zoom"] == pytest.approx(0.825)
     assert seen["camera"]["keys"][-1]["t"] == 2
+
+
+def test_job_timer_override_and_hide(tmp_path):
+    job = job3(tmp_path, timer=12, hide=("RestartButton",))
+    assert job["timer_s"] == 12 and job["hide"] == ["RestartButton"]
+    assert job3(tmp_path)["timer_s"] == -1 and job3(tmp_path)["hide"] == []
+    assert [d["exit_index"] for d in job["drags"]] == [3, 0, 1]
+
+
+@pytest.mark.parametrize("kw, msg", [
+    ({"timer": 0}, "timer must be"), ({"timer": 2.5}, "timer must be"), ({"timer": True}, "timer must be"),
+    ({"hide": ("",)}, "hide must be"),
+])
+def test_bad_timer_or_hide_is_refused(tmp_path, kw, msg):
+    with pytest.raises(ValueError, match=msg):
+        job3(tmp_path, **kw)
+
+
+def test_fail_ending_waits_for_the_overridden_timer(tmp_path):
+    level, drags = level3()
+    job = make_job(level, LEVEL_03, drags[:2], tmp_path, end_mode="fail", ffmpeg="/usr/bin/true", timer=600)
+    assert job["max_seconds"] > 600
+
+
+@needs_ffmpeg
+def test_check_render_rejects_a_video_with_both_endings(tmp_path):
+    out = fake_recording(tmp_path / "both", status="failed", end_mode="fail")
+    r = json.loads((out / "result.json").read_text())
+    r.update(fail_frame=3, win_frame=5)
+    (out / "result.json").write_text(json.dumps(r))
+    assert any("both the fail screen and the win screen" in p for p in check_render(out)["problems"])

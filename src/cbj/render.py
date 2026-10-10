@@ -109,13 +109,22 @@ def make_job(
     size: tuple[int, int] = (1080, 1920),
     ffmpeg: str | None = None,
     camera: Camera = Camera(),
+    timer: int | None = None,
+    hide: tuple[str, ...] = (),
 ) -> dict:
     """Job file for CreativeRunner. Raises ValueError if the drags break a rule, or if
-    end_mode is "win" and the drags do not clear the board."""
+    end_mode is "win" and the drags do not clear the board.
+
+    timer: seconds on the game clock instead of the level's own (the level file is unchanged).
+    hide: GameObject names to hide, e.g. ("RestartButton",)."""
     if end_mode not in END_MODES:
         raise ValueError(f"end must be one of {', '.join(END_MODES)}, got {end_mode!r}")
     pacing.check()
     camera.check()
+    if timer is not None and (not isinstance(timer, int) or isinstance(timer, bool) or timer < 1):
+        raise ValueError(f"timer must be a whole number of seconds, 1 or more, got {timer!r}")
+    if not all(isinstance(h, str) and h for h in hide):
+        raise ValueError("hide must be a list of object names")
     final = replay(level, drags)
     left = sum(p is not None for p in final)
     if end_mode == "win" and left:
@@ -150,7 +159,10 @@ def make_job(
         "start_hold_s": pacing.start_hold_s,
         "end_hold_s": pacing.end_hold_s,
         "max_seconds": round(estimate_seconds(level, drags, pacing) * 2 + 30
-                             + (level.timer if end_mode == "fail" else 0), 1),
+                             + ((timer or level.timer) if end_mode == "fail" else 0), 1),
+        "timer_s": -1 if timer is None else timer,
+        "stop_clock_on_last_exit": True,
+        "hide": list(hide),
         "end_mode": end_mode,
         "camera": camera.to_job(),
         "drags": [
@@ -158,6 +170,7 @@ def make_job(
                 "block": d.block,
                 "path": [{"x": x, "y": y} for x, y in d.path],
                 "exits": d.exits,
+                "exit_index": d.exit_index if d.exit_index is not None else -1,
                 "pause_before_s": pacing.pause_before_s if k else 0.0,
                 "pickup_s": pacing.pickup_s,
                 "cells_per_s": pacing.cells_per_s,
@@ -222,6 +235,8 @@ def check_render(out_dir: str | Path) -> dict:
     if result.get("status") != expected:
         problems.append(f"status is {result.get('status')!r} ({result.get('message')}), "
                         f"expected {expected!r}")
+    if result.get("win_frame", -1) >= 0 and result.get("fail_frame", -1) >= 0:
+        problems.append("the game showed both the fail screen and the win screen; never use this video")
     for d in result.get("drags", []):
         if d.get("result") not in ("exit", "placed", "interrupted"):
             problems.append(f"drag {d.get('index', 0) + 1}: {d.get('result')}")

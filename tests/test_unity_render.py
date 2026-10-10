@@ -151,3 +151,49 @@ def test_bad_camera_keys_are_refused_at_start(tmp_path):
     job["camera"]["keys"] = [{"t": 1, "zoom": 1, "pan_x": 0, "pan_y": 0}, {"t": 0.5, "zoom": 1, "pan_x": 0, "pan_y": 0}]
     r = run_raw(job, tmp_path / "badcam")
     assert r["status"] == "error" and "increasing time order" in r["message"]
+
+
+def slide_job(tmp_path, name):
+    # Timer 3 s; the last exit starts about 0.3 s before the clock would end, and its slide
+    # out takes 0.5 s, so the clock would run out mid-slide.
+    job = job_for("03", tmp_path / name, timer=3)
+    job["drags"][2]["pause_before_s"] = 1.05
+    return job
+
+
+def test_the_game_alone_shows_out_of_time_then_level_completed(tmp_path):
+    # The provided game keeps the clock running during the last exit slide and counts the win
+    # only when the slide ends. Turned back on here to document the bug.
+    job = slide_job(tmp_path, "bug")
+    job["stop_clock_on_last_exit"] = False
+    r = run_raw(job, tmp_path / "bug")
+    assert r["drags"][2]["exit_frame"] < r["fail_frame"] < r["win_frame"]
+    assert any("both the fail screen and the win screen" in p for p in r["problems"])
+
+
+def test_the_recorder_stops_the_clock_when_the_last_block_starts_to_leave(tmp_path):
+    r = run_player(slide_job(tmp_path, "fixed"))
+    assert r["problems"] == [], r["problems"]
+    assert r["status"] == "cleared" and r["fail_frame"] == -1
+    assert r["clock_stopped_frame"] == r["drags"][2]["exit_frame"]
+    assert 0 < r["timer_end"] < 1  # solved with under a second on the clock
+
+
+def test_event_data_for_the_compositor(tmp_path):
+    r = run_player(job_for("03", tmp_path / "ev", size=(540, 960), timer=60, hide=("RestartButton",)))
+    assert r["problems"] == []
+    assert r["timer_start"] == pytest.approx(60, abs=0.05)
+    assert [d["exit_index"] for d in r["drags"]] == [3, 0, 1]
+    # every block leaves, after the frame its exit started
+    assert all(g > d["exit_frame"] for g, d in zip(r["block_gone_frames"], r["drags"]))
+    names = {u["name"] for u in r["ui_rects"]}
+    assert "MainBar" in names and "RestartButton" not in names
+    frames = json.loads((tmp_path / "ev/frames.json").read_text())["frames"]
+    assert len(frames[0]["blocks"]) == 6
+    assert all(0 <= v <= 960 for v in frames[0]["blocks"])
+    assert frames[-1]["blocks"] == [-1, -1, -1, -1, -1, -1]
+
+
+def test_hiding_an_unknown_object_is_an_error(tmp_path):
+    r = run_player(job_for("03", tmp_path / "nohide", hide=("NoSuchThing",)))
+    assert r["status"] == "error" and "NoSuchThing" in r["message"]
