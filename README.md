@@ -148,8 +148,9 @@ listed here:
 - the camera is re-fitted for the 9:16 frame;
 - the HUD is drawn through the camera at a phone's scale;
 - button fades are instant and particle seeds fixed, for repeatability;
-- the level badge shows the level's number;
-- the clock stops when the last block starts to leave (below).
+- the level badge shows the level's number.
+
+The build also applies a small game patch (below) to its copy of the project.
 
 ```
 uv run cbj build-player     # ~35 s; needs Unity 6000.3.5f1 and the project at ../CBJ
@@ -160,6 +161,7 @@ uv run cbj render LEVEL MOVES --end fail --drags 2           # wait for the time
 uv run cbj render LEVEL MOVES --speed 2 --pause 1.6 --start-hold 2.5 --end-hold 3   # slower, longer
 uv run cbj render LEVEL MOVES --zoom 1.1 --pan-y -0.5 --intro  # framing; --intro eases in from pulled back
 uv run cbj render LEVEL MOVES --timer 20 --hide RestartButton  # clock override, hide a HUD part
+uv run cbj build-player --stock && uv run cbj render LEVEL MOVES --stock  # the game as shipped, unpatched
 ```
 
 Length: the shipped levels record in 5-13 s at the default pacing; Level 6 at
@@ -171,13 +173,28 @@ fills the width loses its side gates. Changing only the camera leaves the game
 identical: `cbj compare` then reports the same game state with a different
 finger path on screen and different pixels.
 
-**The clock fix.** The game keeps its clock running while the last block slides
-out, and counts the win only when the slide ends. If time runs out during that
-half second, the game shows "Out of Time!" and then "Level Completed". The
-recorder stops the clock the moment the last block starts to leave, which is
-when the player has solved the level (`stop_clock_on_last_exit`, on by default),
-and `cbj render` rejects any recording that shows both screens. A Unity test
-keeps the original behaviour on record.
+**The game patch.** The game as shipped has two ways to show both endings:
+1. It keeps its clock running while the last block slides out, and counts the
+   win only when the slide ends. If time runs out during that half second, it
+   shows "Out of Time!" and then "Level Completed".
+2. It still accepts drags after the fail screen, because input raycasts the 3D
+   board rather than the UI.
+
+`unity/game-patch` fixes both in the game's own code:
+- the clock stops when every block left on the board has started its exit
+  (`GameManager.OnBlockExitStarted`, called from `ExitService.PerformExit`);
+- once one ending has shown, no other ending can follow;
+- the board takes no input after either ending.
+
+That is 31 added lines in three files, each marked `cbj-creative patch`.
+`game.patch` is the readable diff, and `original/` holds Rollic's files byte for
+byte. `build-player` applies the patch to its copy only, so Rollic's project is
+never changed, and it refuses to patch files that differ from those originals.
+
+For a before/after, `cbj build-player --stock` builds the game exactly as
+shipped and `cbj render --stock` records with it. On a stock build, the
+recorder stops the clock itself unless asked not to. `cbj render` rejects any
+recording that shows both screens.
 
 Event data for the compositor: `result.json` has each drag's frames, cells and
 gate number, the first touch, the clock stop, win or fail frame, the frame
@@ -255,15 +272,16 @@ editor is busy importing, close the editor or delete `build/unity-project` and
 build again.
 
 `tests/test_render.py` checks jobs, recordings and comparisons without Unity.
-`tests/test_unity_render.py` has 20 tests and starts the player 22 times (about
-3.5 minutes):
+`tests/test_unity_render.py` has 22 tests and starts the player 24 times (about
+4 minutes; the two stock-game tests need `cbj build-player --stock` first):
 - six levels cleared;
 - a repeat render;
 - a camera-only change;
 - a blocked drag, an unplanned exit, a path off the board;
 - a dead ffmpeg, a bad job, bad camera keys, an unknown object to hide;
 - the fail screen between drags and in the middle of one;
-- the game's fail-then-win bug and the recorder's fix;
+- the stock game's fail-then-win bug; the patched game stopping its own clock;
+  the recorder stopping it on a stock game;
 - the compositor event data:
 
 ```
@@ -281,6 +299,7 @@ src/cbj/difficulty.py difficulty numbers and the simulated naive player
 src/cbj/render.py    render jobs, camera, running the Unity player, checking and comparing recordings
 src/cbj/cli.py       command line
 unity/CreativeRunner Unity scripts copied into the project copy by build-player
+unity/game-patch     the game fix: Rollic's originals, the patched files, game.patch
 data/levels/         the six shipped levels (copied unchanged from the Unity project)
 data/solutions/      move scripts for the Unity replay
 reports/             solve table and the Level 3 walkthrough
