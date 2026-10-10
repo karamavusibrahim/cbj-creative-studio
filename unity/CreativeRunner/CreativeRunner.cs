@@ -68,6 +68,7 @@ public class RenderJob
     public int msaa = 4;
     public int crf = 16;
     public bool frame_hashes = true;
+    public bool capture = true; // false: a dry run for timing; the game plays, nothing is filmed
     public float start_hold_s = 1f;
     public float end_hold_s = 2f;
     public float max_seconds = 120f;
@@ -115,6 +116,7 @@ public class RenderResult
     public int first_touch_frame = -1;
     public int clock_stopped_frame = -1; // the last block started to leave and the clock stopped
     public bool game_patched; // the build includes the game patch (the game stops its own clock)
+    public bool captured = true; // false for a dry run (no video, no stills, no hashes)
     public int win_frame = -1;
     public int fail_frame = -1;
     public float timer_start;
@@ -642,6 +644,9 @@ public class CreativeRunner : MonoBehaviour
         rt.Create();
         cam.allowMSAA = true;
         cam.targetTexture = rt;
+        result.captured = job.capture;
+        if (!job.capture) return null; // dry run: the camera still renders, nothing is read back
+
         readTex = new Texture2D(job.width, job.height, TextureFormat.RGBA32, false, false);
         buffer = new byte[job.width * job.height * 4];
         md5 = MD5.Create();
@@ -861,6 +866,12 @@ public class CreativeRunner : MonoBehaviour
 
     void Capture()
     {
+        if (!job.capture)
+        {
+            LogFrame(); // timing, finger and block positions only
+            frame++;
+            return;
+        }
         var prev = RenderTexture.active;
         RenderTexture.active = rt;
         readTex.ReadPixels(new Rect(0, 0, job.width, job.height), 0, 0, false);
@@ -881,6 +892,20 @@ public class CreativeRunner : MonoBehaviour
             return;
         }
 
+        FrameRecord rec = LogFrame();
+        if (job.frame_hashes) rec.hash = Hex(md5.ComputeHash(buffer));
+
+        if (stillAt.TryGetValue(frame, out string name))
+        {
+            File.WriteAllBytes(Path.Combine(job.out_dir, name), readTex.EncodeToPNG());
+            result.stills.Add(name);
+        }
+        Graphics.Blit(rt, (RenderTexture)null); // live preview in the player window
+        frame++;
+    }
+
+    FrameRecord LogFrame()
+    {
         var rec = new FrameRecord { frame = frame, timer = Timer(), finger = fingerDown };
         if (fingerDown)
         {
@@ -905,16 +930,8 @@ public class CreativeRunner : MonoBehaviour
         bool failShowing = failMenu != null && failMenu.gameObject.activeInHierarchy;
         if (lastExitStarted && result.clock_stopped_frame < 0 && !failShowing && !ClockRunning())
             result.clock_stopped_frame = frame;
-        if (job.frame_hashes) rec.hash = Hex(md5.ComputeHash(buffer));
         frameLog.frames.Add(rec);
-
-        if (stillAt.TryGetValue(frame, out string name))
-        {
-            File.WriteAllBytes(Path.Combine(job.out_dir, name), readTex.EncodeToPNG());
-            result.stills.Add(name);
-        }
-        Graphics.Blit(rt, (RenderTexture)null); // live preview in the player window
-        frame++;
+        return rec;
     }
 
     void LogUiRects()
@@ -941,7 +958,7 @@ public class CreativeRunner : MonoBehaviour
     {
         if (finished) return;
         finished = true;
-        if (frame > 0 && readTex != null)
+        if (job.capture && frame > 0 && readTex != null)
         {
             File.WriteAllBytes(Path.Combine(job.out_dir, "99_end.png"), readTex.EncodeToPNG());
             result.stills.Add("99_end.png");

@@ -221,3 +221,15 @@ def test_event_data_for_the_compositor(tmp_path):
 def test_hiding_an_unknown_object_is_an_error(tmp_path):
     r = run_player(job_for("03", tmp_path / "nohide", hide=("NoSuchThing",)))
     assert r["status"] == "error" and "NoSuchThing" in r["message"]
+
+
+def test_a_dry_run_has_the_same_timing_as_a_recording(tmp_path):
+    # The game state does not depend on filming, so a dry run gives the exact frames to plan with.
+    full = run_player(job_for("03", tmp_path / "full"))
+    dry = run_player(job_for("03", tmp_path / "dry", size=(270, 480), capture=False))
+    assert dry["problems"] == [] and dry["captured"] is False
+    keys = ("frames", "first_touch_frame", "clock_stopped_frame", "win_frame", "block_gone_frames")
+    assert {k: dry[k] for k in keys} == {k: full[k] for k in keys}
+    assert [(d["start_frame"], d["exit_frame"], d["end_frame"]) for d in dry["drags"]] == \
+           [(d["start_frame"], d["exit_frame"], d["end_frame"]) for d in full["drags"]]
+    assert not (tmp_path / "dry" / "gameplay.mp4").exists()

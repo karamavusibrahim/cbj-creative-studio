@@ -121,6 +121,7 @@ def make_job(
     timer: int | None = None,
     hide: tuple[str, ...] = (),
     stop_clock_on_last_exit: bool = True,
+    capture: bool = True,
 ) -> dict:
     """Job file for CreativeRunner. Raises ValueError if the drags break a rule, or if
     end_mode is "win" and the drags do not clear the board.
@@ -128,7 +129,8 @@ def make_job(
     timer: seconds on the game clock instead of the level's own (the level file is unchanged).
     hide: GameObject names to hide, e.g. ("RestartButton",).
     stop_clock_on_last_exit: False keeps the game's own clock, which can show "Out of Time!"
-    and then "Level Completed" when time runs out during the last exit slide."""
+    and then "Level Completed" when time runs out during the last exit slide.
+    capture: False makes a dry run: the game plays and logs its timing, but nothing is filmed."""
     if end_mode not in END_MODES:
         raise ValueError(f"end must be one of {', '.join(END_MODES)}, got {end_mode!r}")
     pacing.check()
@@ -177,6 +179,7 @@ def make_job(
                              + ((timer or level.timer) if end_mode == "fail" else 0), 1),
         "timer_s": -1 if timer is None else timer,
         "stop_clock_on_last_exit": bool(stop_clock_on_last_exit),
+        "capture": bool(capture),
         "hide": list(hide),
         "end_mode": end_mode,
         "camera": camera.to_job(),
@@ -256,7 +259,9 @@ def check_render(out_dir: str | Path) -> dict:
         if d.get("result") not in ("exit", "placed", "interrupted"):
             problems.append(f"drag {d.get('index', 0) + 1}: {d.get('result')}")
     video = out / Path(result.get("video") or "gameplay.mp4").name
-    if not video.is_file():
+    if result.get("captured") is False:
+        pass  # a dry run films nothing
+    elif not video.is_file():
         problems.append(f"no video at {video}")
     else:
         probe = probe_video(video)

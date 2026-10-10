@@ -367,3 +367,13 @@ def test_fail_ending_needs_a_clock(tmp_path):
         make_job(no_clock, LEVEL_03, drags[:2], tmp_path, end_mode="fail", ffmpeg="/usr/bin/true")
     job = make_job(no_clock, LEVEL_03, drags[:2], tmp_path, end_mode="fail", ffmpeg="/usr/bin/true", timer=5)
     assert job["timer_s"] == 5
+
+
+@needs_ffmpeg
+def test_a_dry_run_needs_no_video(tmp_path):
+    out = fake_recording(tmp_path / "dry", video_frames=0)
+    r = json.loads((out / "result.json").read_text())
+    r["captured"] = False
+    (out / "result.json").write_text(json.dumps(r))
+    assert check_render(out)["problems"] == []
+    assert job3(tmp_path, capture=False)["capture"] is False
