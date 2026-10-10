@@ -1,6 +1,7 @@
 """Recordings in the real game. Opt-in, because each one starts the Unity player:
 
     uv run cbj build-player
+    uv run cbj build-player --stock     # optional: the game as shipped, for the before/after tests
     CBJ_UNITY=1 uv run pytest tests/test_unity_render.py
 """
 
@@ -15,7 +16,8 @@ import pytest
 
 from cbj.describe import script_to_drags
 from cbj.level import load_level
-from cbj.render import PLAYER_APP, Camera, check_render, compare_recordings, make_job, player_binary, run_player
+from cbj.render import (PLAYER_APP, PLAYER_STOCK, Camera, check_render, compare_recordings, make_job, player_binary,
+                        run_player)
 
 PROJ = Path(__file__).parent.parent
 
@@ -155,28 +157,50 @@ def test_bad_camera_keys_are_refused_at_start(tmp_path):
 
 def slide_job(tmp_path, name):
     # Timer 3 s; the last exit starts about 0.3 s before the clock would end, and its slide
-    # out takes 0.5 s, so the clock would run out mid-slide.
+    # out takes 0.5 s, so on the stock game the clock runs out mid-slide.
     job = job_for("03", tmp_path / name, timer=3)
     job["drags"][2]["pause_before_s"] = 1.05
     return job
 
 
-def test_the_game_alone_shows_out_of_time_then_level_completed(tmp_path):
-    # The provided game keeps the clock running during the last exit slide and counts the win
-    # only when the slide ends. Turned back on here to document the bug.
-    job = slide_job(tmp_path, "bug")
+def test_the_patched_game_stops_its_own_clock(tmp_path):
+    # The recorder leaves the clock alone here; the game patch alone must end it cleanly.
+    job = slide_job(tmp_path, "patched")
     job["stop_clock_on_last_exit"] = False
-    r = run_raw(job, tmp_path / "bug")
+    r = run_player(job)
+    assert r["game_patched"] is True
+    assert r["problems"] == [], r["problems"]
+    assert r["status"] == "cleared" and r["fail_frame"] == -1
+    exit_frame = r["drags"][2]["exit_frame"]
+    assert exit_frame <= r["clock_stopped_frame"] <= exit_frame + 4  # after the 0.1 s snap
+    assert 0 < r["timer_end"] < 1
+
+
+def test_the_default_recording_ends_cleanly_with_little_time_left(tmp_path):
+    r = run_player(slide_job(tmp_path, "default"))
+    assert r["problems"] == [], r["problems"]
+    assert r["status"] == "cleared" and r["fail_frame"] == -1 and 0 < r["timer_end"] < 1
+
+
+needs_stock = pytest.mark.skipif(not PLAYER_STOCK.is_dir(), reason="run `cbj build-player --stock` first")
+
+
+@needs_stock
+def test_the_stock_game_shows_out_of_time_then_level_completed(tmp_path):
+    # Rollic's game as shipped: the clock runs on during the last exit slide.
+    job = slide_job(tmp_path, "stock")
+    job["stop_clock_on_last_exit"] = False
+    r = run_player(job, app=PLAYER_STOCK)
+    assert r["game_patched"] is False
     assert r["drags"][2]["exit_frame"] < r["fail_frame"] < r["win_frame"]
     assert any("both the fail screen and the win screen" in p for p in r["problems"])
 
 
-def test_the_recorder_stops_the_clock_when_the_last_block_starts_to_leave(tmp_path):
-    r = run_player(slide_job(tmp_path, "fixed"))
+@needs_stock
+def test_on_the_stock_game_the_recorder_stops_the_clock_itself(tmp_path):
+    r = run_player(slide_job(tmp_path, "stockfix"), app=PLAYER_STOCK)
     assert r["problems"] == [], r["problems"]
-    assert r["status"] == "cleared" and r["fail_frame"] == -1
-    assert r["clock_stopped_frame"] == r["drags"][2]["exit_frame"]
-    assert 0 < r["timer_end"] < 1  # solved with under a second on the clock
+    assert r["status"] == "cleared" and r["clock_stopped_frame"] == r["drags"][2]["exit_frame"]
 
 
 def test_event_data_for_the_compositor(tmp_path):

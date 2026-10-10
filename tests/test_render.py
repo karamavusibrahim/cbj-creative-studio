@@ -346,14 +346,24 @@ def test_check_render_rejects_a_video_with_both_endings(tmp_path):
     assert any("both the fail screen and the win screen" in p for p in check_render(out)["problems"])
 
 
-def test_original_clock_flag_reaches_the_job(tmp_path, monkeypatch):
+def test_stock_flag_records_with_the_stock_player_and_leaves_the_clock_alone(tmp_path, monkeypatch):
     seen = {}
 
     def fake_run(job, app=None, timeout=900):
-        seen.update(job)
+        seen.update(job, app=app)
         raise ValueError("stop here")
 
     monkeypatch.setattr(render, "run_player", fake_run)
-    cli.main(["render", str(LEVEL_03), str(MOVES_03), "-o", str(tmp_path / "o"), "--original-clock"])
-    assert seen["stop_clock_on_last_exit"] is False
+    cli.main(["render", str(LEVEL_03), str(MOVES_03), "-o", str(tmp_path / "o"), "--stock"])
+    assert seen["stop_clock_on_last_exit"] is False and seen["app"] == render.PLAYER_STOCK
     assert job3(tmp_path)["stop_clock_on_last_exit"] is True
+
+
+def test_fail_ending_needs_a_clock(tmp_path):
+    import dataclasses
+    level, drags = level3()
+    no_clock = dataclasses.replace(level, timer=0)
+    with pytest.raises(ValueError, match="needs a clock"):
+        make_job(no_clock, LEVEL_03, drags[:2], tmp_path, end_mode="fail", ffmpeg="/usr/bin/true")
+    job = make_job(no_clock, LEVEL_03, drags[:2], tmp_path, end_mode="fail", ffmpeg="/usr/bin/true", timer=5)
+    assert job["timer_s"] == 5

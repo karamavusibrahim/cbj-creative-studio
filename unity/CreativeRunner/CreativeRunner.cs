@@ -73,10 +73,11 @@ public class RenderJob
     public float max_seconds = 120f;
     public RenderCamera camera = new RenderCamera();
     public int timer_s = -1; // overrides the level's timerCount when 0 or more
-    // The game keeps its clock running during the last block's exit slide and counts the win
-    // only when the slide ends, so time can run out after the level is solved: the game then
-    // shows "Out of Time!" followed by "Level Completed". With this on (the default) the clock
-    // stops the moment the last block starts to leave, which is when the player has solved it.
+    // The stock game keeps its clock running during the last block's exit slide and counts the
+    // win only when the slide ends, so time can run out after the level is solved: it then shows
+    // "Out of Time!" followed by "Level Completed". The game patch (unity/game-patch) fixes this in
+    // the game. On a game without the patch, this makes the recorder stop the clock itself when
+    // the last block starts to leave; false records the stock behaviour.
     public bool stop_clock_on_last_exit = true;
     public List<string> hide = new List<string>(); // GameObjects to hide by name, e.g. "RestartButton"
     public string end_mode = "win"; // "win": wait for the win screen; "cut": stop after the last drag;
@@ -113,6 +114,7 @@ public class RenderResult
     public float duration_s;
     public int first_touch_frame = -1;
     public int clock_stopped_frame = -1; // the last block started to leave and the clock stopped
+    public bool game_patched; // the build includes the game patch (the game stops its own clock)
     public int win_frame = -1;
     public int fail_frame = -1;
     public float timer_start;
@@ -171,6 +173,8 @@ public class CreativeRunner : MonoBehaviour
     ExitService exitService;
     FieldInfo remainingTimeField;
     FieldInfo timerRunningField;
+    bool gameStopsClock;
+    bool lastExitStarted;
     readonly HashSet<Block> leaving = new HashSet<Block>();
     FailMenu failMenu;
     Camera cam;
@@ -486,6 +490,8 @@ public class CreativeRunner : MonoBehaviour
             int wait = 0;
             while (!exitPerformed && wait++ < job.fps) yield return null;
             rec.result = "exit";
+            if (lastExitStarted && gameStopsClock && ClockRunning() && result.status == null)
+                Mismatch(rec, "the game did not stop the clock when the last block started to leave");
         }
         else
         {
@@ -536,15 +542,17 @@ public class CreativeRunner : MonoBehaviour
         // InputHandler.HandleExitDuringDrag: snap to the cell, then the game's exit animation.
         exitTriggered = true;
         leaving.Add(b);
-        if (job.stop_clock_on_last_exit && result.status == null)
+        if (result.status == null)
         {
             bool last = true;
             foreach (var other in blocks)
                 if (other != null && !leaving.Contains(other)) last = false;
             if (last)
             {
-                timerRunningField.SetValue(GameManager.Instance, false);
-                result.clock_stopped_frame = frame;
+                lastExitStarted = true;
+                // The patched game stops its own clock in ExitService.PerformExit after the snap.
+                if (job.stop_clock_on_last_exit && !gameStopsClock)
+                    timerRunningField.SetValue(GameManager.Instance, false);
             }
         }
         Vector3 snap = grid.GetCell(g.x, g.y).transform.position;
@@ -583,7 +591,9 @@ public class CreativeRunner : MonoBehaviour
         exitService = new ExitService(grid, GameManager.Instance);
         remainingTimeField = typeof(GameManager).GetField("remainingTime", BindingFlags.Instance | BindingFlags.NonPublic);
         timerRunningField = typeof(GameManager).GetField("isTimerRunning", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (job.stop_clock_on_last_exit && timerRunningField == null) return "GameManager.isTimerRunning not found";
+        gameStopsClock = typeof(GameManager).GetMethod("OnBlockExitStarted") != null;
+        result.game_patched = gameStopsClock;
+        if (timerRunningField == null) return "GameManager.isTimerRunning not found";
         failMenu = FindFirstObjectByType<FailMenu>(FindObjectsInactive.Include);
         cam = Camera.main;
         if (cam == null) return "no main camera";
@@ -892,6 +902,9 @@ public class CreativeRunner : MonoBehaviour
             rec.blocks.Add(job.height - bp.y);
         }
         if (frame == 0) LogUiRects();
+        bool failShowing = failMenu != null && failMenu.gameObject.activeInHierarchy;
+        if (lastExitStarted && result.clock_stopped_frame < 0 && !failShowing && !ClockRunning())
+            result.clock_stopped_frame = frame;
         if (job.frame_hashes) rec.hash = Hex(md5.ComputeHash(buffer));
         frameLog.frames.Add(rec);
 
@@ -1002,6 +1015,9 @@ public class CreativeRunner : MonoBehaviour
     }
 
     int Frames(float seconds) => Mathf.Max(0, Mathf.RoundToInt(seconds * job.fps));
+
+    bool ClockRunning() => timerRunningField != null && GameManager.Instance != null
+                           && (bool)timerRunningField.GetValue(GameManager.Instance);
 
     void SetOutline(Block b, bool on)
     {

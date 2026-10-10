@@ -1,0 +1,88 @@
+diff -ru original/Assets/Scripts/GameManager.cs patched/Assets/Scripts/GameManager.cs
+--- original/Assets/Scripts/GameManager.cs	2026-10-10 19:19:33
++++ patched/Assets/Scripts/GameManager.cs	2026-10-10 19:19:34
+@@ -71,6 +71,11 @@
+     private float remainingTime;
+     private bool isTimerRunning;
+     private bool hasGameStarted;
++    // cbj-creative patch: blocks whose exit slide has started, and whether the win or the fail
++    // screen has been shown. Stops the game from showing "Out of Time!" and then "Level Completed".
++    private readonly HashSet<GameObject> leavingBlocks = new HashSet<GameObject>();
++    private bool isLevelOver;
++    public bool IsLevelOver => isLevelOver;
+     
+     public float pOffsetMultiplier;
+     public float pYOffset;
+@@ -171,6 +176,7 @@
+         {
+             remainingTime = 0;
+             isTimerRunning = false;
++            isLevelOver = true; // cbj-creative patch
+             if (UIManager.Instance != null)
+             {
+                 UIManager.Instance.ShowFail();
+@@ -312,6 +318,8 @@
+             hasGameStarted = false;
+             UIManager.Instance.UpdateTimer(remainingTime);
+         }
++        leavingBlocks.Clear(); // cbj-creative patch
++        isLevelOver = false;
+ 
+         gridManager.CreateGrid(
+             levelData, 
+@@ -391,15 +399,27 @@
+         }
+     }
+ 
++    // cbj-creative patch: ExitService.PerformExit calls this when a block starts to slide out.
++    // Once every block still on the board is on its way out, the level is solved, so the clock
++    // stops here; the win screen still waits for the last slide to end (OnBlockExited).
++    public void OnBlockExitStarted(GameObject blockObj)
++    {
++        if (isLevelOver || !spawnedBlocks.Contains(blockObj) || !leavingBlocks.Add(blockObj)) return;
++        if (leavingBlocks.Count >= spawnedBlocks.Count) isTimerRunning = false;
++    }
++
+     public void OnBlockExited(GameObject blockObj)
+     {
+         if (spawnedBlocks.Contains(blockObj))
+         {
+             spawnedBlocks.Remove(blockObj);
+         }
++        leavingBlocks.Remove(blockObj); // cbj-creative patch
++        if (isLevelOver) return; // the fail screen is already showing: no second ending
+ 
+         if (spawnedBlocks.Count == 0)
+         {
++            isLevelOver = true;
+             isTimerRunning = false;
+             if (UIManager.Instance != null)
+             {
+diff -ru original/Assets/Scripts/Services/Exit/ExitService.cs patched/Assets/Scripts/Services/Exit/ExitService.cs
+--- original/Assets/Scripts/Services/Exit/ExitService.cs	2026-10-10 19:19:33
++++ patched/Assets/Scripts/Services/Exit/ExitService.cs	2026-10-10 19:19:34
+@@ -135,6 +135,7 @@
+         
+         ClearBlockFromGrid(block);
+         DisableBlockColliders(block);
++        _gameManager.OnBlockExitStarted(block.gameObject); // cbj-creative patch
+ 
+         // --- Setup Particle Tracking ---
+         List<ParticleSystem> exitParticles = _gridManager.GetExitParticles(exitData.exitNumber);
+diff -ru original/Assets/Scripts/Services/Input/InputHandler.cs patched/Assets/Scripts/Services/Input/InputHandler.cs
+--- original/Assets/Scripts/Services/Input/InputHandler.cs	2026-10-10 19:19:33
++++ patched/Assets/Scripts/Services/Input/InputHandler.cs	2026-10-10 19:19:34
+@@ -40,6 +40,13 @@
+ 
+     private void HandleInput()
+     {
++        // cbj-creative patch: after the win or fail screen, the board takes no more input
++        // (it raycasts physics, so the overlay alone does not block drags).
++        if (GameManager.Instance != null && GameManager.Instance.IsLevelOver)
++        {
++            if (_currentBlock != null) ReleaseBlock();
++            return;
++        }
+         if (Input.GetMouseButtonDown(0))
+         {
+             if (GameManager.Instance != null)

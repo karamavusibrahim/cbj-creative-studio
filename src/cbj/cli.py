@@ -166,8 +166,9 @@ def _cmd_check(args) -> int:
 
 def _cmd_build_player(args) -> int:
     from .render import build_player
-    print(f"Copying {args.project} into build/ and building the runner player (about a minute)...")
-    app = build_player(Path(args.project), args.unity)
+    kind = "the stock game (no game patch)" if args.stock else "the runner player"
+    print(f"Copying {args.project} into build/ and building {kind} (about a minute)...")
+    app = build_player(Path(args.project), args.unity, stock=args.stock)
     print(f"Player built: {app}")
     return 0
 
@@ -181,7 +182,7 @@ def _size(text: str) -> tuple[int, int]:
 
 
 def _cmd_render(args) -> int:
-    from .render import Camera, Pacing, make_job, run_player
+    from .render import PLAYER_STOCK, Camera, Pacing, make_job, run_player
     level = load_level(args.level)
     if args.moves:
         drags = _load_moves(level, args.moves)
@@ -200,10 +201,10 @@ def _cmd_render(args) -> int:
     camera = (Camera.intro(args.zoom, 0.0, args.pan_y, seconds=args.start_hold or 1.0)
               if args.intro else Camera(args.zoom, 0.0, args.pan_y))
     job = make_job(level, args.level, drags, out, pacing, end_mode=args.end, size=args.size, camera=camera,
-                   timer=args.timer, hide=tuple(args.hide), stop_clock_on_last_exit=not args.original_clock)
+                   timer=args.timer, hide=tuple(args.hide), stop_clock_on_last_exit=not args.stock)
     print(f"{level.name}: {len(drags)} drags, end mode '{args.end}'. Recording in Unity...")
     t0 = time.perf_counter()
-    result = run_player(job)
+    result = run_player(job, app=PLAYER_STOCK if args.stock else None)
     dt = time.perf_counter() - t0
     print(f"Status: {result['status']} {result['message']}".rstrip())
     print(f"Video: {result['video']} ({result['frames']} frames, {result['duration_s']:.2f} s "
@@ -272,6 +273,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--project", default=str(Path(__file__).resolve().parents[3] / "CBJ"),
                    help="the Unity project to copy (default: ../CBJ)")
     s.add_argument("--unity", default="/Applications/Unity/Hub/Editor/6000.3.5f1/Unity.app/Contents/MacOS/Unity")
+    s.add_argument("--stock", action="store_true",
+                   help="build the game as Rollic shipped it, without the game patch (build/CBJRunner-stock.app)")
     s.set_defaults(func=_cmd_build_player)
 
     s = sub.add_parser("render", help="record a move script in the real game as a 9:16 video")
@@ -292,8 +295,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--pan-y", type=float, default=0.0, help="move the view up (+) or down (-) the board, in cells")
     s.add_argument("--intro", action="store_true", help="start pulled back and ease in, like the game's level start")
     s.add_argument("--timer", type=int, help="seconds on the game clock (default: the level's own)")
-    s.add_argument("--original-clock", action="store_true",
-                   help="keep the game's own clock, which runs on during the last exit slide (shows its bug)")
+    s.add_argument("--stock", action="store_true",
+                   help="record with the stock game (cbj build-player --stock), which keeps its clock "
+                        "running during the last exit slide and can show both endings")
     s.add_argument("--hide", action="append", default=[], metavar="NAME",
                    help="hide a game object by name, e.g. RestartButton (repeatable)")
     s.set_defaults(func=_cmd_render)

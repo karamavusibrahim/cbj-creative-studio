@@ -26,6 +26,15 @@ RUNNER_SRC = REPO / "unity" / "CreativeRunner"
 BUILD_DIR = REPO / "build"
 BUILD_PROJECT = BUILD_DIR / "unity-project"
 PLAYER_APP = BUILD_DIR / "CBJRunner.app"
+PLAYER_STOCK = BUILD_DIR / "CBJRunner-stock.app"  # Rollic's game without the game patch
+GAME_PATCH = REPO / "unity" / "game-patch"
+# The game patch (unity/game-patch/game.patch) stops the clock when the last block starts to
+# leave and keeps a second ending from showing after the first. These are the files it changes.
+PATCHED_FILES = (
+    "Assets/Scripts/GameManager.cs",
+    "Assets/Scripts/Services/Exit/ExitService.cs",
+    "Assets/Scripts/Services/Input/InputHandler.cs",
+)
 DEFAULT_PROJECT = REPO.parent / "CBJ"
 DEFAULT_UNITY = "/Applications/Unity/Hub/Editor/6000.3.5f1/Unity.app/Contents/MacOS/Unity"
 END_MODES = ("win", "cut", "fail")
@@ -136,6 +145,9 @@ def make_job(
     if end_mode == "cut" and not left:
         raise ValueError("the drags clear the board, so the video would end on the win screen; "
                          "use end mode 'win', or fewer drags for a cliffhanger")
+    if end_mode == "fail" and (timer or level.timer) < 1:
+        # GameManager.StartTimer only starts a clock with time on it, so it could never run out.
+        raise ValueError("a fail ending needs a clock, but the level's timer is 0; set a timer")
     if end_mode == "fail" and not left:
         raise ValueError("the drags clear the board, so the timer cannot run out; "
                          "a fail ending needs at least one block left")
@@ -324,8 +336,24 @@ def compare_recordings(a: str | Path, b: str | Path) -> dict:
     return out
 
 
-def build_player(project: Path = DEFAULT_PROJECT, unity: str = DEFAULT_UNITY) -> Path:
-    """Copy the Unity project into build/, add the runner scripts, and build the macOS player.
+def apply_game_patch(project: Path, stock: bool = False) -> None:
+    """Write the patched game files (or, with stock, Rollic's originals) into a project.
+    Refuses a project whose files are neither, since the patch was written against the originals."""
+    project = Path(project)
+    for rel in PATCHED_FILES:
+        target = project / rel
+        original = (GAME_PATCH / "original" / rel).read_bytes()
+        patched = (GAME_PATCH / "patched" / rel).read_bytes()
+        current = target.read_bytes() if target.is_file() else None
+        if current not in (original, patched):
+            raise ValueError(f"{target}: differs from the version the game patch was written for "
+                             f"(unity/game-patch/original); update the patch before building")
+        target.write_bytes(original if stock else patched)
+
+
+def build_player(project: Path = DEFAULT_PROJECT, unity: str = DEFAULT_UNITY, stock: bool = False) -> Path:
+    """Copy the Unity project into build/, add the runner scripts and the game patch, and build the
+    macOS player. stock=True leaves the game as Rollic shipped it (to show its original behaviour).
     The original project is never modified, so it can stay open in the editor."""
     project = Path(project).expanduser().resolve()
     if not (project / "Assets").is_dir() or not (project / "ProjectSettings").is_dir():
@@ -339,13 +367,15 @@ def build_player(project: Path = DEFAULT_PROJECT, unity: str = DEFAULT_UNITY) ->
     dst = BUILD_PROJECT / "Assets" / "CreativeRunner"
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(RUNNER_SRC, dst, ignore=shutil.ignore_patterns("*.meta"))
-    log = BUILD_DIR / "build.log"
-    shutil.rmtree(PLAYER_APP, ignore_errors=True)
+    apply_game_patch(BUILD_PROJECT, stock=stock)
+    app = PLAYER_STOCK if stock else PLAYER_APP
+    log = BUILD_DIR / ("build-stock.log" if stock else "build.log")
+    shutil.rmtree(app, ignore_errors=True)
     cmd = [unity, "-batchmode", "-quit", "-projectPath", str(BUILD_PROJECT),
-           "-executeMethod", "CreativeRunnerBuild.BuildMac", "-cbjOut", str(PLAYER_APP), "-logFile", str(log)]
+           "-executeMethod", "CreativeRunnerBuild.BuildMac", "-cbjOut", str(app), "-logFile", str(log)]
     proc = subprocess.run(cmd)
-    if proc.returncode != 0 or not PLAYER_APP.is_dir():
+    if proc.returncode != 0 or not app.is_dir():
         errors = [ln for ln in log.read_text(errors="replace").splitlines() if "error CS" in ln][:10]
         detail = ("\n" + "\n".join(errors)) if errors else ""
         raise ValueError(f"Unity build failed (exit {proc.returncode}); see {log}{detail}")
-    return PLAYER_APP
+    return app
