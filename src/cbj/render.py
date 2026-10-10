@@ -111,12 +111,15 @@ def make_job(
     camera: Camera = Camera(),
     timer: int | None = None,
     hide: tuple[str, ...] = (),
+    stop_clock_on_last_exit: bool = True,
 ) -> dict:
     """Job file for CreativeRunner. Raises ValueError if the drags break a rule, or if
     end_mode is "win" and the drags do not clear the board.
 
     timer: seconds on the game clock instead of the level's own (the level file is unchanged).
-    hide: GameObject names to hide, e.g. ("RestartButton",)."""
+    hide: GameObject names to hide, e.g. ("RestartButton",).
+    stop_clock_on_last_exit: False keeps the game's own clock, which can show "Out of Time!"
+    and then "Level Completed" when time runs out during the last exit slide."""
     if end_mode not in END_MODES:
         raise ValueError(f"end must be one of {', '.join(END_MODES)}, got {end_mode!r}")
     pacing.check()
@@ -161,7 +164,7 @@ def make_job(
         "max_seconds": round(estimate_seconds(level, drags, pacing) * 2 + 30
                              + ((timer or level.timer) if end_mode == "fail" else 0), 1),
         "timer_s": -1 if timer is None else timer,
-        "stop_clock_on_last_exit": True,
+        "stop_clock_on_last_exit": bool(stop_clock_on_last_exit),
         "hide": list(hide),
         "end_mode": end_mode,
         "camera": camera.to_job(),

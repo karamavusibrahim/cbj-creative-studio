@@ -200,7 +200,7 @@ def _cmd_render(args) -> int:
     camera = (Camera.intro(args.zoom, 0.0, args.pan_y, seconds=args.start_hold or 1.0)
               if args.intro else Camera(args.zoom, 0.0, args.pan_y))
     job = make_job(level, args.level, drags, out, pacing, end_mode=args.end, size=args.size, camera=camera,
-                   timer=args.timer, hide=tuple(args.hide))
+                   timer=args.timer, hide=tuple(args.hide), stop_clock_on_last_exit=not args.original_clock)
     print(f"{level.name}: {len(drags)} drags, end mode '{args.end}'. Recording in Unity...")
     t0 = time.perf_counter()
     result = run_player(job)
@@ -292,6 +292,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--pan-y", type=float, default=0.0, help="move the view up (+) or down (-) the board, in cells")
     s.add_argument("--intro", action="store_true", help="start pulled back and ease in, like the game's level start")
     s.add_argument("--timer", type=int, help="seconds on the game clock (default: the level's own)")
+    s.add_argument("--original-clock", action="store_true",
+                   help="keep the game's own clock, which runs on during the last exit slide (shows its bug)")
     s.add_argument("--hide", action="append", default=[], metavar="NAME",
                    help="hide a game object by name, e.g. RestartButton (repeatable)")
     s.set_defaults(func=_cmd_render)

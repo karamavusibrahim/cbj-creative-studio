@@ -344,3 +344,16 @@ def test_check_render_rejects_a_video_with_both_endings(tmp_path):
     r.update(fail_frame=3, win_frame=5)
     (out / "result.json").write_text(json.dumps(r))
     assert any("both the fail screen and the win screen" in p for p in check_render(out)["problems"])
+
+
+def test_original_clock_flag_reaches_the_job(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(job, app=None, timeout=900):
+        seen.update(job)
+        raise ValueError("stop here")
+
+    monkeypatch.setattr(render, "run_player", fake_run)
+    cli.main(["render", str(LEVEL_03), str(MOVES_03), "-o", str(tmp_path / "o"), "--original-clock"])
+    assert seen["stop_clock_on_last_exit"] is False
+    assert job3(tmp_path)["stop_clock_on_last_exit"] is True
