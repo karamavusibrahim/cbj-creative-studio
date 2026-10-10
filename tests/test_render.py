@@ -11,7 +11,8 @@ import pytest
 from cbj import cli, render
 from cbj.describe import script_to_drags
 from cbj.level import load_level
-from cbj.render import Pacing, check_render, compare_recordings, level_label, make_job, player_binary, run_player
+from cbj.render import (Camera, Pacing, check_render, compare_recordings, level_label, make_job, player_binary,
+                        run_player)
 from cbj.solver import Drag, ReplayError
 
 PROJ = Path(__file__).parent.parent
@@ -256,5 +257,59 @@ def test_cli_compare(tmp_path, capsys):
     assert cli.main(["compare", str(a), str(b)]) == 0
     out = capsys.readouterr().out
     assert "game state (timer, finger, drags, ending): identical" in out
+    assert "finger on screen: same path" in out
     assert cli.main(["compare", str(a), str(tmp_path / "nothing")]) == 1
     assert "no recording" in capsys.readouterr().err
+
+
+@needs_ffmpeg
+def test_compare_separates_the_finger_on_screen_from_the_game_state(tmp_path):
+    a = fake_recording(tmp_path / "a")
+    b = fake_recording(tmp_path / "b")
+    log = json.loads((b / "frames.json").read_text())
+    for f in log["frames"]:
+        f["finger_x"] = 40  # same game, different framing
+    (b / "frames.json").write_text(json.dumps(log))
+    c = compare_recordings(a, b)
+    assert c["state_equal"] and not c["finger_path_equal"]
+
+
+def test_job_carries_the_camera(tmp_path):
+    job = job3(tmp_path, camera=Camera(zoom=1.1, pan_y=-0.5, keys=((0, 0.8, 0, 0), (1.5, 1.1, 0, -0.5))))
+    cam = job["camera"]
+    assert (cam["zoom"], cam["pan_x"], cam["pan_y"]) == (1.1, 0.0, -0.5)
+    assert cam["keys"][1] == {"t": 1.5, "zoom": 1.1, "pan_x": 0, "pan_y": -0.5}
+    assert job3(tmp_path)["camera"] == {"zoom": 1.0, "pan_x": 0.0, "pan_y": 0.0, "keys": []}
+
+
+def test_intro_camera_eases_in_from_pulled_back():
+    cam = Camera.intro(1.0, seconds=1.0)
+    assert cam.keys == ((0.0, 0.75, 0.0, 0.0), (1.0, 1.0, 0.0, 0.0))
+
+
+@pytest.mark.parametrize("cam", [
+    Camera(zoom=0), Camera(zoom=-1), Camera(zoom=float("nan")), Camera(pan_y=float("inf")),
+    Camera(keys=((1, 1, 0, 0), (0.5, 1, 0, 0))),   # keys out of order
+    Camera(keys=((0, 0, 0, 0),)),                   # zero zoom in a key
+    Camera(keys=((0, 1, 0),)),                      # too short
+])
+def test_bad_camera_is_refused(tmp_path, cam):
+    with pytest.raises(ValueError, match="camera"):
+        job3(tmp_path, camera=cam)
+
+
+def test_cli_pacing_and_camera_flags_reach_the_job(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(job, app=None, timeout=900):
+        seen.update(job)
+        raise ValueError("stop here")
+
+    monkeypatch.setattr(render, "run_player", fake_run)
+    cli.main(["render", str(LEVEL_03), str(MOVES_03), "-o", str(tmp_path / "o"), "--pause", "1.5",
+              "--start-hold", "2", "--end-hold", "3", "--speed", "4", "--zoom", "1.1", "--intro"])
+    assert seen["start_hold_s"] == 2 and seen["end_hold_s"] == 3
+    assert [d["pause_before_s"] for d in seen["drags"]] == [0.0, 1.5, 1.5]
+    assert seen["drags"][0]["cells_per_s"] == 4
+    assert seen["camera"]["keys"][0]["zoom"] == pytest.approx(0.825)
+    assert seen["camera"]["keys"][-1]["t"] == 2

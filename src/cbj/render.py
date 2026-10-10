@@ -57,6 +57,41 @@ class Pacing:
                 raise ValueError(f"{name} must be zero or more, got {v!r}")
 
 
+@dataclass(frozen=True)
+class Camera:
+    """Framing on top of the game's own fit. zoom 1 = the game's framing, 1.2 = 20% closer;
+    pan in cells (+x right, +y up the board). keys: (t_seconds, zoom, pan_x, pan_y) tuples,
+    eased between, held before the first and after the last."""
+
+    zoom: float = 1.0
+    pan_x: float = 0.0
+    pan_y: float = 0.0
+    keys: tuple[tuple[float, float, float, float], ...] = ()
+
+    def check(self) -> None:
+        def finite(v):
+            return isinstance(v, (int, float)) and not isinstance(v, bool) and v == v and abs(v) != float("inf")
+        if not (finite(self.zoom) and self.zoom > 0 and finite(self.pan_x) and finite(self.pan_y)):
+            raise ValueError("camera zoom must be a positive number and pans finite numbers")
+        last = -1.0
+        for k, key in enumerate(self.keys, start=1):
+            if len(key) != 4 or not all(finite(v) for v in key):
+                raise ValueError(f"camera key {k} must be (t, zoom, pan_x, pan_y) numbers")
+            t, zoom = key[0], key[1]
+            if t < 0 or zoom <= 0 or t <= last:
+                raise ValueError(f"camera key {k}: t must be zero or more and increasing, zoom positive")
+            last = t
+
+    def to_job(self) -> dict:
+        return {"zoom": self.zoom, "pan_x": self.pan_x, "pan_y": self.pan_y,
+                "keys": [{"t": t, "zoom": z, "pan_x": x, "pan_y": y} for t, z, x, y in self.keys]}
+
+    @staticmethod
+    def intro(zoom: float = 1.0, pan_x: float = 0.0, pan_y: float = 0.0, seconds: float = 1.0) -> "Camera":
+        """Start pulled back and ease into the framing, like the game's level-start glide."""
+        return Camera(zoom, pan_x, pan_y, ((0.0, zoom * 0.75, pan_x, pan_y), (seconds, zoom, pan_x, pan_y)))
+
+
 def level_label(level: Level) -> int:
     """The number the game shows in its "Level" badge: Level_03 -> 3."""
     m = re.search(r"(\d+)$", level.name)
@@ -73,12 +108,14 @@ def make_job(
     label: int | None = None,
     size: tuple[int, int] = (1080, 1920),
     ffmpeg: str | None = None,
+    camera: Camera = Camera(),
 ) -> dict:
     """Job file for CreativeRunner. Raises ValueError if the drags break a rule, or if
     end_mode is "win" and the drags do not clear the board."""
     if end_mode not in END_MODES:
         raise ValueError(f"end must be one of {', '.join(END_MODES)}, got {end_mode!r}")
     pacing.check()
+    camera.check()
     final = replay(level, drags)
     left = sum(p is not None for p in final)
     if end_mode == "win" and left:
@@ -115,6 +152,7 @@ def make_job(
         "max_seconds": round(estimate_seconds(level, drags, pacing) * 2 + 30
                              + (level.timer if end_mode == "fail" else 0), 1),
         "end_mode": end_mode,
+        "camera": camera.to_job(),
         "drags": [
             {
                 "block": d.block,
@@ -222,7 +260,9 @@ def probe_video(path: Path) -> dict:
 
 
 def compare_recordings(a: str | Path, b: str | Path) -> dict:
-    """How close two recordings are. The game state (timer, finger, drags) must match exactly.
+    """How close two recordings are. The game state (timer, finger down or up, drags, ending)
+    must match exactly; the finger's position on screen is reported separately, since a camera
+    or size change moves it without changing the game.
     Pixels match in nearly every frame; the rest differ by a few pixels from the graphics
     driver, so pixel closeness is measured as PSNR (identical frames count as infinite)."""
     a, b = Path(a), Path(b)
@@ -230,9 +270,10 @@ def compare_recordings(a: str | Path, b: str | Path) -> dict:
     rb = json.loads((b / "result.json").read_text())
     fa = json.loads((a / "frames.json").read_text())["frames"]
     fb = json.loads((b / "frames.json").read_text())["frames"]
-    state_keys = ("timer", "finger", "finger_x", "finger_y")
     state_diff = [x["frame"] for x, y in zip(fa, fb)
-                  if any(abs(x.get(k, 0) - y.get(k, 0)) > 1e-4 for k in state_keys)]
+                  if abs(x.get("timer", 0) - y.get("timer", 0)) > 1e-4 or x.get("finger") != y.get("finger")]
+    finger_moved = [x["frame"] for x, y in zip(fa, fb)
+                    if any(abs(x.get(k, 0) - y.get(k, 0)) > 0.5 for k in ("finger_x", "finger_y"))]
     drag_keys = ("block", "cells", "result", "start_frame", "exit_frame", "end_frame")
     drags_equal = [{k: d.get(k) for k in drag_keys} for d in ra["drags"]] == \
                   [{k: d.get(k) for k in drag_keys} for d in rb["drags"]]
@@ -242,6 +283,7 @@ def compare_recordings(a: str | Path, b: str | Path) -> dict:
         "state_equal": same_length and not state_diff and drags_equal and ra["status"] == rb["status"]
                        and ra.get("win_frame") == rb.get("win_frame") and ra.get("fail_frame") == rb.get("fail_frame"),
         "state_diff_frames": state_diff[:20],
+        "finger_path_equal": same_length and not finger_moved,
         "identical_frames": sum(x.get("hash") == y.get("hash") for x, y in zip(fa, fb)),
         "min_psnr_db": None,
         "worst_frames": [],

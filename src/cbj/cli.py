@@ -1,8 +1,9 @@
-"""Command line: `cbj show|solve|table|check|build-player|render|compare`.
+"""Command line: `cbj show|solve|table|difficulty|check|build-player|render|compare`.
 
     uv run cbj show  data/levels/Level_03.json
     uv run cbj solve data/levels/Level_03.json [--json out.json]
     uv run cbj table data/levels [--md reports/solve_table.md]
+    uv run cbj difficulty data/levels
     uv run cbj check data/levels/Level_03.json data/solutions/Level_03.moves.json
     uv run cbj build-player
     uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json
@@ -128,6 +129,29 @@ def _load_moves(level, moves_path) -> list:
         raise ValueError(f"{path.name}: {e}") from None
 
 
+def _cmd_difficulty(args) -> int:
+    from .difficulty import rate
+    target = Path(args.path)
+    paths = sorted(target.glob("*.json")) if target.is_dir() else [target]
+    if not paths or not paths[0].exists():
+        raise ValueError(f"{target}: no such level file or folder")
+    header = ("level", "blocks", "min drags", "extra drags", "exits at start", "first-drag options",
+              "naive player: mean drags", "p90", "capped", "mean / min")
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    for path in paths:
+        level = load_level(path)
+        d = rate(level, runs=args.runs, seed=args.seed)
+        if d is None:
+            lines.append(f"| {level.name} | {len(level.blocks)} | UNSOLVABLE |" + " - |" * 7)
+            continue
+        lines.append(f"| {d.level_name} | {d.blocks} | {d.min_drags} | {d.extra_drags} | {d.exits_at_start} | "
+                     f"{d.first_moves} | {d.naive_mean:.1f} | {d.naive_p90} | {d.naive_capped} | {d.naive_ratio:.2f} |")
+    print("\n".join(lines))
+    print(f"\nNaive player: takes an exit when one is available, otherwise drags a random block to a "
+          f"random reachable cell; {args.runs} runs, seed {args.seed}, capped at 200 drags.")
+    return 0
+
+
 def _cmd_check(args) -> int:
     level = load_level(args.level)
     drags = _load_moves(level, args.moves)
@@ -157,7 +181,7 @@ def _size(text: str) -> tuple[int, int]:
 
 
 def _cmd_render(args) -> int:
-    from .render import Pacing, make_job, run_player
+    from .render import Camera, Pacing, make_job, run_player
     level = load_level(args.level)
     if args.moves:
         drags = _load_moves(level, args.moves)
@@ -171,8 +195,11 @@ def _cmd_render(args) -> int:
             raise ValueError("--drags must be 1 or more")
         drags = drags[: args.drags]
     out = Path(args.out or f"renders/{level.name}")
-    pacing = Pacing(fps=args.fps, cells_per_s=args.speed)
-    job = make_job(level, args.level, drags, out, pacing, end_mode=args.end, size=args.size)
+    pacing = Pacing(fps=args.fps, cells_per_s=args.speed, start_hold_s=args.start_hold,
+                    pause_before_s=args.pause, end_hold_s=args.end_hold)
+    camera = (Camera.intro(args.zoom, 0.0, args.pan_y, seconds=args.start_hold or 1.0)
+              if args.intro else Camera(args.zoom, 0.0, args.pan_y))
+    job = make_job(level, args.level, drags, out, pacing, end_mode=args.end, size=args.size, camera=camera)
     print(f"{level.name}: {len(drags)} drags, end mode '{args.end}'. Recording in Unity...")
     t0 = time.perf_counter()
     result = run_player(job)
@@ -202,6 +229,8 @@ def _cmd_compare(args) -> int:
     print(f"frames: {na} vs {nb}")
     print("game state (timer, finger, drags, ending): " + ("identical" if c["state_equal"] else
           f"DIFFERENT (first frames: {c['state_diff_frames']})"))
+    print("finger on screen: " + ("same path" if c["finger_path_equal"] else
+          "different path (the camera or video size changed)"))
     print(f"identical frames: {c['identical_frames']} of {min(na, nb)}")
     if c["min_psnr_db"] is not None:
         low = "inf (all identical)" if c["min_psnr_db"] == float("inf") else f"{c['min_psnr_db']:.1f} dB"
@@ -227,6 +256,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--json", help="write the move script for the Unity replay")
     s.set_defaults(func=_cmd_solve)
 
+    s = sub.add_parser("difficulty", help="how hard a level is: minimum solution and a simulated naive player")
+    s.add_argument("path", help="a level file or a folder of them")
+    s.add_argument("--runs", type=int, default=200)
+    s.add_argument("--seed", type=int, default=0)
+    s.set_defaults(func=_cmd_difficulty)
+
     s = sub.add_parser("check", help="check a move script against a level, cell by cell")
     s.add_argument("level")
     s.add_argument("moves")
@@ -249,6 +284,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--fps", type=int, default=30)
     s.add_argument("--speed", type=float, default=6.0, help="finger speed in cells per second")
     s.add_argument("--size", type=_size, default=(1080, 1920), help="video size, default 1080x1920")
+    s.add_argument("--start-hold", type=float, default=1.0, help="seconds on the board before the first touch")
+    s.add_argument("--pause", type=float, default=0.45, help="seconds between drags")
+    s.add_argument("--end-hold", type=float, default=2.5, help="seconds after the ending")
+    s.add_argument("--zoom", type=float, default=1.0, help="1 = the game's framing, 1.2 = 20%% closer")
+    s.add_argument("--pan-y", type=float, default=0.0, help="move the view up (+) or down (-) the board, in cells")
+    s.add_argument("--intro", action="store_true", help="start pulled back and ease in, like the game's level start")
     s.set_defaults(func=_cmd_render)
 
     s = sub.add_parser("compare", help="compare two recordings: game state, frames, PSNR")

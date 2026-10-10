@@ -15,7 +15,7 @@ import pytest
 
 from cbj.describe import script_to_drags
 from cbj.level import load_level
-from cbj.render import PLAYER_APP, check_render, compare_recordings, make_job, player_binary, run_player
+from cbj.render import PLAYER_APP, Camera, check_render, compare_recordings, make_job, player_binary, run_player
 
 PROJ = Path(__file__).parent.parent
 
@@ -134,3 +134,20 @@ def test_timer_running_out_mid_drag_interrupts_the_drag(tmp_path):
     assert r["status"] == "failed"
     assert r["drags"][0]["result"] == "interrupted"
     assert r["problems"] == []
+
+
+def test_changing_only_the_camera_keeps_the_game_identical(tmp_path):
+    # A small controlled edit: the framing changes every frame, the gameplay does not.
+    base = run_player(job_for("03", tmp_path / "base", size=(540, 960)))
+    zoom = run_player(job_for("03", tmp_path / "zoom", size=(540, 960), camera=Camera(zoom=1.1)))
+    assert base["problems"] == [] and zoom["problems"] == []
+    c = compare_recordings(tmp_path / "base", tmp_path / "zoom")
+    assert c["state_equal"] and not c["finger_path_equal"]
+    assert c["min_psnr_db"] < 30
+
+
+def test_bad_camera_keys_are_refused_at_start(tmp_path):
+    job = job_for("03", tmp_path / "x")
+    job["camera"]["keys"] = [{"t": 1, "zoom": 1, "pan_x": 0, "pan_y": 0}, {"t": 0.5, "zoom": 1, "pan_x": 0, "pan_y": 0}]
+    r = run_raw(job, tmp_path / "badcam")
+    assert r["status"] == "error" and "increasing time order" in r["message"]

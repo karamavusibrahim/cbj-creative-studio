@@ -36,6 +36,24 @@ public class RenderDrag
 }
 
 [Serializable]
+public class CameraKey
+{
+    public float t; // seconds from the first recorded frame
+    public float zoom = 1f; // 1 = the game's own framing, 2 = twice as close
+    public float pan_x; // look-at point shift in cells, + is right
+    public float pan_y; // look-at point shift in cells, + is up the board
+}
+
+[Serializable]
+public class RenderCamera
+{
+    public float zoom = 1f;
+    public float pan_x;
+    public float pan_y;
+    public List<CameraKey> keys = new List<CameraKey>(); // if set, overrides zoom/pan; eased between keys
+}
+
+[Serializable]
 public class RenderJob
 {
     public string level_path;
@@ -52,6 +70,7 @@ public class RenderJob
     public float start_hold_s = 1f;
     public float end_hold_s = 2f;
     public float max_seconds = 120f;
+    public RenderCamera camera = new RenderCamera();
     public string end_mode = "win"; // "win": wait for the win screen; "cut": stop after the last drag;
                                     // "fail": wait for the timer to run out
     public List<RenderDrag> drags = new List<RenderDrag>();
@@ -144,6 +163,10 @@ public class CreativeRunner : MonoBehaviour
     bool scriptDone;
     bool finished;
     bool fingerDown;
+    float camSpacing;
+    float camBaseDist;
+    float camBaseSize;
+    Vector3 camBasePos;
     string captureError;
     int doneFrames;
     Vector3 finger;
@@ -194,6 +217,17 @@ public class CreativeRunner : MonoBehaviour
         if (j.end_mode != "win" && j.end_mode != "cut" && j.end_mode != "fail")
             throw new Exception($"end_mode must be win, cut or fail, got '{j.end_mode}'");
         if (j.drags == null || j.drags.Count == 0) throw new Exception("the job has no drags");
+        if (j.camera == null) j.camera = new RenderCamera();
+        if (!Positive(j.camera.zoom) || !Finite(j.camera.pan_x) || !Finite(j.camera.pan_y))
+            throw new Exception("camera zoom must be positive and pans finite");
+        for (int k = 0; k < j.camera.keys.Count; k++)
+        {
+            var key = j.camera.keys[k];
+            if (!NonNegative(key.t) || !Positive(key.zoom) || !Finite(key.pan_x) || !Finite(key.pan_y))
+                throw new Exception($"camera key {k + 1}: t must be zero or more, zoom positive, pans finite");
+            if (k > 0 && key.t <= j.camera.keys[k - 1].t)
+                throw new Exception("camera keys must be in increasing time order");
+        }
         if (!NonNegative(j.start_hold_s) || !NonNegative(j.end_hold_s) || !(j.max_seconds > 0f))
             throw new Exception("start_hold_s and end_hold_s must be zero or more, max_seconds positive");
         for (int i = 0; i < j.drags.Count; i++)
@@ -208,6 +242,8 @@ public class CreativeRunner : MonoBehaviour
     }
 
     static bool NonNegative(float v) => v >= 0f && !float.IsInfinity(v);
+    static bool Positive(float v) => v > 0f && !float.IsInfinity(v);
+    static bool Finite(float v) => !float.IsNaN(v) && !float.IsInfinity(v);
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void AfterSceneLoad()
@@ -581,6 +617,7 @@ public class CreativeRunner : MonoBehaviour
 
         float s = grid.CellSpacing;
         int w = grid.GridWidth, h = grid.GridHeight;
+        camSpacing = s;
         float boardW = w * s + padding * 2;
         float boardH = h * s + padding * 2;
         Vector3 center = grid.GridOrigin + new Vector3((w - 1) * s * 0.5f, 0, (h - 1) * s * 0.5f);
@@ -590,8 +627,9 @@ public class CreativeRunner : MonoBehaviour
         {
             float size = Mathf.Max(boardH * 0.5f, boardW * 0.5f / aspect);
             Vector3 c = center + cam.transform.up * (vOffset * size * 2f);
-            cam.transform.position = new Vector3(c.x, cam.transform.position.y, c.z);
-            cam.orthographicSize = size;
+            camBasePos = new Vector3(c.x, cam.transform.position.y, c.z);
+            camBaseSize = size;
+            ApplyCamera();
             return;
         }
         float fovRad = cam.fieldOfView * Mathf.Deg2Rad;
@@ -605,7 +643,56 @@ public class CreativeRunner : MonoBehaviour
         Vector3 pos = center - cam.transform.forward * dist;
         if (Mathf.Abs(vOffset) > 0.001f)
             pos += cam.transform.up * (vOffset * 2f * dist * Mathf.Tan(fovRad * 0.5f));
-        cam.transform.position = pos;
+        camBasePos = pos;
+        camBaseDist = dist;
+        ApplyCamera();
+    }
+
+    // Zoom moves the camera along its view direction toward the fitted framing's look-at point;
+    // pan slides it over the board in cells. Runs every frame before rendering.
+    void ApplyCamera()
+    {
+        if (cam == null || camSpacing <= 0f) return;
+        float t = (float)frame / job.fps;
+        float zoom = job.camera.zoom, px = job.camera.pan_x, py = job.camera.pan_y;
+        var keys = job.camera.keys;
+        if (keys.Count > 0)
+        {
+            // Hold the first key before it, the last key after it, and ease in between.
+            CameraKey a = keys[0], b = keys[0];
+            float u = 0f;
+            if (t >= keys[keys.Count - 1].t)
+            {
+                a = b = keys[keys.Count - 1];
+            }
+            else if (t > keys[0].t)
+            {
+                int i = 0;
+                while (t >= keys[i + 1].t) i++;
+                a = keys[i];
+                b = keys[i + 1];
+                u = Mathf.SmoothStep(0f, 1f, (t - a.t) / (b.t - a.t));
+            }
+            zoom = Mathf.Lerp(a.zoom, b.zoom, u);
+            px = Mathf.Lerp(a.pan_x, b.pan_x, u);
+            py = Mathf.Lerp(a.pan_y, b.pan_y, u);
+        }
+        Vector3 pan = new Vector3(px * camSpacing, 0f, py * camSpacing);
+        if (cam.orthographic)
+        {
+            cam.transform.position = camBasePos + pan;
+            cam.orthographicSize = camBaseSize / zoom;
+        }
+        else
+        {
+            Vector3 lookAt = camBasePos + cam.transform.forward * camBaseDist;
+            cam.transform.position = lookAt - cam.transform.forward * (camBaseDist / zoom) + pan;
+        }
+    }
+
+    void LateUpdate()
+    {
+        if (rt != null && !finished) ApplyCamera();
     }
 
     // Overlay canvases do not reach a render texture, so draw them through the camera, scaled as

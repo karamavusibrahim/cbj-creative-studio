@@ -189,8 +189,10 @@ def _is_goal(state: State) -> bool:
     return all(p is None for p in state)
 
 
-def solve(level: Level, max_states: int = 2_000_000, prune_exits: bool = True) -> Solution | None:
+def solve(level: Level, max_states: int = 2_000_000, prune_exits: bool = True,
+          start: State | None = None) -> Solution | None:
     """Breadth-first search over drags. Returns a minimum-drag solution, or None if unsolvable.
+    `start` searches from a position other than the level's start (one pivot or None per block).
 
     Raises SolverLimitError as soon as more than `max_states` positions are stored,
     or when a single drag reaches more than max(max_states, 144) cells. The second
@@ -201,9 +203,13 @@ def solve(level: Level, max_states: int = 2_000_000, prune_exits: bool = True) -
         raise ValueError(f"max_states must be a positive integer, got {max_states!r}")
     # Real boards are at most 12x12, so this cap never changes a real result.
     cell_limit = max(max_states, MAX_GRID * MAX_GRID)
-    start = initial_state(level)
+    if start is None:
+        start = initial_state(level)
+    elif len(start) != len(level.blocks):
+        raise ValueError(f"start has {len(start)} entries, the level has {len(level.blocks)} blocks")
     if _is_goal(start):
         return Solution(level.name, [], 1, 0)
+    blocks_left = sum(p is not None for p in start)
 
     parent: dict[State, tuple[State, Drag] | None] = {start: None}
     queue: deque[State] = deque([start])
@@ -237,7 +243,7 @@ def solve(level: Level, max_states: int = 2_000_000, prune_exits: bool = True) -
                     drags.append(_with_full_path(level, prev, drag))
                     cur = prev
                 drags.reverse()
-                return Solution(level.name, drags, len(parent), len(level.blocks))
+                return Solution(level.name, drags, len(parent), blocks_left)
             queue.append(ns)
             if len(parent) > max_states:
                 raise SolverLimitError(f"{level.name or 'level'}: more than {max_states} states, stopped")
