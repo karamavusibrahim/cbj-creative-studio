@@ -202,7 +202,7 @@ def _cmd_render(args) -> int:
     camera = (Camera.intro(args.zoom, 0.0, args.pan_y, seconds=args.start_hold or 1.0)
               if args.intro else Camera(args.zoom, 0.0, args.pan_y))
     job = make_job(level, args.level, drags, out, pacing, end_mode=args.end, size=args.size, camera=camera,
-                   timer=args.timer, hide=tuple(args.hide), stop_clock_on_last_exit=not args.stock,
+                   timer=args.timer, hide=tuple(args.hide or ()), stop_clock_on_last_exit=not args.stock,
                    capture=not args.dry_run)
     doing = "Dry run (timing only, no video)" if args.dry_run else "Recording"
     print(f"{level.name}: {len(drags)} drags, end mode '{args.end}'. {doing} in Unity...")
@@ -273,6 +273,8 @@ def _cmd_scenario(args) -> int:
         print(f"  {k:2d}. {b.kind:8s} {labels[b.drag.block]:3s} pause {b.pause:14s} {b.pause_f:2d} f, "
               f"{b.frames_per_cell} f/cell{extra}  {b.note}")
     label = args.label if args.label is not None else level_label(level)
+    for n in script.notes:
+        print(f"  note: {n}")
     if args.label is None and not re.fullmatch(r"Level_\d+", level.name):
         print(f"  note: the HUD will show \"Level {label}\" (from the file name); set --label for the "
               f"number the ad should show")
@@ -281,7 +283,7 @@ def _cmd_scenario(args) -> int:
     out = Path(args.out or f"renders/{level.name}_{args.ending}")
     print("Dry run, fit (pauses only), then recording in Unity...")
     result = run(level, args.level, script, out, length_s=args.length, difficulty=d, label=label,
-                 hide=tuple(args.hide))
+                 hide=("RestartButton", *(args.hide or ())))
     m, fit = script.measured, script.fit
     timer = f"{script.timer_s} s" if script.timer_s is not None else "the level's own"
     print(f"Status: {result['status']} {result['message']}".rstrip())
@@ -355,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--stock", action="store_true",
                    help="record with the stock game (cbj build-player --stock), which keeps its clock "
                         "running during the last exit slide and can show both endings")
-    s.add_argument("--hide", action="append", default=[], metavar="NAME",
+    s.add_argument("--hide", action="append", metavar="NAME",
                    help="hide a game object by name, e.g. RestartButton (repeatable)")
     s.add_argument("--dry-run", action="store_true",
                    help="play and log the timing (frames.json, result.json) without filming; a few seconds")
@@ -373,7 +375,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--allow-fail", action="store_true",
                    help="required for time_out (opt-in, social tests; hard levels only)")
     s.add_argument("--plan-only", action="store_true", help="print the beats, do not start Unity")
-    s.add_argument("--hide", action="append", default=["RestartButton"], metavar="NAME")
+    s.add_argument("--hide", action="append", metavar="NAME",
+                   help="hide another game object (RestartButton is always hidden)")
     s.add_argument("-o", "--out", help="output folder (default: renders/<level>_<ending>)")
     s.set_defaults(func=_cmd_scenario)
 

@@ -54,7 +54,7 @@ PAUSES = {
     "hesitate": (11, 14, 18),  # reaching for a block the player then doubts
 }
 MIN_PAUSE_F = 5  # shorter than this and two drags read as one
-TRAVEL_F_PER_CELL = 1  # a longer pause when the finger has further to go to the next block
+TRAVEL_CELLS_PER_F = 2  # a pause grows a frame per two cells the finger travels to the next block
 HESITATE_HOLD_F = 21  # lift, hold 0.7 s, put down
 MISTAKE_PUSH_CELLS, MISTAKE_HOLD_F = 0.3, 8  # a blocked attempt presses into the blocker
 BUMP_PUSH_CELLS, BUMP_HOLD_F = 0.35, 24  # the cliffhanger's last beat: 0.8 s against the blocker
@@ -110,6 +110,7 @@ class PlayScript:
     measured: dict = field(default_factory=dict)
     difficulty: dict | None = None
     hud_label: int | None = None
+    notes: list[str] = field(default_factory=list)  # what the plan had to change from the request
 
     @property
     def drags(self) -> list[Drag]:
@@ -126,6 +127,7 @@ class PlayScript:
             "fps": FPS,
             "timer_s": self.timer_s,
             "hud_label": self.hud_label,
+            "notes": self.notes,
             "difficulty": self.difficulty,
             "beats": [
                 {
@@ -157,7 +159,7 @@ class PlayScript:
                       b["push_cells"], b["hold_f"], tuple(b["push_dir"]) if b.get("push_dir") else None)
                  for b in d["beats"]]
         return PlayScript(d["level"], d["ending"], d["seed"], beats, d["left"], d["timer_s"], d.get("fit", {}),
-                          d.get("measured", {}), d.get("difficulty"), d.get("hud_label"))
+                          d.get("measured", {}), d.get("difficulty"), d.get("hud_label"), d.get("notes", []))
 
 
 # ---------- mistakes ----------
@@ -247,13 +249,14 @@ def mistake_options(level: Level, state: State, allow_fidget: bool = True) -> li
     """Legal drags that cost the player 1-2 extra drags, most believable first:
     - blocked: a trapped block dragged toward its gate until a blocker stops it;
     - wrong_way: a block the solution has to move, moved somewhere that does not help;
-    - fidget: a one-cell nudge of another block (at most one per ad).
+    - fidget: a one-cell nudge of a block that cannot leave yet (at most one per ad).
     A block parked at a gate of another colour is never used: it reads as not knowing the rules."""
     base = solve(level, start=state)
     if base is None:
         return []
     occ = occupancy(level, state)
     to_move = {d.block for d in base.drags if not d.exits}  # blocks the solution repositions
+    trapped = {bid for bid, p in enumerate(state) if p is not None and not _can_exit_now(level, state, bid, occ)}
 
     def cost_of(drag: Drag) -> int | None:
         after = solve(level, start=apply_drag(state, drag))
@@ -280,8 +283,12 @@ def mistake_options(level: Level, state: State, allow_fidget: bool = True) -> li
                 continue
             if bid in to_move:
                 kind, score = "wrong_way", 2.0
-                note = f"{_name(level, bid)} is moved, but the wrong way: the path is still blocked"
-            elif allow_fidget and o.cells_moved == 1:
+                if _gate_distance(level, bid, o.end) < _gate_distance(level, bid, pivot):
+                    note = f"{_name(level, bid)} moves toward its gate but stops short, which does not help"
+                else:
+                    note = f"{_name(level, bid)} is moved the wrong way, which does not help"
+            elif allow_fidget and o.cells_moved == 1 and bid in trapped:
+                # Only a block that cannot leave: nudging one that could would read as "why not exit?".
                 kind, score = "fidget", 1.0
                 note = f"{_name(level, bid)} is nudged one cell, which does not help"
             else:
@@ -318,12 +325,14 @@ def to_cliffhanger(level: Level, start: State, left: int, max_states: int = CLIF
     """Drags to a cliffhanger position: only `left` blocks on the board, one of them trapped
     (a bump shows it), and the position still solvable.
 
-    For each set of blocks to keep, a best-first search: positions with fewer of the other
-    blocks left come first, then fewer drags. The other blocks leave as soon as they can
+    For each set of blocks to keep, a greedy best-first search: positions with fewer of the
+    other blocks left come first, then fewer drags. The other blocks leave as soon as they can
     (exit first, as players clear the easy blocks); the kept ones may move but never leave.
-    A position that still needs a repositioning drag (a real puzzle) beats one that does not,
-    then fewer drags, then the earlier set, so the result is deterministic. None if there is
-    no such position within the search budget."""
+    Across sets, a position that still needs a repositioning drag (a real puzzle) beats one
+    that does not, then fewer drags, then the earlier set, so the result is deterministic.
+    It is not guaranteed to be the shortest route, and it does not look for positions where a
+    kept block must move after the others have gone. None if nothing is found within the
+    search budget."""
     import heapq
     from itertools import combinations
     on_board = [i for i, p in enumerate(start) if p is not None]
@@ -380,7 +389,13 @@ def to_cliffhanger(level: Level, start: State, left: int, max_states: int = CLIF
 
 
 def _solve_note(level: Level, d: Drag) -> str:
-    return f"{_name(level, d.block)} leaves through its gate" if d.exits else f"{_name(level, d.block)} is moved out of the way"
+    """What the drag shows, from its geometry (captions are built from these notes)."""
+    name = _name(level, d.block)
+    if d.exits:
+        return f"{name} leaves through its gate"
+    if _gate_distance(level, d.block, d.end) < _gate_distance(level, d.block, d.start):
+        return f"{name} moves toward its gate"
+    return f"{name} is moved out of the way"
 
 
 def _states(level: Level, drags: list[Drag]) -> list[State]:
@@ -419,8 +434,9 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
     max_hes = {"win": 1, "near_fail": 2, "cliffhanger": 1, "time_out": 1}[ending]
     if not isinstance(hesitations, int) or isinstance(hesitations, bool) or not 0 <= hesitations <= max_hes:
         raise ValueError(f"hesitations must be 0 to {max_hes} for {ending}, got {hesitations!r}")
+    notes: list[str] = []
     if ending == "cliffhanger":
-        left = 2 if left is None else left
+        left = min(2, n_blocks - 1) if left is None else left
         if not 1 <= left < n_blocks:
             raise ValueError(f"left must be 1 to {n_blocks - 1} for this level, got {left}")
     elif ending == "time_out":
@@ -466,12 +482,24 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
         steps.append(("solve", d, "solve", _solve_note(level, d)))
         state = apply_drag(state, d)
     if made < mistakes:
-        raise ValueError(f"{level.name}: found only {made} believable mistake(s) of {mistakes}")
+        # An easy board may have no believable mistake (every block can just leave); play on
+        # without it and say so, rather than fail the request.
+        notes.append(f"asked for {mistakes} mistake(s); this board offers {made} believable one(s)")
 
     # 2. The ending.
     states = _states(level, [s[1] for s in steps])
     if ending == "cliffhanger":
         steps = _cliffhanger_end(level, steps, states, left, rng)
+        if steps[-1][0] != "bump":
+            notes.append("no trapped block at the cut; the cliffhanger ends on a hesitation")
+        # On the way to the standoff, a kept block that heads for its gate until another block
+        # stops it is a blocked attempt, and is played like one (pushed, held), not as parking.
+        for i, (kind, d, role, note, *extra) in enumerate(steps):
+            if kind == "solve" and role == "solve" and not d.exits:
+                hit = [b for a, b in blocked_attempts(level, states[i]) if a.block == d.block and a.end == d.end]
+                if hit:
+                    steps[i] = ("attempt", d, "blocked", f"{_name(level, d.block)} heads for its gate, but "
+                                f"{_name(level, hit[0])} is in the way")
     elif ending == "time_out":
         # Drop the last exit and replace it with the same drag stopping one cell short.
         kind, last, role, _ = steps.pop()
@@ -491,9 +519,9 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
     cascade = set(solve_idx[-CASCADE_DRAGS:]) if ending in ("win", "near_fail") else set()
     beats: list[Beat] = []
     for i, (kind, d, role, note, *extra) in enumerate(steps):
-        if kind == "mistake":
+        if kind in ("mistake", "attempt"):
             push = dict(push_cells=MISTAKE_PUSH_CELLS, hold_f=MISTAKE_HOLD_F) if role == "blocked" else {}
-            b = _beat("mistake", d, "before_mistake", CONFIDENT, PICKUP_QUICK, note, **push)
+            b = _beat(kind, d, "before_mistake", CONFIDENT, PICKUP_QUICK, note, **push)
         elif role == "realize":
             stuck = i == last_mistake + 1 and ending in ("near_fail", "time_out")
             b = _beat("solve", d, "stuck" if stuck else "after_mistake", CAREFUL, PICKUP_CAREFUL, note)
@@ -501,8 +529,12 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
             b = _beat("bump", d, "thinking", CAREFUL, PICKUP_NORMAL, note, push_cells=BUMP_PUSH_CELLS,
                       hold_f=BUMP_HOLD_F, push_dir=extra[0] if extra else None)
         elif kind == "short":
-            pickup = LIFT_HOLD_F if role == "lift" else PICKUP_NORMAL
-            b = _beat("short", d, "stuck", NORMAL, pickup, note)
+            # The clock reaches zero as the block enters its last cell. Hold the pick-up long
+            # enough that the race starts with a second on the clock, so the HUD turns from
+            # 00:01 to 00:00 during the race (it shows whole seconds, rounded down).
+            race_f = d.cells_moved * NORMAL
+            pickup = LIFT_HOLD_F if role == "lift" else max(PICKUP_NORMAL, FPS + 3 - race_f)
+            b = _beat("short", d, "thinking", NORMAL, pickup, note)
         elif kind == "hesitate":
             b = _beat("hesitate", d, "hesitate", NORMAL, HESITATE_HOLD_F, note)
         elif i in cascade:
@@ -544,12 +576,12 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
                                      PICKUP_QUICK + HESITATE_HOLD_F, f"{_name(level, bid)} is picked up, "
                                      f"then put back: not yet")))
         if len(inserts) < hesitations:
-            raise ValueError(f"{level.name}: room for only {len(inserts)} hesitation(s) of {hesitations}")
+            notes.append(f"asked for {hesitations} hesitation(s); this plan has room for {len(inserts)}")
         for k, hb in sorted(inserts, key=lambda t: -t[0]):
             beats.insert(k, hb)
 
     beats = _with_travel(level, beats)
-    script = PlayScript(level.name, ending, seed, beats, left)
+    script = PlayScript(level.name, ending, seed, beats, left, notes=notes)
     final = replay(level, script.drags)  # every beat must be legal before Unity sees it
     if _left(final) != left:
         raise AssertionError(f"plan leaves {_left(final)} blocks, expected {left}")
@@ -562,6 +594,9 @@ def _cliffhanger_end(level: Level, steps, states, left: int, rng: random.Random)
     cuts = [k for k in range(len(steps) + 1) if _left(states[k]) == left]
     if not cuts:
         raise ValueError(f"{level.name}: the plan never has exactly {left} block(s) left")
+    # Keep a mistake out of the last two drags before the cut, as everywhere else.
+    last_mistake = max((i for i, st in enumerate(steps) if st[0] == "mistake"), default=-10)
+    cuts = [k for k in cuts if k >= last_mistake + 3] or cuts
     for k in reversed(cuts):
         options = bumps(level, states[k])
         if options:
@@ -586,7 +621,7 @@ def _with_travel(level: Level, beats: list[Beat]) -> list[Beat]:
         else:
             lo, base, hi = PAUSES[b.pause]
             travel = abs(b.drag.start[0] - prev[0]) + abs(b.drag.start[1] - prev[1])
-            out.append(replace(b, pause_f=max(lo, min(hi, base + TRAVEL_F_PER_CELL * travel))))
+            out.append(replace(b, pause_f=max(lo, min(hi, base + travel // TRAVEL_CELLS_PER_F))))
         prev = b.drag.end
     return out
 
@@ -677,11 +712,16 @@ def fit_clock(script: PlayScript, level: Level, dry_beats: list[Beat], dry: dict
             timer = math.ceil(e + CALM_MARGIN_S)
             return beats, timer, {"clock_left_s": round(timer - e, 3),
                                   "why": "the level's clock would drop below 0:50 and flash red"}
-        timer = max(2, round(e + NEAR_FAIL_LEFT_S))
-        delta = round((timer - e - NEAR_FAIL_LEFT_S) * FPS)
-        beats = spread(beats, delta, _fit_indices(beats, last), proportional=False)
-        e2 = e + delta / FPS
-        return beats, timer, {"delta_f": delta, "clock_left_s": round(timer - e2, 3)}
+        # Any clock left in NEAR_FAIL_RANGE_S shows 00:01. Try both whole-second timers around the
+        # target and every shift that lands in the range, closest to 1.5 s first, until the
+        # pauses can absorb it (a short script has little room in its pauses).
+        lo, hi = NEAR_FAIL_RANGE_S
+        options = []
+        for timer in {max(2, math.floor(e + NEAR_FAIL_LEFT_S)), max(2, math.ceil(e + NEAR_FAIL_LEFT_S))}:
+            for delta in range(math.ceil((timer - e - hi) * FPS - 1e-6), math.floor((timer - e - lo) * FPS + 1e-6) + 1):
+                options.append((abs(timer - e - delta / FPS - NEAR_FAIL_LEFT_S), abs(delta), timer, delta))
+        return _first_fit(beats, sorted(options), _fit_indices(beats, last),
+                          lambda timer, delta: {"delta_f": delta, "clock_left_s": round(timer - e - delta / FPS, 3)})
 
     if script.ending == "cliffhanger":
         e = elapsed(len(frames) - 1) + _shift(dry_beats, beats, last) / FPS
@@ -696,11 +736,22 @@ def fit_clock(script: PlayScript, level: Level, dry_beats: list[Beat], dry: dict
     else:
         target = d["start_frame"] + beats[last].pickup_f - 10
     e = elapsed(target) + _shift(dry_beats, beats, last) / FPS
-    timer = max(1, round(e))
-    delta = round((timer - e) * FPS)
+    options = [(abs(round((t - e) * FPS)), 0, t, round((t - e) * FPS)) for t in {max(1, math.floor(e)), math.ceil(e)}]
     order = [last] + [i for i in _fit_indices(beats, last) if i != last]  # the pause before the last drag first
-    beats = spread(beats, delta, order, proportional=False)
-    return beats, timer, {"delta_f": delta, "fail_target_frame": target + _shift(dry_beats, beats, last)}
+    beats, timer, fit = _first_fit(beats, sorted(options), order, lambda timer, delta: {"delta_f": delta})
+    fit["fail_target_frame"] = target + _shift(dry_beats, beats, last)
+    return beats, timer, fit
+
+
+def _first_fit(beats: list[Beat], options: list[tuple], order: list[int], describe):
+    """The first (timer, delta) option, in the given order, that the pauses can absorb."""
+    for *_, timer, delta in options:
+        try:
+            return spread(beats, delta, order, proportional=False), timer, describe(timer, delta)
+        except ValueError:
+            continue
+    raise ValueError("the pauses cannot move the clock onto the ending; the script is too short to fit "
+                     "(add a hesitation or a mistake)")
 
 
 # ---------- running ----------
@@ -819,6 +870,13 @@ def run(level: Level, level_path: str | Path, script: PlayScript, out_dir: str |
         "beat_frames": [[d["start_frame"], d["end_frame"]] for d in result["drags"]],
         "problems": problems,
     }
+    # The level as recorded: the same file with the clock the ad used, so the video can be
+    # reproduced from the folder alone (the source level keeps its own timer).
+    recorded = json.loads(Path(level_path).read_text())
+    if script.timer_s is not None:
+        recorded["timerCount"] = script.timer_s
+    (out / "level.json").write_text(json.dumps(recorded, indent=2))
+    script.fit["recorded_level"] = "level.json"
     (out / "play.json").write_text(json.dumps(script.to_dict(level), indent=2))
     result["problems"] = problems
     return result

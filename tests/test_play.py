@@ -11,8 +11,9 @@ from cbj import cli, render
 from cbj.difficulty import rate
 from cbj.level import load_level
 from cbj.play import (CALM_MARGIN_S, CASCADE_DRAGS, CLIFF_LEFT_S, DRY_TIMER_S, ENDINGS, FPS, MIN_PAUSE_F,
-                      NEAR_FAIL_LEFT_S, PAUSES, PlayScript, _can_exit_now, bumps, check_ending, fit_clock,
-                      fit_length, length_range, mistake_options, plan, predict, spread, time_out_allowed)
+                      NEAR_FAIL_LEFT_S, NEAR_FAIL_RANGE_S, PAUSES, PlayScript, _can_exit_now, blocked_attempts,
+                      bumps, check_ending, fit_clock, fit_length, length_range, mistake_options, plan, predict,
+                      spread, time_out_allowed)
 from cbj.rules import initial_state, occupancy
 from cbj.solver import apply_drag, drag_outcomes, replay, solve_fast
 
@@ -96,6 +97,8 @@ def test_mistake_census_on_the_narrow_level(narrow):
         assert not m.drag.exits and 1 <= m.drag.cells_moved
         after = solve_fast(narrow, start=apply_drag(state, m.drag)).min_drags
         assert m.cost == after + 1 - base and 1 <= m.cost <= 2  # costs the player 1-2 drags
+        if m.kind == "fidget":  # never a block that could simply leave
+            assert not _can_exit_now(narrow, state, m.drag.block, occupancy(narrow, state))
     replay(narrow, solve_fast(narrow).drags[:1] + [m.drag for m in options[:1]])
 
 
@@ -171,6 +174,34 @@ def test_time_out_stops_one_cell_short_of_the_gate(narrow, plans):
     assert sum(p is not None for p in state) == 1
     exits = [o for o in drag_outcomes(narrow, state, short.drag.block) if o.exits]
     assert any(o.path[:-1] == short.drag.path for o in exits)  # one more cell and it would leave
+
+
+def test_cliffhanger_set_up_drags_into_a_blocker_are_played_as_attempts(narrow, plans):
+    script = plans["cliffhanger"]
+    attempts = [(i, b) for i, b in enumerate(script.beats) if b.kind == "attempt"]
+    assert attempts
+    for i, b in attempts:
+        state = replay(narrow, script.drags[:i])
+        assert any(a.block == b.drag.block and a.end == b.drag.end for a, _ in blocked_attempts(narrow, state))
+        assert b.push_cells > 0 and b.hold_f > 0 and b.frames_per_cell == 4
+
+
+def test_the_time_out_race_starts_with_a_second_on_the_clock(plans):
+    short = plans["time_out"].beats[-1]
+    assert short.pause == "thinking"  # no long stare with one block left
+    # The clock hits zero as the block enters its last cell, which is at least 1 s after the touch.
+    assert short.pickup_f + short.drag.cells_moved * short.frames_per_cell >= FPS
+
+
+@pytest.mark.parametrize("name", ["Level_01", "Level_03"])
+def test_easy_levels_degrade_instead_of_failing(name):
+    level = load_level(PROJ / f"data/levels/{name}.json")
+    nf = plan(level, "near_fail")
+    assert not any(b.kind == "mistake" for b in nf.beats) and "believable" in nf.notes[0]
+    assert left_after(level, nf) == 0
+    cl = plan(level, "cliffhanger")
+    assert cl.left == min(2, len(level.blocks) - 1) and left_after(level, cl) == cl.left
+    assert cl.beats[-1].kind == "hesitate" and any("hesitation" in n for n in cl.notes)
 
 
 def test_time_out_is_only_for_hard_levels(narrow):
@@ -261,6 +292,23 @@ def test_near_fail_clock_leaves_one_and_a_half_seconds(narrow, plans, stop):
     assert abs(timer - elapsed - NEAR_FAIL_LEFT_S) <= 0.5 / FPS
     assert sum(b.pause_f - a.pause_f for a, b in zip(script.beats, beats)) == fit["delta_f"]
     assert int(timer - elapsed) == 1  # the HUD shows 00:01
+
+
+def test_near_fail_fit_uses_the_other_second_when_the_pauses_cannot_stretch(narrow, plans):
+    script = replace(plans["near_fail"])
+    full = [replace(b, pause_f=PAUSES[b.pause][2]) if i else b for i, b in enumerate(script.beats)]
+    script = replace(script, beats=full)  # no pause can grow
+    lo, hi = NEAR_FAIL_RANGE_S
+    for stop in range(500, 530):
+        beats, timer, fit = fit_clock(script, narrow, full, {"clock_stopped_frame": stop}, dry_frames(stop + 10))
+        assert fit["delta_f"] <= 0 and lo <= fit["clock_left_s"] <= hi
+
+
+def test_a_script_too_short_to_fit_is_refused_clearly(narrow, plans):
+    script = replace(plans["near_fail"])
+    script = replace(script, beats=script.beats[:1])  # one beat: no pause to move
+    with pytest.raises(ValueError, match="too short to fit"):
+        fit_clock(script, narrow, script.beats, {"clock_stopped_frame": 480}, dry_frames(500))  # 15.0 s
 
 
 def test_time_out_clock_runs_out_on_the_planned_frame(narrow, plans):

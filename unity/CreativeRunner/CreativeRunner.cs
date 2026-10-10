@@ -483,7 +483,8 @@ public class CreativeRunner : MonoBehaviour
         {
             Vector3 from = CellWorld(ToCell(d.path[i - 1]));
             Vector3 to = CellWorld(ToCell(d.path[i]));
-            for (int f = 1; f <= framesPerCell; f++)
+            // Every loop stops at the fail screen, so a block cannot move on (or exit) after it.
+            for (int f = 1; f <= framesPerCell && result.status == null; f++)
             {
                 finger = Vector3.Lerp(from, to, (float)f / framesPerCell);
                 if (Step(b, initialY, rec)) break;
@@ -491,8 +492,8 @@ public class CreativeRunner : MonoBehaviour
             }
             bool corner = i == d.path.Count - 1 || Turns(d.path, i);
             int settle = 0;
-            while (corner && !exitTriggered && Flat(b.transform.position - to) > SettleEps * grid.CellSpacing
-                   && settle++ < job.fps * 2)
+            while (corner && !exitTriggered && result.status == null
+                   && Flat(b.transform.position - to) > SettleEps * grid.CellSpacing && settle++ < job.fps * 2)
             {
                 if (Step(b, initialY, rec)) break;
                 yield return null;

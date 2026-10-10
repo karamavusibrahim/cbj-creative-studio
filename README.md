@@ -273,8 +273,8 @@ editor is busy importing, close the editor or delete `build/unity-project` and
 build again.
 
 `tests/test_render.py` checks jobs, recordings and comparisons without Unity.
-`tests/test_unity_render.py` has 22 tests and starts the player 24 times (about
-4 minutes; the two stock-game tests need `cbj build-player --stock` first):
+`tests/test_unity_render.py` has 27 tests and starts the player about 33 times (about
+5 minutes; the two stock-game tests need `cbj build-player --stock` first):
 - six levels cleared;
 - a repeat render;
 - a camera-only change;
@@ -283,7 +283,8 @@ build again.
 - the fail screen between drags and in the middle of one;
 - the stock game's fail-then-win bug; the patched game stopping its own clock;
   the recorder stopping it on a stock game;
-- the compositor event data:
+- the compositor event data;
+- the four scenario endings on the narrow level, each landing on the dry run's predicted frames:
 
 ```
 CBJ_UNITY=1 uv run pytest tests/test_unity_render.py
@@ -304,15 +305,24 @@ uv run cbj scenario LEVEL --ending time_out --allow-fail      # opt-in; refused 
 |---|---|---|
 | `win` (S3) | a clean solve; the closing drags speed up | kept above 0:50 (no red flashing) |
 | `near_fail` (S4) | 1 mistake, 2 hesitations (one on the last block), a quick finish | 00:01 left when the last block starts leaving |
-| `cliffhanger` (S1) | play until two blocks block each other; the last one is pushed into its blocker; cut | 00:08 at the cut |
-| `time_out` (S5) | 1 mistake, a long stuck pause, the last block races for its gate and the clock runs out one cell short | 0:00, fail screen |
+| `cliffhanger` (S1) | clear the easy blocks, try the last two and get blocked; the final one is pushed into its blocker; cut | 00:08 at the cut |
+| `time_out` (S5) | 1 mistake; the last block races for its gate as the HUD turns 00:01 → 00:00, and time runs out one cell short | fail screen |
 
 **Mistakes** follow the winning "I can't reach <colour>" ads: a trapped block dragged toward
 its gate until another block stops it, and the finger keeps pressing (`blocked`); a block that
-must move, moved the wrong way (`wrong_way`); or at most one one-cell nudge (`fidget`). Every
-mistake costs the player 1 or 2 extra drags (measured by the solver; 0 would be progress), comes
-in drags 1-3, and never in the last two drags. A block parked at a gate of another colour is
-never used: it reads as not knowing the rules. After a mistake the solver re-plans.
+must move, moved somewhere that does not help (`wrong_way`); or at most one one-cell nudge of a
+block that cannot leave yet (`fidget`). Every mistake costs the player 1 or 2 extra drags
+(measured by the solver; 0 would be progress), comes in drags 1-3 when the board offers one
+there (otherwise at the next drag that does), and never in the last two drags. A block parked at a gate of another colour is
+never used: it reads as not knowing the rules. After a mistake the solver re-plans. In a
+cliffhanger, the set-up drags that run a block into another one are played the same way
+(pushed and held), so the final push reads as the second try.
+
+**Easy boards degrade instead of failing.** If a board has no believable mistake (every block can
+just leave) or no room for a hesitation, the plan plays on without it and records why in
+`play.json` (`notes`); `cbj scenario` prints the notes. A cliffhanger on a two-block level keeps
+one block. A time-out is refused on easy levels (policy: at least one repositioning drag and a
+naive player at 1.1x the minimum).
 
 **Pacing** is in whole frames, chosen by what the player is doing: confident 0.35-0.6 s before
 an exit they can see, thinking 0.9-1.6 s before a repositioning drag, stuck 1.8-2.5 s after
@@ -322,9 +332,13 @@ frames per cell). Each pause grows by a frame per cell the finger travels to the
 **Exact timing, pauses only.** A dry run of the real game (`capture=False`, about 4 s) logs every
 frame. A pause shifts every later frame by exactly its length, so the clock and `--length` are
 fitted by moving pauses inside their ranges, never by changing speeds (slow fingers read as slow
-motion). The recording must then land on the predicted frame for every drag; `cbj scenario`
+motion). `--length` therefore only trims or stretches a script by a few seconds (about 14-23 s
+on the narrow level, depending on the ending) and refuses anything outside that; a longer ad
+needs more mistakes or hesitations, a bigger level, or several gameplay segments joined by the
+compositor. The recording must then land on the predicted frame for every drag; `cbj scenario`
 reports a problem if it does not. The fitted values, the predicted and measured frames, and the
-level's difficulty numbers go into `play.json` next to the video.
+level's difficulty numbers go into `play.json` next to the video, and `level.json` is the level
+with the clock the ad used, so the folder alone reproduces the recording.
 
 **Repeatable.** The seed picks the mistakes and hesitations, nothing else. The same level,
 ending and seed give the same `play.json`.
@@ -338,6 +352,11 @@ into its neighbour. The runner logs the frame on which each cell was entered (`c
 prompt ("a difficult level with a narrow center section... the player almost fails"): a 6x8
 hourglass with a two-lane waist, 7 blocks, 9 minimum drags (2 repositioning), naive player 1.29x
 the minimum. Its cliffhanger is two blocks head-on in the waist.
+
+**Finding a cliffhanger.** For each pair of blocks to keep, a greedy search clears the other
+blocks first (as players do) until only the pair is left with one of them trapped and the
+position still a puzzle. It prefers real puzzles, then fewer drags; it is not guaranteed to be
+the shortest route, and if no such position turns up it ends on a hesitation and says so.
 
 **Speed.** Planning solves many positions, so it uses `solve_fast`, an A* search (lower bound:
 blocks left), which gives the same minimum as `solve` (tests compare them on every level and

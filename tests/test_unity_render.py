@@ -249,6 +249,8 @@ def test_scenario_endings_land_on_the_predicted_frames(tmp_path, ending):
     m = script.measured
     play = json.loads((tmp_path / ending / "play.json").read_text())
     assert play["measured"]["problems"] == [] and play["fit"]["dry_frames"] > 0
+    recorded = json.loads((tmp_path / ending / "level.json").read_text())  # the level with the ad's clock
+    assert recorded["timerCount"] == (script.timer_s or level.timer)
     if ending == "win":
         assert r["status"] == "cleared" and m["clock_left_s"] >= 50  # never in the red
     if ending == "near_fail":
