@@ -461,7 +461,7 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
         return _optimal(level, s)
 
     todo = replan(state)
-    made, fidget_used = 0, False
+    made, fidget_used, realize = 0, False, False
     next_slot = rng.choice((0, 1, 2)) if mistakes else 0  # the first mistake is drag 1, 2 or 3
     while todo:
         # Never in the last two drags: after a mistake at least three drags remain.
@@ -473,13 +473,15 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
                 made += 1
                 fidget_used |= m.kind == "fidget"
                 todo = replan(state)
-                d = todo.pop(0)
-                steps.append(("solve", d, "realize", _solve_note(level, d)))
-                state = apply_drag(state, d)
-                next_slot = len(steps) + 1  # at least one ordinary drag between mistakes
+                realize = True
+                next_slot = len(steps) + 2  # at least two ordinary drags between mistakes
                 continue
         d = todo.pop(0)
-        steps.append(("solve", d, "solve", _solve_note(level, d)))
+        # The player takes any obvious exit first, then stops to work out the real fix: the
+        # first repositioning drag after a mistake is the "realize" beat.
+        role = "realize" if realize and not d.exits else "solve"
+        realize &= d.exits
+        steps.append(("solve", d, role, _solve_note(level, d)))
         state = apply_drag(state, d)
     if made < mistakes:
         # An easy board may have no believable mistake (every block can just leave); play on
@@ -514,7 +516,7 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
             steps.append(("short", short, "lift", f"{name} is picked up, one cell from its gate, as time runs out"))
 
     # 3. Pacing, chosen by what the player is doing.
-    last_mistake = max((i for i, s in enumerate(steps) if s[0] == "mistake"), default=-1)
+    last_realize = max((i for i, s in enumerate(steps) if s[2] == "realize"), default=-1)
     solve_idx = [i for i, s in enumerate(steps) if s[0] == "solve"]
     cascade = set(solve_idx[-CASCADE_DRAGS:]) if ending in ("win", "near_fail") else set()
     beats: list[Beat] = []
@@ -523,7 +525,7 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
             push = dict(push_cells=MISTAKE_PUSH_CELLS, hold_f=MISTAKE_HOLD_F) if role == "blocked" else {}
             b = _beat(kind, d, "before_mistake", CONFIDENT, PICKUP_QUICK, note, **push)
         elif role == "realize":
-            stuck = i == last_mistake + 1 and ending in ("near_fail", "time_out")
+            stuck = i == last_realize and ending in ("near_fail", "time_out")
             b = _beat("solve", d, "stuck" if stuck else "after_mistake", CAREFUL, PICKUP_CAREFUL, note)
         elif kind == "bump":
             b = _beat("bump", d, "thinking", CAREFUL, PICKUP_NORMAL, note, push_cells=BUMP_PUSH_CELLS,
