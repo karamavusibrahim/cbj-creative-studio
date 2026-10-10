@@ -11,8 +11,8 @@ import pytest
 from cbj import cli, render
 from cbj.describe import script_to_drags
 from cbj.level import load_level
-from cbj.render import (Camera, Pacing, check_render, compare_recordings, level_label, make_job, player_binary,
-                        run_player)
+from cbj.render import (Camera, DragPacing, Pacing, check_render, compare_recordings, level_label, make_job,
+                        player_binary, run_player)
 from cbj.solver import Drag, ReplayError
 
 PROJ = Path(__file__).parent.parent
@@ -377,3 +377,22 @@ def test_a_dry_run_needs_no_video(tmp_path):
     (out / "result.json").write_text(json.dumps(r))
     assert check_render(out)["problems"] == []
     assert job3(tmp_path, capture=False)["capture"] is False
+
+
+def test_per_drag_pacing(tmp_path):
+    level, drags = level3()
+    dp = [DragPacing(0.0, 0.1, 6), DragPacing(1.5, 0.6, 3), DragPacing(0.2, 0.05, 12)]
+    job = make_job(level, LEVEL_03, drags, tmp_path, ffmpeg="/usr/bin/true", drag_pacing=dp)
+    assert [(d["pause_before_s"], d["pickup_s"], d["cells_per_s"]) for d in job["drags"]] == \
+           [(0.0, 0.1, 6), (1.5, 0.6, 3), (0.2, 0.05, 12)]
+
+
+@pytest.mark.parametrize("dp, msg", [
+    ([DragPacing(0, 0.1, 6)] * 2, "2 entries for 3 drags"),
+    ([DragPacing(0, 0.1, 6), DragPacing(-1, 0.1, 6), DragPacing(0, 0.1, 6)], "drag 2: pause_before_s"),
+    ([DragPacing(0, 0.1, 6), DragPacing(0, 0.1, 6), DragPacing(0, 0.1, 16)], "drag 3: cells_per_s"),
+])
+def test_bad_per_drag_pacing_is_refused(tmp_path, dp, msg):
+    level, drags = level3()
+    with pytest.raises(ValueError, match=msg):
+        make_job(level, LEVEL_03, drags, tmp_path, ffmpeg="/usr/bin/true", drag_pacing=dp)

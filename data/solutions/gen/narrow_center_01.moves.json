@@ -1,0 +1,259 @@
+{
+  "level": "narrow_center_01",
+  "grid": {
+    "width": 6,
+    "height": 8
+  },
+  "timer": 60,
+  "min_drags": 9,
+  "drags": [
+    {
+      "block": 4,
+      "color": "yellow",
+      "path": [
+        [
+          2,
+          4
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "exits": true,
+      "exit_index": 4
+    },
+    {
+      "block": 0,
+      "color": "red",
+      "path": [
+        [
+          3,
+          7
+        ],
+        [
+          3,
+          6
+        ],
+        [
+          3,
+          5
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "exits": false,
+      "exit_index": null
+    },
+    {
+      "block": 2,
+      "color": "dark_green",
+      "path": [
+        [
+          2,
+          7
+        ],
+        [
+          1,
+          7
+        ]
+      ],
+      "exits": false,
+      "exit_index": null
+    },
+    {
+      "block": 3,
+      "color": "purple",
+      "path": [
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          2,
+          7
+        ]
+      ],
+      "exits": true,
+      "exit_index": 3
+    },
+    {
+      "block": 1,
+      "color": "green",
+      "path": [
+        [
+          3,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          7
+        ]
+      ],
+      "exits": true,
+      "exit_index": 1
+    },
+    {
+      "block": 0,
+      "color": "red",
+      "path": [
+        [
+          3,
+          4
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      "exits": true,
+      "exit_index": 0
+    },
+    {
+      "block": 2,
+      "color": "dark_green",
+      "path": [
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          2
+        ]
+      ],
+      "exits": true,
+      "exit_index": 2
+    },
+    {
+      "block": 5,
+      "color": "blue",
+      "path": [
+        [
+          4,
+          6
+        ],
+        [
+          3,
+          6
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          0,
+          6
+        ]
+      ],
+      "exits": true,
+      "exit_index": 5
+    },
+    {
+      "block": 6,
+      "color": "orange",
+      "path": [
+        [
+          5,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "exits": true,
+      "exit_index": 6
+    }
+  ]
+}

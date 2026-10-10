@@ -67,6 +67,24 @@ class Pacing:
 
 
 @dataclass(frozen=True)
+class DragPacing:
+    """Pacing for one drag, overriding the Pacing defaults (scenario scripts set these per beat)."""
+
+    pause_before_s: float
+    pickup_s: float
+    cells_per_s: float
+
+    def check(self, fps: int, k: int) -> None:
+        for name in ("pause_before_s", "pickup_s"):
+            v = getattr(self, name)
+            if not (isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v < float("inf")):
+                raise ValueError(f"drag {k}: {name} must be zero or more, got {v!r}")
+        if not (isinstance(self.cells_per_s, (int, float)) and 0 < self.cells_per_s <= fps / 2):
+            raise ValueError(f"drag {k}: cells_per_s must be above 0 and at most fps/2 ({fps / 2:g}), "
+                             f"got {self.cells_per_s!r}")
+
+
+@dataclass(frozen=True)
 class Camera:
     """Framing on top of the game's own fit. zoom 1 = the game's framing, 1.2 = 20% closer;
     pan in cells (+x right, +y up the board). keys: (t_seconds, zoom, pan_x, pan_y) tuples,
@@ -122,6 +140,7 @@ def make_job(
     hide: tuple[str, ...] = (),
     stop_clock_on_last_exit: bool = True,
     capture: bool = True,
+    drag_pacing: list[DragPacing] | None = None,
 ) -> dict:
     """Job file for CreativeRunner. Raises ValueError if the drags break a rule, or if
     end_mode is "win" and the drags do not clear the board.
@@ -130,11 +149,20 @@ def make_job(
     hide: GameObject names to hide, e.g. ("RestartButton",).
     stop_clock_on_last_exit: False keeps the game's own clock, which can show "Out of Time!"
     and then "Level Completed" when time runs out during the last exit slide.
-    capture: False makes a dry run: the game plays and logs its timing, but nothing is filmed."""
+    capture: False makes a dry run: the game plays and logs its timing, but nothing is filmed.
+    drag_pacing: one DragPacing per drag, replacing the uniform pause/pickup/speed."""
     if end_mode not in END_MODES:
         raise ValueError(f"end must be one of {', '.join(END_MODES)}, got {end_mode!r}")
     pacing.check()
     camera.check()
+    if drag_pacing is not None:
+        if len(drag_pacing) != len(drags):
+            raise ValueError(f"drag_pacing has {len(drag_pacing)} entries for {len(drags)} drags")
+        for k, dp in enumerate(drag_pacing, start=1):
+            dp.check(pacing.fps, k)
+    else:
+        drag_pacing = [DragPacing(pacing.pause_before_s if k else 0.0, pacing.pickup_s, pacing.cells_per_s)
+                       for k in range(len(drags))]
     if timer is not None and (not isinstance(timer, int) or isinstance(timer, bool) or timer < 1):
         raise ValueError(f"timer must be a whole number of seconds, 1 or more, got {timer!r}")
     if not all(isinstance(h, str) and h for h in hide):
@@ -175,7 +203,7 @@ def make_job(
         "frame_hashes": True,
         "start_hold_s": pacing.start_hold_s,
         "end_hold_s": pacing.end_hold_s,
-        "max_seconds": round(estimate_seconds(level, drags, pacing) * 2 + 30
+        "max_seconds": round(estimate_seconds(level, drags, pacing, drag_pacing) * 2 + 30
                              + ((timer or level.timer) if end_mode == "fail" else 0), 1),
         "timer_s": -1 if timer is None else timer,
         "stop_clock_on_last_exit": bool(stop_clock_on_last_exit),
@@ -189,20 +217,24 @@ def make_job(
                 "path": [{"x": x, "y": y} for x, y in d.path],
                 "exits": d.exits,
                 "exit_index": d.exit_index if d.exit_index is not None else -1,
-                "pause_before_s": pacing.pause_before_s if k else 0.0,
-                "pickup_s": pacing.pickup_s,
-                "cells_per_s": pacing.cells_per_s,
+                "pause_before_s": dp.pause_before_s,
+                "pickup_s": dp.pickup_s,
+                "cells_per_s": dp.cells_per_s,
             }
-            for k, d in enumerate(drags)
+            for d, dp in zip(drags, drag_pacing)
         ],
     }
 
 
-def estimate_seconds(level: Level, drags: list[Drag], pacing: Pacing) -> float:
+def estimate_seconds(level: Level, drags: list[Drag], pacing: Pacing,
+                     drag_pacing: list[DragPacing] | None = None) -> float:
     """Rough video length: holds, pauses and finger travel, plus a second for the last exit."""
+    if drag_pacing is None:
+        drag_pacing = [DragPacing(pacing.pause_before_s if k else 0.0, pacing.pickup_s, pacing.cells_per_s)
+                       for k in range(len(drags))]
     t = pacing.start_hold_s + pacing.end_hold_s + 1.0
-    for k, d in enumerate(drags):
-        t += (pacing.pause_before_s if k else 0.0) + pacing.pickup_s + d.cells_moved / pacing.cells_per_s + 0.2
+    for d, dp in zip(drags, drag_pacing):
+        t += dp.pause_before_s + dp.pickup_s + d.cells_moved / dp.cells_per_s + 0.2
     return t
 
 

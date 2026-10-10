@@ -240,6 +240,40 @@ def _cmd_compare(args) -> int:
     return 0 if c["state_equal"] else 1
 
 
+def _cmd_scenario(args) -> int:
+    from .difficulty import rate
+    from .play import END_MODE, plan, run
+    level = load_level(args.level)
+    if args.ending == "time_out":
+        if not args.allow_fail:
+            raise ValueError("a time-out ending is opt-in (social tests or an explicit fail request); "
+                             "add --allow-fail")
+        d = rate(level)
+        if d is not None and d.extra_drags == 0 and d.naive_ratio <= 1.0:
+            print("Note: this level is easy (no repositioning needed), so a time-out on it can look "
+                  "staged. Use it as a demo only.")
+    mistakes = args.mistakes if args.mistakes is not None else (1 if args.ending in ("near_fail", "time_out") else 0)
+    script = plan(level, args.ending, mistakes=mistakes, seed=args.seed, left=args.left)
+    labels = block_labels(level)
+    print(f"{level.name}: {args.ending} ({END_MODE[args.ending]} ending), {mistakes} mistake(s), seed {args.seed}")
+    for k, b in enumerate(script.beats, start=1):
+        print(f"  {k:2d}. {b.kind:9s} {labels[b.drag.block]:3s} {b.note}")
+    if args.plan_only:
+        return 0
+    out = Path(args.out or f"renders/{level.name}_{args.ending}")
+    print("Dry run, clock fit, then recording in Unity...")
+    result = run(level, args.level, script, out, left=args.left, hide=tuple(args.hide))
+    m = script.measured
+    timer = f"{script.timer_s} s" if script.timer_s is not None else "the level's own"
+    print(f"Status: {result['status']} {result['message']}".rstrip())
+    print(f"Video: {result['video']} ({m['frames']} frames, {m['duration_s']:.2f} s); clock {timer}, "
+          f"{m['clock_left_s']:.2f} s left at the end")
+    print(f"Script: {out / 'play.json'}")
+    for p in result["problems"]:
+        print(f"  PROBLEM: {p}")
+    return 0 if not result["problems"] else 1
+
+
 def _clock(seconds: float) -> str:
     s = max(0, int(seconds))
     return f"{s // 60:02d}:{s % 60:02d}"
@@ -301,6 +335,18 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--hide", action="append", default=[], metavar="NAME",
                    help="hide a game object by name, e.g. RestartButton (repeatable)")
     s.set_defaults(func=_cmd_render)
+
+    s = sub.add_parser("scenario", help="human-looking play toward an ending (win, near-fail, ...), recorded")
+    s.add_argument("level")
+    s.add_argument("--ending", choices=["win", "near_fail", "cliffhanger", "time_out"], default="near_fail")
+    s.add_argument("--mistakes", type=int, help="believable mistakes, 0-3 (default 1 for near_fail and time_out)")
+    s.add_argument("--seed", type=int, default=0, help="picks among the most believable mistakes")
+    s.add_argument("--left", type=int, default=1, help="blocks left on the board for cliffhanger and time_out")
+    s.add_argument("--allow-fail", action="store_true", help="required for time_out (opt-in, social tests)")
+    s.add_argument("--plan-only", action="store_true", help="print the beats, do not start Unity")
+    s.add_argument("--hide", action="append", default=["RestartButton"], metavar="NAME")
+    s.add_argument("-o", "--out", help="output folder (default: renders/<level>_<ending>)")
+    s.set_defaults(func=_cmd_scenario)
 
     s = sub.add_parser("compare", help="compare two recordings: game state, frames, PSNR")
     s.add_argument("a")
