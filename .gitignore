@@ -13,3 +13,7 @@ wheels/
 .pytest_cache/
 renders/
 ads/
+
+# local secrets and the UI's creatives
+.env
+studio/

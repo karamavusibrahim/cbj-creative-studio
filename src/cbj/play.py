@@ -301,9 +301,11 @@ def mistake_options(level: Level, state: State, allow_fidget: bool = True) -> li
     return options
 
 
-def pick_mistake(level: Level, state: State, rng: random.Random, allow_fidget: bool = True) -> Mistake | None:
-    """One of the three most believable mistakes, chosen with the seed."""
-    options = mistake_options(level, state, allow_fidget)
+def pick_mistake(level: Level, state: State, rng: random.Random, allow_fidget: bool = True,
+                 kinds: tuple[str, ...] | None = None) -> Mistake | None:
+    """One of the three most believable mistakes, chosen with the seed (only of the given kinds,
+    if any are given)."""
+    options = [m for m in mistake_options(level, state, allow_fidget) if not kinds or m.kind in kinds]
     return rng.choice(options[:3]) if options else None
 
 
@@ -415,7 +417,7 @@ def _beat(kind: str, drag: Drag, pause: str, speed: int, pickup: int, note: str,
 
 
 def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, left: int | None = None,
-         hesitations: int | None = None) -> PlayScript:
+         hesitations: int | None = None, kinds: tuple[str, ...] | None = None) -> PlayScript:
     """Beats for the requested ending, before the clock and length are fitted.
 
     Defaults (from what the winning ads show):
@@ -468,7 +470,7 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
     while todo:
         # Never in the last two drags: after a mistake at least three drags remain.
         if made < mistakes and len(steps) >= next_slot and len(todo) >= 3 and _left(state) >= 2:
-            m = pick_mistake(level, state, rng, allow_fidget=not fidget_used)
+            m = pick_mistake(level, state, rng, allow_fidget=not fidget_used, kinds=kinds)
             if m is not None:
                 steps.append(("mistake", m.drag, m.kind, m.note))
                 state = apply_drag(state, m.drag)
@@ -835,8 +837,11 @@ def check_ending(script: PlayScript, result: dict, n_blocks: int, predicted: lis
 
 def run(level: Level, level_path: str | Path, script: PlayScript, out_dir: str | Path,
         length_s: float | None = None, difficulty: Difficulty | None = None, label: int | None = None,
-        **job_kw) -> dict:
-    """Dry run, fit the length and the clock (pauses only), record, check. Writes play.json."""
+        length_pick=None, **job_kw) -> dict:
+    """Dry run, fit the length and the clock (pauses only), record, check. Writes play.json.
+    length_pick(lo, hi, planned), if given, chooses the length once the dry run has measured the range
+    that human pauses can reach (a tempo, or what an ad of a given length has room for); it may
+    return None to keep the planned pauses."""
     replay(level, script.drags)
     out = Path(out_dir)
     pacing = Pacing(fps=FPS, start_hold_s=START_HOLD_S, end_hold_s=END_HOLD_S[script.ending])
@@ -850,6 +855,12 @@ def run(level: Level, level_path: str | Path, script: PlayScript, out_dir: str |
     frames = json.loads((out / "dry" / "frames.json").read_text())["frames"]
 
     fit: dict = {"dry_frames": dry["frames"]}
+    if length_pick is not None:
+        lo, hi = length_range(script.beats, dry["frames"])
+        fit["length_range_s"] = [round(lo, 2), round(hi, 2)]
+        picked = length_pick(lo, hi, dry["frames"] / FPS)
+        if picked is not None:
+            length_s = min(hi, max(lo, picked))
     if length_s is not None:
         script.beats = fit_length(script.beats, dry["frames"], length_s)
         fit["length_s"] = length_s

@@ -125,24 +125,32 @@ def ring_image(size: int, fill_alpha: float, ring_alpha: float = 1.0) -> Image.I
     return img
 
 
-def draw_cursor(frame, st: dict, placer: Placer, size: int, speed: float, image: Image.Image | None):
+def draw_cursor(frame, st: dict, placer: Placer, size: int, speed: float, image: Image.Image | None,
+                hotspot=(0.5, 0.5)):
     """The tap ring (or a hand image) at one frame. Animations run in recording frames, so in a
-    0.5x replay they play at half speed with everything else."""
+    0.5x replay they play at half speed with everything else. An image is placed so its hotspot
+    (a fingertip, as fractions of its width and height) is on the touch point; it shrinks a little
+    while pressed, and a small ripple marks each lift."""
     boxes = []
     ripple = st.get("released") and st["since"] < 8
     if st["alpha"] <= 0 and not ripple:
         return boxes
     x, y = placer.point(st["x"], st["y"])
     s = placer.fit["scale"] / 0.75  # the ring keeps its size relative to the board
+    if image is not None:
+        k = ease_out_cubic(st["since"] / 4) if st["down"] else 1.0
+        img = scaled(image, s * ((1.08 - 0.14 * k) if st["down"] else 1.0))
+        if ripple:
+            q = st["since"] / 8
+            boxes.append(blend(frame, ring_image(int(size * 0.6 * s * (1 + 0.8 * q)), 0.0, 0.8), x, y, 1 - q))
+        cx, cy = x + img.width * (0.5 - hotspot[0]), y + img.height * (0.5 - hotspot[1])
+        boxes.append(blend(frame, img, cx, cy, 1.0 if st["down"] else st["alpha"]))
+        return [b for b in boxes if b]
     if st["down"]:
         k = ease_out_cubic(st["since"] / 4)
         scale = (1.25 - 0.25 * k) * s
-        img = image if image is not None else ring_image(int(size * scale), 0.28 + 0.22 * k)
-        boxes.append(blend(frame, img, x, y, 1.0))
+        boxes.append(blend(frame, ring_image(int(size * scale), 0.28 + 0.22 * k), x, y, 1.0))
     else:
-        if image is not None:
-            boxes.append(blend(frame, image, x, y, st["alpha"]))
-            return [b for b in boxes if b]
         boxes.append(blend(frame, ring_image(int(size * s), 0.28), x, y, st["alpha"]))
         if ripple:  # the release ripple
             k = st["since"] / 8
@@ -152,7 +160,15 @@ def draw_cursor(frame, st: dict, placer: Placer, size: int, speed: float, image:
 
 # ---------- text, tags, buttons ----------
 
-def layer_image(layer: dict, text: str) -> Image.Image:
+def _colour(hex_or_none, default):
+    if not hex_or_none:
+        return default
+    h = hex_or_none.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def layer_image(layer: dict, text: str, band: dict | None = None) -> Image.Image:
+    band = band or BAND
     kind = layer["type"]
     if kind == "tag" and layer.get("shape") == "circle":
         # A round badge, sized to cover the HUD element it sits on (the level circle).
@@ -178,13 +194,15 @@ def layer_image(layer: dict, text: str) -> Image.Image:
     size = STYLES.get(layer.get("style", "title_xl"), 96)
     icon = layer.get("icon")
     icon_w = 126 if icon else 0
+    style = {"fill": _colour(layer.get("fill"), WHITE), "stroke": _colour(layer.get("stroke"), PURPLE)}
     if layer.get("slot") == "top":
         # In the band: the largest one- or two-line size that fits between the safe top and the HUD.
         # The pop-in overshoots to about 1.04x, so fit with that room to spare.
-        img = fit_text(text, size, int((BAND["max_w"] - icon_w) / 1.05), int((BAND["y1"] - BAND["y0"]) / 1.05))
+        img = fit_text(text, size, int((band["max_w"] - icon_w) / 1.05), int((band["y1"] - band["y0"]) / 1.05),
+                       **style)
     else:
         # Placed texts (the end card) fit the safe width too, in one or two lines.
-        img = fit_text(text, size, int(BAND["max_w"] / 1.05), layer.get("max_h", 260))
+        img = fit_text(text, size, int(BAND["max_w"] / 1.05), layer.get("max_h", 260), **style)
     if icon:
         ic = scaled(sprite(icon), 110 / sprite(icon).width)
         out = Image.new("RGBA", (ic.width + 16 + img.width, max(ic.height, img.height)), (0, 0, 0, 0))
@@ -244,6 +262,7 @@ class Prepared:
                 self.qa["failures"].append(f"source {sid!r}: gameplay.mp4 changed since ad.json was made (hash differs)")
         self.tl = timeline(ad)
         self.total = max(e for _, e in self.tl.values())
+        self.band = {**BAND, **ad.get("band", {})}  # a logo in a top corner narrows the caption band
         self._check_locked()
         self.layers = self._resolve_layers()
         try:
@@ -300,14 +319,14 @@ class Prepared:
                 seg_id = layer.get("seg") or layer.get("start", {}).get("seg")
                 src = ad["segments"].get(seg_id, {}).get("src") or next(iter(recs))
                 try:
-                    text = fill(layer["text"], recs[src].facts(layer.get("beat")))
+                    text = fill(layer["text"], recs[src].facts(layer.get("beat"), ad.get("colour_names")))
                 except ValueError as e:
                     self.qa["failures"].append(f"layer {lid!r}: {e}")
                     continue
                 self.qa["failures"] += [f"layer {lid!r}: {p}" for p in copy_problems(text)]
                 entry["text"] = text
-                entry["image"] = layer_image(layer, text)
-                if layer.get("slot") == "top" and entry["image"].height > BAND["y1"] - BAND["y0"]:
+                entry["image"] = layer_image(layer, text, self.band)
+                if layer.get("slot") == "top" and entry["image"].height > self.band["y1"] - self.band["y0"]:
                     self.qa["failures"].append(f"layer {lid!r}: too long for the text band even at the smallest size")
                 if layer["type"] == "text":
                     need = reading_s(text)  # time to read it
@@ -315,7 +334,12 @@ class Prepared:
                         self.qa["failures"].append(f"layer {lid!r}: on screen {(f1 - f0) / FPS:.2f} s; "
                                                    f"its words need {need:.1f} s")
             elif layer["type"] == "image":
-                entry["image"] = scaled(sprite(layer["image"]), layer.get("scale", 1.0))
+                im = sprite(layer["image"])
+                if layer.get("box"):  # fit inside a box (an uploaded picture of any size)
+                    bw, bh = layer["box"]
+                    entry["image"] = scaled(im, min(bw / im.width, bh / im.height))
+                else:
+                    entry["image"] = scaled(im, layer.get("scale", 1.0))
             elif layer["type"] == "vignette":
                 entry["image"] = vignette_image(size, layer.get("color", [255, 40, 40]))
                 sid = layer["start"].get("seg")
@@ -323,7 +347,15 @@ class Prepared:
                 pulses = [to_output(seg, tl[sid][0], f) for f in recs[seg["src"]].event(layer.get("pulse_on", ""))]
                 entry["pulses"] = sorted(p for p in pulses if p is not None)
             elif layer["type"] == "cursor":
-                entry["image"] = sprite(layer["image"]) if layer.get("image") else None
+                img = layer.get("image")
+                if img == "builtin:hand":
+                    from .draw import hand_image
+                    entry["image"] = hand_image(int(layer.get("size", 96) * 1.9))
+                elif img:
+                    im = sprite(img)
+                    entry["image"] = scaled(im, layer.get("size", 96) * 1.9 / max(im.width, im.height))
+                else:
+                    entry["image"] = None
                 entry["tracks"] = {sid: cursor_track(r) for sid, r in recs.items()}
             layers[lid] = entry
         return layers
@@ -337,7 +369,13 @@ class Prepared:
         return self._placers[key]
 
     def card_base(self, seg) -> np.ndarray:
-        base = cover(sprite(seg.get("background", "StartBACKGROUND.png")), self.size)
+        if seg.get("gradient"):  # a card in the brief's colours instead of the game's brick art
+            top, bottom = (np.array(_colour(c, WHITE), dtype=np.float64) for c in seg["gradient"])
+            k = np.linspace(0.0, 1.0, self.size[1])[:, None]
+            col = np.round(top * (1 - k) + bottom * k).astype(np.uint8)
+            base = np.repeat(col[:, None, :], self.size[0], axis=1).copy()
+        else:
+            base = cover(sprite(seg.get("background", "StartBACKGROUND.png")), self.size)
         th = seg.get("thumb")
         if th:
             f = next(read_frames(self.recs[th["src"]].video, self.size, th["frame"], 1))
@@ -393,8 +431,9 @@ class Prepared:
         if lay["type"] == "cursor":
             if seg["kind"] == "clip" and sid in lay.get("segments", []):
                 st = e["tracks"][seg["src"]][source_frame(seg, k)]
+                hot = lay.get("hotspot") or ((0.36, 0.05) if lay.get("image") == "builtin:hand" else (0.5, 0.5))
                 e["boxes"] += draw_cursor(frame, st, self.placer(seg["src"], seg["fit"]), lay.get("size", 96),
-                                          seg.get("speed", 1), e["image"])
+                                          seg.get("speed", 1), e["image"], hot)
             return
         if not e["f0"] <= t < e["f1"]:
             return
@@ -411,7 +450,7 @@ class Prepared:
         if e.get("image") is None:
             return
         sc, op = anim_state(lay, t, e["f0"], e["f1"], self.total)
-        b = blend(frame, scaled(e["image"], sc), *lay.get("pos", [BAND["cx"], BAND["cy"]]), op)
+        b = blend(frame, scaled(e["image"], sc), *lay.get("pos", [self.band["cx"], self.band["cy"]]), op)
         if b:
             e["boxes"].append(b)
 

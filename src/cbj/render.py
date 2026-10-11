@@ -154,6 +154,7 @@ def make_job(
     stop_clock_on_last_exit: bool = True,
     capture: bool = True,
     drag_pacing: list[DragPacing] | None = None,
+    visuals: dict | None = None,
 ) -> dict:
     """Job file for CreativeRunner. Raises ValueError if the drags break a rule, or if
     end_mode is "win" and the drags do not clear the board.
@@ -225,6 +226,7 @@ def make_job(
         "stop_clock_on_last_exit": bool(stop_clock_on_last_exit),
         "capture": bool(capture),
         "hide": list(hide),
+        "visuals": visuals_job(visuals),
         "end_mode": end_mode,
         "camera": camera.to_job(),
         "drags": [
@@ -290,10 +292,21 @@ def run_player(job: dict, app: Path | None = None, timeout: float = 900) -> dict
     return check_render(out)
 
 
-def rerun(folder: str | Path, out_dir: str | Path) -> dict:
+def visuals_job(visuals: dict | None) -> dict:
+    """The job's visuals section: {"blocks": [{"slot", "hex"}], "grid", "background_top",
+    "background_bottom"}; empty fields keep the game's look."""
+    v = visuals or {}
+    return {"blocks": [{"slot": b["slot"], "hex": b["hex"]} for b in v.get("blocks", [])],
+            "grid": v.get("grid") or "", "background_top": v.get("background_top") or "",
+            "background_bottom": v.get("background_bottom") or ""}
+
+
+def rerun(folder: str | Path, out_dir: str | Path, changes: dict | None = None) -> dict:
     """Record a finished recording again, into another folder, from the folder alone: job.json
     is the runner's exact input and level.json (written by `cbj scenario`) the level with the
-    clock the ad used. Uses the stock player if the original was recorded with it."""
+    clock the ad used. Uses the stock player if the original was recorded with it.
+    changes: job fields to replace that do not touch the play (visuals, hide, camera, label), for
+    an edit that keeps the gameplay: the same drags with the same timing, filmed again."""
     folder, out = Path(folder).resolve(), Path(out_dir).resolve()
     if not (folder / "job.json").is_file() or not (folder / "result.json").is_file():
         raise ValueError(f"{folder}: no recording (job.json and result.json) there")
@@ -303,6 +316,10 @@ def rerun(folder: str | Path, out_dir: str | Path) -> dict:
     if (folder / "level.json").is_file():
         job["level_path"] = str(folder / "level.json")
     job["out_dir"] = str(out)
+    for k, v in (changes or {}).items():
+        if k not in ("visuals", "hide", "camera", "level_label"):
+            raise ValueError(f"rerun can change only the look ({k} would change the play)")
+        job[k] = v
     stock = json.loads((folder / "result.json").read_text()).get("game_patched") is False
     return run_player(job, app=PLAYER_STOCK if stock else None)
 

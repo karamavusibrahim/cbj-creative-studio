@@ -12,8 +12,9 @@ uv sync
 uv run pytest
 ```
 
-Python 3.12, no runtime dependencies. Recording videos also needs ffmpeg on PATH
-and Unity 6000.3.5f1 (see "Recording in the real game").
+Python 3.12. Recording videos also needs ffmpeg on PATH and Unity 6000.3.5f1 (see
+"Recording in the real game"). The prompt planner needs an NVIDIA API key (build.nvidia.com),
+in the environment or in a `.env` file in this folder (git-ignored): `NVIDIA_API_KEY=...`.
 
 ## Commands
 
@@ -32,6 +33,10 @@ uv run cbj rerun renders/nc01_near_fail -o renders/nc01_again   # record a folde
 uv run cbj ad renders/nc01_near_fail                          # a finished 30 s ad from a recording
 uv run cbj compose ads/nc01_near_fail_30s/ad.json -o ads/edited  # render an (edited) ad.json
 uv run cbj ad-diff ads/nc01_near_fail_30s ads/edited             # what the edit changed, and nothing else
+uv run cbj ui                                                 # the test UI: prompts in, ads out (port 8765)
+uv run cbj plan "a hard level with a narrow centre, the player almost fails"   # what a prompt means
+uv run cbj make "the same prompt"                             # plan it and make the ad (studio/<id>/v1)
+uv run cbj make "keep everything, but the hook says 'Beat this!'" --edit <id>  # an edit: v2, with the proof
 ```
 
 Errors print one line, `cbj: <reason>`, and exit with code 1.
@@ -481,6 +486,74 @@ bank.
 rounding. ffmpeg's default darkened a decode and re-encode by about 2 levels; now the drift is
 about 0.
 
+## Text to creative: prompts in, ads out
+
+`uv run cbj ui` opens a local page (http://127.0.0.1:8765). You write what you want; the page
+shows how each of the case's eight prompt controls was read, makes the ad, and plays it. A
+follow-up prompt edits it into a new version, with the proof of what changed.
+
+**The split.** An LLM turns the prompt into a typed **brief** (`brief.py`) and nothing else: it
+never makes levels, moves or pixels. The deterministic engine makes the ad from the brief, so
+the gameplay is real and solvable and an edit can be proven. The planner (`planner.py`) uses
+NVIDIA's Nemotron 3 Ultra through its JSON-schema mode, with reasoning off (a brief takes 15-40
+s; with reasoning on, up to 3 minutes), and falls back to Nemotron 3 Super.
+
+**What I understood.** Each control gets a row: the prompt's own words, what the tool will do,
+and a status. *applied*: done as asked. *default*: not mentioned. *adjusted*: asked, but changed
+to something the game can do, with the reason. *not supported*: impossible here, with the
+reason (for example "turn the blocks into 3D cats"). Nothing is dropped silently.
+
+**Checks in code, not in the prompt.** The model is told the rules, but the code enforces them:
+- a control the prompt does not mention keeps its default (a new ad) or its previous value (an
+  edit), so the model cannot add copy, colours or assets nobody asked for;
+- an uploaded image is used only if the prompt refers to it; a HUD level number only if the
+  prompt gives one;
+- every text goes through the copy guard and may only use measured facts;
+- repainted colours must stay easy to tell apart (each colour has its own gate);
+- a time-out is a social-channel ending on a medium or hard level; the clock of a near-fail is
+  set by the ending; only 9:16 is rendered.
+
+**The eight controls, and what each one drives.**
+
+| Control | In the brief | What the engine does with it |
+|---|---|---|
+| Type or structure of the level | shape (open, narrow centre, door, holes), size, blocks, colours, HUD number | the level generator (`generate.py`), or a shipped level |
+| Gameplay behaviour | ending, mistakes and their kind, hesitations | the scenario planner, recorded in the real game |
+| Difficulty or pacing | easy / medium / hard, length, tempo | the generator's difficulty band; the recording's pauses; the ad's sizing |
+| Visual elements | theme or per-colour paint (with names), background, board, caption colours, zoom, cursor, HUD | the recorder repaints the game's own materials; the compositor styles the captions |
+| Creative concept | angle, hook, every caption, end-card texts, language | the ad's texts (non-English: the defaults are translated too) |
+| Sequence of events | standard or result-first, replay, result screen | the ad's segments |
+| Assets to use | uploaded images or game sprites, by role: logo, mascot, sticker, cursor, end-card art or background; sound on or off | image layers, the cursor image, the end card |
+| Elements that should remain unchanged | keep list; edits | an edit changes only what it asks about (below) |
+
+**The level generator** places polyomino blocks at random on a board of the requested shape,
+each with a gate of its colour, then keeps the candidates that the game's rules accept, the
+exact solver can solve, and the difficulty measure puts in the requested band (easy: nothing to
+reposition, most blocks can leave at once; hard: no block can leave at the start, two or more
+repositioning drags, a naive player needs 1.2-4x the minimum and always finishes). Harder levels
+put gates across the board, so blocks must cross each other's paths. When the prompt gives no
+block count, the level is sized to the ad's length. The same spec and seed give the same level,
+and levels are cached. A hard narrow centre that the search cannot find in its time budget falls
+back to the hand-checked one, and the brief says so.
+
+**Colours in the game.** The recorder repaints the game's own materials before the board is
+built (block, gate and exit-particle colour per colour slot, the cells), and replaces the
+ground's gradient. The puzzle is unchanged: only the look. Captions name the shown colour
+("I can't reach mint!"), and the end card follows the background.
+
+**Edits change only what they ask about.** A follow-up prompt is planned against the current
+brief; the fields of every control it does not mention are restored. Then the smallest re-run:
+- copy, captions, sequence, assets or caption colours: the same recording is reused and only the
+  ad is composed again; `ad-diff` proves which frames and pixels changed;
+- colours, HUD, zoom or the level number in the game: the stored job (the same moves and timing)
+  is filmed again with the new look, and the game state is checked identical on every frame;
+- gameplay or level: recorded again, and the proof says so.
+
+Recordings and levels are stored under a hash of everything that decides them
+(`studio/recordings`, `studio/levels`), so asking for the same thing twice never re-records.
+Each version (`studio/<id>/v<n>`) keeps its prompt, brief, level, the recording it used, the
+ad and its proof.
+
 ## Layout
 
 ```
@@ -496,6 +569,11 @@ src/cbj/compose.py   renders ad.json: layout, layers, cursor, sound, QA, compose
 src/cbj/draw.py      text in the game's style, sprites, easing, exact alpha blending
 src/cbj/sound.py     synthesized sound effects and the mix
 src/cbj/video.py     frame-exact decode and bit-exact encode with matched colour
+src/cbj/brief.py     the creative brief: schema, checks, edit merging, colours
+src/cbj/planner.py   prompt -> brief with an LLM (NVIDIA Nemotron), with checks in code
+src/cbj/generate.py  the level generator: shape, size, blocks, colours, difficulty band
+src/cbj/studio.py    brief -> level -> recording -> ad, versions, cached stages, edit proofs
+src/cbj/app.py       the test UI (FastAPI); the page is src/cbj/static/index.html
 src/cbj/cli.py       command line
 unity/CreativeRunner Unity scripts copied into the project copy by build-player
 unity/game-patch     the game fix: Rollic's originals, the patched files, game.patch
@@ -505,4 +583,5 @@ data/solutions/      move scripts for the Unity replay
 reports/             solve table and the Level 3 walkthrough
 tests/               rule, level, solver, replay, failure-mode and render tests
 build/, renders/     player build and recordings (not in git)
+studio/              the UI's creatives, recordings, levels and uploads (not in git)
 ```

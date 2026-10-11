@@ -59,6 +59,24 @@ public class RenderCamera
 }
 
 [Serializable]
+public class BlockLook
+{
+    public string slot; // the game's colour, as BlockColor names it: "Red", "DarkGreen", ...
+    public string hex; // the colour to show it in, "#RRGGBB"
+}
+
+// How the game looks: the recorder repaints the game's own materials at run time, before the
+// board is built. The puzzle (colour slots, gates, rules) is unchanged; only the look changes.
+[Serializable]
+public class RenderVisuals
+{
+    public List<BlockLook> blocks = new List<BlockLook>(); // block, gate and exit-particle colour per slot
+    public string grid = ""; // the cells' colour, "" = the game's
+    public string background_top = ""; // the ground gradient, "" = the game's
+    public string background_bottom = "";
+}
+
+[Serializable]
 public class RenderJob
 {
     public string level_path;
@@ -85,6 +103,7 @@ public class RenderJob
     // the last block starts to leave; false records the stock behaviour.
     public bool stop_clock_on_last_exit = true;
     public List<string> hide = new List<string>(); // GameObjects to hide by name, e.g. "RestartButton"
+    public RenderVisuals visuals = new RenderVisuals();
     public string end_mode = "win"; // "win": wait for the win screen; "cut": stop after the last drag;
                                     // "fail": wait for the timer to run out
     public List<RenderDrag> drags = new List<RenderDrag>();
@@ -196,6 +215,7 @@ public class CreativeRunner : MonoBehaviour
 
     int frame; // frames written so far
     bool boardReady;
+    string visualsError;
     bool scriptDone;
     bool finished;
     bool fingerDown;
@@ -256,6 +276,14 @@ public class CreativeRunner : MonoBehaviour
         if (j.drags == null || j.drags.Count == 0) throw new Exception("the job has no drags");
         if (j.timer_s < -1) throw new Exception($"timer_s must be -1 (use the level's) or 0 and up, got {j.timer_s}");
         if (j.hide == null) j.hide = new List<string>();
+        if (j.visuals == null) j.visuals = new RenderVisuals();
+        if (j.visuals.blocks == null) j.visuals.blocks = new List<BlockLook>();
+        foreach (var b in j.visuals.blocks)
+            if (!Enum.TryParse(b.slot, out BlockColor _) || !ColorUtility.TryParseHtmlString(b.hex, out Color _))
+                throw new Exception($"visuals: block colour '{b.slot}' = '{b.hex}' needs a BlockColor name and #RRGGBB");
+        foreach (var hex in new[] { j.visuals.grid, j.visuals.background_top, j.visuals.background_bottom })
+            if (!string.IsNullOrEmpty(hex) && !ColorUtility.TryParseHtmlString(hex, out Color _))
+                throw new Exception($"visuals: '{hex}' is not a #RRGGBB colour");
         if (j.camera == null) j.camera = new RenderCamera();
         if (!Positive(j.camera.zoom) || !Finite(j.camera.pan_x) || !Finite(j.camera.pan_y))
             throw new Exception("camera zoom must be positive and pans finite");
@@ -317,8 +345,73 @@ public class CreativeRunner : MonoBehaviour
         if (cc != null) cc.enabled = false;
         if (GameManager.Instance != null)
             GameManager.Instance.OnBoardGenerated += () => boardReady = true;
+        RepaintBeforeBoard();
         if (LevelManager.Instance != null)
             LevelManager.Instance.OnLevelCompleted += _ => { if (result.win_frame < 0) result.win_frame = frame; };
+    }
+
+    // Before the board is built (GameManager.Start): the block, gate and particle materials and the
+    // grid colours. Blocks and gates copy these shared materials when they spawn, so changing the
+    // shared assets here (process-local in a player) repaints every instance.
+    void RepaintBeforeBoard()
+    {
+        var v = job.visuals;
+        if (v.blocks.Count > 0)
+        {
+            var factory = FindFirstObjectByType<ItemFactory>(FindObjectsInactive.Include);
+            if (factory == null) { visualsError = "visuals: no ItemFactory, so block colours cannot be set"; return; }
+            foreach (var look in v.blocks)
+            {
+                var slot = (BlockColor)Enum.Parse(typeof(BlockColor), look.slot);
+                ColorUtility.TryParseHtmlString(look.hex, out Color c);
+                foreach (var bd in factory.blockDataList)
+                {
+                    if (bd == null || bd.blockColor != slot) continue;
+                    var seen = new HashSet<Material>(); // DarkGreen's particles use its gate material
+                    foreach (var m in new[] { bd.colorMaterial, bd.exitMaterial, bd.particleMaterial })
+                        if (m != null && seen.Add(m) && m.HasProperty("_Color")) m.SetColor("_Color", c);
+                }
+            }
+        }
+        if (!string.IsNullOrEmpty(v.grid) && GameManager.Instance != null)
+        {
+            ColorUtility.TryParseHtmlString(v.grid, out Color g);
+            for (int i = 0; i < GameManager.Instance.gridColors.Count; i++) GameManager.Instance.gridColors[i] = g;
+        }
+    }
+
+    // After the board is built: the cells' second sprite (not driven by code) and the ground.
+    void RepaintAfterBoard()
+    {
+        var v = job.visuals;
+        if (!string.IsNullOrEmpty(v.grid))
+        {
+            ColorUtility.TryParseHtmlString(v.grid, out Color g);
+            Color back = Color.Lerp(g, Color.black, 0.18f);
+            foreach (var sr in FindObjectsByType<SpriteRenderer>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (sr.name == "CellBackground") sr.color = back;
+        }
+        if (!string.IsNullOrEmpty(v.background_top))
+        {
+            var ground = GameObject.Find("Ground");
+            var mr = ground != null ? ground.GetComponent<MeshRenderer>() : null;
+            if (mr == null) { visualsError = "visuals: no Ground object, so the background cannot be set"; return; }
+            ColorUtility.TryParseHtmlString(v.background_top, out Color top);
+            Color bottom = top;
+            if (!string.IsNullOrEmpty(v.background_bottom)) ColorUtility.TryParseHtmlString(v.background_bottom, out bottom);
+            // The game's GroundGradient2.png runs white at the top to light blue at the bottom of the
+            // texture; a 4x256 texture in the same orientation replaces it.
+            var tex = new Texture2D(4, 256, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < 256; y++)
+            {
+                Color c = Color.Lerp(bottom, top, y / 255f);
+                for (int x = 0; x < 4; x++) tex.SetPixel(x, y, c);
+            }
+            tex.Apply();
+            var mat = mr.material;
+            mat.mainTexture = tex;
+            mat.color = Color.white;
+        }
     }
 
     // Safety net: if the capture loop has died, the script still ends with result.json.
@@ -673,6 +766,8 @@ public class CreativeRunner : MonoBehaviour
             colors.fadeDuration = 0f;
             sel.colors = colors;
         }
+        RepaintAfterBoard();
+        if (visualsError != null) return visualsError;
         FitCamera();
         AttachCanvases();
         SeedParticles();

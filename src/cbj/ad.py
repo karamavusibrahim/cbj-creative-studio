@@ -169,8 +169,9 @@ class Recording:
                     and int(k.split(".")[1]) <= int(m.group(1)) for f in v]
         return list(self.events.get(name, []))
 
-    def facts(self, beat: int | None = None) -> dict[str, str]:
-        """Facts a text may use, all measured from the recording."""
+    def facts(self, beat: int | None = None, names: dict[str, str] | None = None) -> dict[str, str]:
+        """Facts a text may use, all measured from the recording. names: a display name per colour
+        slot ({"Red": "pink"}), for blocks the recorder repainted."""
         r = self.result
         timer = self.play.get("timer_s") or (self.level.timer if self.level else 0)
         gone = r.get("block_gone_frames", [])
@@ -181,7 +182,8 @@ class Recording:
              "blocks_left_phrase": f"{word}{NBSP}block{'' if left == 1 else 's'}"}
         if beat is not None and self.level is not None:
             block = self.play["beats"][beat]["block"]
-            f["colour"] = color_name(self.level.blocks[block].color).replace(" ", NBSP)
+            slot = self.level.blocks[block].color
+            f["colour"] = ((names or {}).get(slot.name) or color_name(slot)).replace(" ", NBSP)
         return f
 
     def sha(self) -> str:
@@ -309,17 +311,35 @@ def _text(text, start, end=None, dur=None, style="title_xl", anim="pop", beat=No
 
 HOOKS = {"near_fail": "Can you beat the clock?", "time_out": "Can you beat the clock?",
          "win": "Can you clear it?", "cliffhanger": "Can you clear it?"}
+# With the result shown first (a 1.5 s teaser of the result screen), the hook asks how.
+TEASER_HOOKS = {"near_fail": "How did they make it?", "win": "Can you clear it this fast?",
+                "time_out": "So close! What went wrong?"}
+TEASER_S = 1.5
+# Options a brief can set on the default ad (see build_ad).
+AD_OPTIONS = {"replay": True, "result_screen": True, "teaser": False, "texts": {}, "fill": None, "stroke": None,
+              "colour_names": {}, "logo": None, "hook_icon": None, "end_art": None, "end_background": None,
+              "end_gradient": None, "cursor": "ring", "cursor_image": None, "sfx": True}
+TEXT_LAYERS = {"hook": "hook", "mistake": "cap_mistake", "fix": "cap_fix", "hurry": "cap_hurry",
+               "cascade": "cap_cascade", "result": "cap_result", "end_title": "end_title", "end_fact": "end_fact",
+               "cta": "end_cta"}
+LOGO_BOX = 150  # px; a logo in a top corner, inside the safe area, beside a narrowed caption band
 END_FACTS = {"near_fail": "Cleared with {clock_left} left", "time_out": "Out of time with {blocks_left_phrase} left!",
              "win": "Cleared in {time_used} seconds", "cliffhanger": "Your move: {blocks_left_phrase} to go!"}
 
 
-def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long_card: bool = False) -> dict:
+def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long_card: bool = False,
+             options: dict | None = None) -> dict:
     """The default ad for a recording, from its ending: hook, mistake caption, urgency, replay,
     the game's own result screen, end card. Sized to exactly length_s:
     - the replay is the last one or two beats in slow motion (at most 5 s);
     - if time is left, a frozen first frame (up to 2 s) gives the hook room;
     - the end card takes the rest: at least 3 s, and over 8 s only with allow_long_card (the
-      recording is then too short for the length, and the ad would be mostly a card)."""
+      recording is then too short for the length, and the ad would be mostly a card).
+    options (AD_OPTIONS) come from a brief: replay, result screen, a result-first teaser, texts
+    ("" removes a caption), caption colours, colour names for repainted blocks, a logo, a picture
+    beside the hook, end-card art and background, the cursor, and sound on or off. What an
+    option could not do is written into the ad's notes."""
+    o = {**AD_OPTIONS, **(options or {})}
     ending = rec.play.get("ending")
     if ending not in HOOKS:
         raise ValueError(f"{rec.path}: unknown ending {ending!r}")
@@ -331,17 +351,28 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     if not end_of_play:
         raise ValueError(f"{rec.path}: the recording has no {ending} moment to build the ad around")
     p = end_of_play[0]
+    notes: list[str] = []
     seg = {"play": {"kind": "clip", "src": src, "from": 0, "to": p, "speed": 1, "fit": dict(FIT)}}
-    if ending != "cliffhanger":
+    after = []
+    if ending == "cliffhanger":
+        seg["question"] = {"kind": "hold", "src": src, "frame": rec.n - 1, "frames": 2 * FPS, "fit": dict(FIT)}
+        after = ["question"]
+    elif o["result_screen"]:
         # The game's own result screen dims the whole screen, so it plays full size (like the replay).
         seg["result"] = {"kind": "clip", "src": src, "from": p, "to": rec.n, "speed": 1, "fit": dict(NATIVE)}
         after = ["result"]
-    else:
-        seg["question"] = {"kind": "hold", "src": src, "frame": rec.n - 1, "frames": 2 * FPS, "fit": dict(FIT)}
-        after = ["question"]
-    fixed = p + sum(seg_frames(seg[a]) for a in after)
+    teaser = 0
+    if o["teaser"]:
+        t0 = p + 12  # the result screen once it has dimmed and shown its banner
+        teaser = int(TEASER_S * FPS)
+        if ending == "cliffhanger" or t0 + teaser > rec.n:
+            notes.append("result-first teaser left out: this recording has no result screen to show first")
+            teaser = 0
+        else:
+            seg["teaser"] = {"kind": "clip", "src": src, "from": t0, "to": t0 + teaser, "speed": 1, "fit": dict(NATIVE)}
+    fixed = p + sum(seg_frames(seg[a]) for a in after) + teaser
     replay_from, card = None, total - fixed
-    for k in range(len(bf) - 1, max(-1, len(bf) - 1 - REPLAY_MAX_BEATS), -1):
+    for k in range(len(bf) - 1, max(-1, len(bf) - 1 - REPLAY_MAX_BEATS) if o["replay"] else len(bf) - 1, -1):
         r = 2 * (p - bf[k][0])
         if r > REPLAY_MAX_S * FPS or total - fixed - r < END_CARD_S[0] * FPS:
             break
@@ -349,7 +380,7 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         if card <= END_CARD_S[1] * FPS:
             break
     intro = 0
-    if card > END_CARD_S[1] * FPS:
+    if card > END_CARD_S[1] * FPS and not teaser:
         intro = min(int(INTRO_MAX_S * FPS), card - int(END_CARD_S[1] * FPS))
         card -= intro
     if card < END_CARD_S[0] * FPS:
@@ -359,7 +390,7 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         raise ValueError(f"the recording is too short for a {length_s:g} s ad: the end card would run "
                          f"{card / FPS:.1f} s (at most {END_CARD_MAX_S:g}); record a longer scenario (a bigger "
                          f"level, more mistakes), ask for a shorter ad, or allow a long card")
-    order = []
+    order = ["teaser"] if teaser else []
     if intro:
         seg["intro"] = {"kind": "hold", "src": src, "frame": 0, "frames": intro, "fit": dict(FIT)}
         order.append("intro")
@@ -378,7 +409,10 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     first = next((i for i, b in enumerate(beats) if b["kind"] in ("mistake", "attempt")), None)
     # The hook is on screen 1.5-3 s from frame 0; it gives way early to a mistake, never drops it.
     intro_s = intro / FPS
-    hook_min = max(1.5, reading_s(HOOKS[ending]))
+    hook_text = o["texts"].get("hook") or (TEASER_HOOKS.get(ending, HOOKS[ending]) if teaser else HOOKS[ending])
+    if o["texts"].get("hook") == "":
+        notes.append("the hook stays: frame 0 needs it (it is the poster and the first thing a feed shows)")
+    hook_min = max(1.5, reading_s(fill(hook_text, rec.facts(None))))
     hook_play_end = max(1.0 if intro else 2.4, hook_min - intro_s)
     if first is not None:
         m = bf[first][0] / FPS
@@ -388,8 +422,12 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         hook_end = {"seg": "play", "event": f"beat.{first}.start", "offset": -0.1}
     else:
         hook_end = {"seg": "play", "at": round(hook_play_end, 4)}
-    layers["hook"] = _text(HOOKS[ending], {"seg": order[0], "at": 0}, end=hook_end, anim="pop_out",
-                           icon="stopwatch.png" if ending in ("near_fail", "time_out") else None)
+    if teaser:
+        # The hook asks how, over the result shown first, and stays into the gameplay until it can
+        # be read.
+        hook_end = {"seg": "play", "at": round(max(0.3, hook_min - TEASER_S + 0.2), 4)}
+    layers["hook"] = _text(hook_text, {"seg": order[0], "at": 0}, end=hook_end, anim="pop_out",
+                           icon="stopwatch.png" if ending in ("near_fail", "time_out") and not teaser else None)
     if first is not None:
         kind = beats[first]["kind"]
         text = "I can't reach {colour}!" if "in the way" in beats[first]["note"] else "Oops!"
@@ -432,9 +470,26 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     elif ending == "cliffhanger":
         layers["cap_result"] = _text("Can you see the move?", {"seg": "question", "at": 0},
                                      end={"seg": "question", "at": "end"}, style="title_l")
-    notes = _schedule_band(layers, ["hook", "cap_mistake", "cap_fix", "cap_hurry", "cap_cascade", "cap_result"],
-                           seg, order, rec, src)
-    layers["cursor"] = {"type": "cursor", "image": None, "size": 96, "segments": ["play", "replay"]}
+    for key, text in o["texts"].items():
+        lid = TEXT_LAYERS.get(key)
+        if text is None or lid is None or lid.startswith("end_") or lid == "hook":
+            continue
+        if lid not in layers:
+            notes.append(f"no {key} moment in this {ending.replace('_', '-')} ad, so its text is not used")
+        elif text == "":
+            del layers[lid]
+            notes.append(f"{lid} removed, as asked")
+        else:
+            layers[lid]["text"] = text
+    if o["hook_icon"] and "hook" in layers:
+        layers["hook"]["icon"] = o["hook_icon"]
+    names = o["colour_names"]
+    notes += _schedule_band(layers, ["hook", "cap_mistake", "cap_fix", "cap_hurry", "cap_cascade", "cap_result"],
+                            seg, order, rec, src, names)
+    layers["cursor"] = {"type": "cursor", "image": o["cursor_image"] or ("builtin:hand" if o["cursor"] == "hand" else None),
+                        "size": 96, "segments": ["play", "replay"]}
+    if o["cursor"] == "none" and not o["cursor_image"]:
+        del layers["cursor"]
     cliff = ending == "cliffhanger"
     layers["end_title"] = {"type": "text", "seg": "end", "text": END_TITLE, "style": "hero", "max_h": 150,
                            "pos": [540, 420 if cliff else 520], "anim": "pop"}
@@ -448,15 +503,53 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
                          "pos": [540, 1360 if cliff else 1250], "scale": 0.8 if cliff else 0.9, "pulse": True}
     layers["end_footer"] = {"type": "text", "seg": "end", "text": "Contains in-app purchases", "style": "title_s",
                             "pos": [540, 1460], "enabled": False}
+    for key in ("end_title", "end_fact", "cta"):
+        text = o["texts"].get(key)
+        lid = TEXT_LAYERS[key]
+        if text == "" and key != "cta":
+            del layers[lid]
+            notes.append(f"{lid} removed, as asked")
+        elif text:
+            layers[lid]["text"] = text
+    if o["end_art"]:
+        if cliff:
+            notes.append("end-card picture not used: the cliffhanger's end card shows the unsolved board there")
+        else:
+            layers["end_art"] = {"type": "image", "seg": "end", "image": o["end_art"], "box": [460, 420],
+                                 "pos": [540, 1000], "anim": "pop"}
+    if o["end_background"]:
+        seg["end"]["background"] = o["end_background"]
+    elif o["end_gradient"]:
+        seg["end"]["gradient"] = list(o["end_gradient"])
+    for lay in layers.values():  # caption colours, on every text the ad draws
+        if lay["type"] == "text":
+            if o["fill"]:
+                lay["fill"] = o["fill"]
+            if o["stroke"]:
+                lay["stroke"] = o["stroke"]
+    band = None
+    if o["logo"]:
+        # A logo in a top corner, inside the safe area, for the gameplay and the end card; the
+        # caption band narrows to make room. It steps aside during the full-size replay and result
+        # screens, where the HUD sits in that corner.
+        where = o["logo"].get("where", "top_left")
+        x = SAFE["social"]["left"] + LOGO_BOX // 2 if where != "top_right" else W - SAFE["social"]["right"] - LOGO_BOX // 2
+        y = SAFE["social"]["top"] + LOGO_BOX // 2
+        logo = {"type": "image", "image": o["logo"]["file"], "box": [LOGO_BOX, LOGO_BOX], "pos": [x, y], "anim": "none"}
+        first_fit = next(sid for sid in order if sid in ("intro", "play"))
+        layers["logo"] = {**logo, "start": {"seg": first_fit, "at": 0}, "end": {"seg": "play", "at": "end"}}
+        layers["logo_end"] = {**logo, "seg": "end"}
+        shift = (LOGO_BOX + 20) // 2
+        band = {"cx": BAND["cx"] + (shift if where != "top_right" else -shift), "max_w": BAND["max_w"] - 2 * shift}
 
     audio = {"music": None, "events": {
         "taps": {"sound": "click", "event": "drag.*.start", "gain": 0.25},
         "pops": {"sound": "pop", "event": "drag.*.exit", "gain": 0.5, "pitch": "cascade"},
         "ticks": {"sound": "tick", "event": "clock_second<=10", "gain": 0.3, "pitch": "ticktock", "slowmo": False},
         "card": {"sound": "whoosh", "seg": "end", "at": 0, "gain": 0.35}}}
-    if ending in ("near_fail", "win"):
+    if ending in ("near_fail", "win") and "result" in seg:
         audio["events"]["win"] = {"sound": "chord", "event": "win", "gain": 0.6}
-    if ending == "time_out":
+    if ending == "time_out" and "result" in seg:
         audio["events"]["fail"] = {"sound": "womp", "event": "fail", "gain": 0.5}
     if "replay" in seg:
         audio["events"]["rewind"] = {"sound": "whoosh", "seg": "replay", "at": 0, "gain": 0.3}
@@ -468,10 +561,15 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     if intro:
         notes.append(f"a {intro / FPS:.1f} s frozen intro gives the hook room (the recording is short for "
                      f"{length_s:g} s)")
+    if not o["sfx"]:
+        audio["events"] = {}
+        notes.append("no sound effects, as asked (the track is silent)")
 
     ad = {
         "version": 1,
         "concept": ending,
+        **({"band": band} if band else {}),
+        **({"colour_names": names} if names else {}),
         "length_s": length_s,
         "output": {"w": W, "h": H, "fps": FPS, "safe": "social", "crf": 16},
         "sources": {src: {"recording": str(rec.path.resolve()), "sha256": rec.sha()}},
@@ -502,7 +600,7 @@ def locked_digests(ad: dict) -> dict[str, str]:
 
 
 def _schedule_band(layers: dict, priority: list[str], segments: dict, order: list[str], rec: Recording,
-                   src: str) -> list[str]:
+                   src: str, names: dict | None = None) -> list[str]:
     """One text at a time in the band. A caption that overlaps a higher-priority one starts after
     it, keeping its anchor (with a later offset) and its length, cut at the end of its segment;
     one that can then not be read in time (reading_s) is left out. Returns what was changed."""
@@ -524,7 +622,7 @@ def _schedule_band(layers: dict, priority: list[str], segments: dict, order: lis
         s1 = tl[seg_id][1]
         if "dur" in lay:
             f1 = min(f0 + int(round(lay["dur"] * FPS)), s1)
-        text = fill(lay["text"], rec.facts(lay.get("beat")))
+        text = fill(lay["text"], rec.facts(lay.get("beat"), names))
         if (f1 - f0) / FPS < reading_s(text) - 1e-6:
             del layers[lid]
             notes.append(f"{lid} left out: it would overlap another caption or be too short to read")

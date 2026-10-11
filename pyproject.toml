@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "Color Block Jam creative tool: level model, rule-exact solver, and creative pipeline"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.143.0",
     "numpy>=2.5.4",
     "pillow>=12.3.0",
+    "python-multipart>=0.0.32",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]

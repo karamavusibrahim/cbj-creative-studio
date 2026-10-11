@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from .level import Level
 from .rules import initial_state, occupancy
-from .solver import apply_drag, drag_outcomes, solve
+from .solver import Solution, apply_drag, drag_outcomes, solve_fast
 
 
 @dataclass(frozen=True)
@@ -57,9 +57,13 @@ def naive_play(level: Level, rng: random.Random, cap: int = 200) -> int | None:
     return used + 1 if all(p is None for p in state) else None
 
 
-def rate(level: Level, runs: int = 200, seed: int = 0, cap: int = 200) -> Difficulty | None:
-    """Difficulty numbers for a level, or None if it is unsolvable."""
-    sol = solve(level)
+def rate(level: Level, runs: int = 200, seed: int = 0, cap: int = 200,
+         solution: Solution | None = None) -> Difficulty | None:
+    """Difficulty numbers for a level, or None if it is unsolvable. The minimum comes from the A*
+    solver (the same minimum as the BFS one, about 100x faster on hard boards), or from a solution
+    already found. extra_drags is the minimum minus the blocks, so it does not depend on which
+    shortest solution is found."""
+    sol = solution or solve_fast(level)
     if sol is None:
         return None
     state = initial_state(level)

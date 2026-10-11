@@ -181,3 +181,32 @@ def cover(img: Image.Image, size: tuple[int, int]) -> np.ndarray:
     r = img.convert("RGB").resize((round(img.width * s), round(img.height * s)), Image.LANCZOS)
     x0, y0 = (r.width - w) // 2, (r.height - h) // 2
     return np.array(r.crop((x0, y0, x0 + w, y0 + h)))
+
+
+@lru_cache(maxsize=8)
+def hand_image(height: int = 180) -> Image.Image:
+    """A pointing hand for the cursor, drawn here (the game has no hand sprite): a white glove with
+    the game's purple outline and a soft shadow, index finger up. Its fingertip is at about
+    (0.36, 0.05) of the image, the hotspot the compositor puts on the touch point."""
+    k = 4  # draw large, then scale down for clean edges
+    W, H = 150 * k, 200 * k
+    mask = Image.new("L", (W, H), 0)
+    d = ImageDraw.Draw(mask)
+    d.rounded_rectangle((40 * k, 0, 72 * k, 110 * k), radius=16 * k, fill=255)  # index finger
+    d.rounded_rectangle((30 * k, 78 * k, 132 * k, 182 * k), radius=30 * k, fill=255)  # palm
+    for i, (x, top) in enumerate(((72, 84), (96, 90), (118, 100))):  # folded fingers
+        d.rounded_rectangle((x * k, top * k, (x + 26) * k, (top + 52) * k), radius=13 * k, fill=255)
+    d.rounded_rectangle((6 * k, 104 * k, 50 * k, 140 * k), radius=18 * k, fill=255)  # thumb
+    d.rounded_rectangle((40 * k, 170 * k, 122 * k, 200 * k), radius=10 * k, fill=255)  # cuff
+    outline = mask.filter(ImageFilter.MaxFilter(6 * k + 1))
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    shadow.paste((0, 0, 0, 60), (3 * k, 5 * k), outline.crop((0, 0, W - 3 * k, H - 5 * k)))
+    img = Image.alpha_composite(img, shadow.filter(ImageFilter.GaussianBlur(4 * k)))
+    img.paste((*PURPLE, 255), (0, 0), outline)
+    img.paste((255, 255, 255, 255), (0, 0), mask)
+    seams = ImageDraw.Draw(img)  # finger creases in the outline colour
+    for x, top in ((72, 104), (96, 110), (118, 120)):
+        seams.line((x * k, top * k, x * k, (top + 26) * k), fill=(*PURPLE, 255), width=3 * k)
+    seams.line((40 * k, 172 * k, 122 * k, 172 * k), fill=(*PURPLE, 255), width=3 * k)
+    return img.resize((round(W * height / H), height), Image.LANCZOS)

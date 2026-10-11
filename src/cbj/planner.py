@@ -1,0 +1,223 @@
+"""The planner: a natural-language prompt in, a creative brief out.
+
+An LLM fills the brief's JSON schema (brief.SCHEMA) and nothing else. It never makes levels,
+moves or pixels: the deterministic engine does, from the brief, so the gameplay is real and an
+edit can be proven. The brief is then checked in code (brief.check), and an edit is merged so
+that only what the edit asked about can change (brief.merge_edit).
+
+The model runs on NVIDIA's hosted API (NVIDIA_API_KEY, from the environment or a .env file in
+the repo). Tests use a fake client.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+from . import brief as B
+
+REPO = Path(__file__).resolve().parents[2]
+NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+MODELS = ("nvidia/nemotron-3-ultra-550b-a55b", "nvidia/nemotron-3-super-120b-a12b")
+# Reasoning is off: with it, a brief took 30-180 s; without, 5-18 s, and still schema-valid.
+TIMEOUT_S = 120
+
+SYSTEM = """You turn a request for a Color Block Jam video ad into a creative brief: JSON that follows the given schema exactly.
+
+THE GAME. Color Block Jam is a puzzle game. Coloured blocks (polyomino shapes) sit on a grid; the player drags each block out through a gate of its own colour on the board's edge. Blocks get in each other's way, so some must be moved aside first. A level has a countdown clock. The HUD shows "Level N" and the time.
+
+THE TOOL. It records the REAL game playing a level (real, solvable moves; a scripted finger that looks human), then adds a hook, captions, a tap cursor, sound effects, a slow-motion replay, the game's own result screen and an end card with a "PLAY NOW" button. You decide WHAT to make; the engine makes it. Only fill a field from what the request says; leave the default when it says nothing.
+
+channel: "network" (ad networks; default) or "social" (TikTok, Instagram, Facebook feeds). language: "en" unless the request asks for another language (e.g. "tr", "de"); then write EVERY text in concept in that language. format: "9:16" unless the request asks for another aspect ratio.
+
+level (control "level"; difficulty belongs to control "difficulty_pacing"):
+- source: "auto" (the tool chooses), "shipped" (the game's own levels 1-6: small tutorial levels, ALL EASY), or "generate" (a new level built to the spec below). Use "generate" whenever the request describes a structure, shape, size, block count, colours or difficulty.
+- shape: "narrow_center" (a narrow middle / centre / waist / bottleneck: an hourglass), "door" (two rooms joined by a narrow gap), "holes" (holes or pillars inside the board), "open" (a plain rectangle), or "any".
+- width 4-9, height 4-10, blocks 2-10: only if the request gives them, else null.
+- colours: the game colour SLOTS the level uses: Green, Yellow, Blue, Red, Orange, Purple, DarkGreen ([] = any). If the request names colours the game does not have (pink, teal...), pick the nearest slots here AND repaint them in visuals.blocks.
+- difficulty: "easy", "medium", "hard" or "any".
+- label: the number in the HUD's Level badge ("level 47" -> 47), else null.
+
+gameplay (control "gameplay"):
+- ending: "win" (a clean, satisfying solve), "near_fail" (a mistake, a stuck moment, then solved with 00:01 left on the clock), "cliffhanger" (the video stops with two blocks left in each other's way and asks "Can you see the move?"), "time_out" (the clock runs out one move short: ONLY when the request explicitly asks for a fail or losing ending). If the request says nothing about gameplay, use "near_fail".
+- mistakes: believable wrong moves, 0-3 (null = the ending's default). mistake_kinds: any of "blocked" (drags a block toward its gate and another block stops it), "wrong_way" (moves a block somewhere unhelpful), "fidget" (a pointless nudge); [] = the tool chooses. hesitations: picking a block up and putting it back, 0-3 (null = default).
+- timer_s: seconds on the clock at the start, only if the request gives it. seed: null unless the request asks for a different take of the same ad (then any new integer).
+
+pacing (control "difficulty_pacing"): length_s 15-60 (default 30); tempo "calm", "normal" or "fast" (the pauses between moves).
+
+visuals (control "visuals"):
+- theme: "game" (the game's own look), "candy", "pastel", "neon", "dark", or "custom" (only the colours given below).
+- blocks: repaint colour slots: [{"slot": "Red", "hex": "#FF69B4", "name": "pink"}]. name is how captions call that colour. Only slots the request wants repainted.
+- background: 0, 1 or 2 colours "#RRGGBB" (top and bottom of a gradient). board: the board's cell colour "#RRGGBB" or null.
+- caption_fill, caption_outline: "#RRGGBB" or null (the game's white text with a purple outline).
+- camera_zoom: 1.0-1.6 to frame the board closer, or null. cursor: "ring" (a tap ring, default), "hand" (a pointing hand), "none".
+- hud_timer, hud_level: false to hide the HUD's clock or level badge (default true).
+
+concept (control "concept"): angle = the idea in one line. Texts: hook (first frame), mistake (caption on the mistake), fix (on the move that fixes it), hurry (the last 5 seconds), cascade (the fast finish of a win), result (on the result screen), end_title, end_fact, cta (the button). LEAVE EVERY TEXT null UNLESS the request asks for specific copy, a tone, an angle or a language: the defaults are written for each ending and use measured facts. "" removes that caption (not the cta). Keep captions under 6 words. Texts may use facts measured from the recording, in braces: {clock_left} (e.g. 00:01), {time_used} (seconds used), {colour} (the colour of the block in the mistake or the fix), {blocks_left_phrase} (e.g. "two blocks"), {blocks_left}, {timer}, {blocks}. Any number about the play must be one of these facts. NEVER write statistics, odds, percentages, rankings or IQ claims ("only 1% can solve this" is forbidden by ad rules); dares are fine ("Can you beat it?"). If the request asks for such a claim, write the closest honest dare and set the concept row to "adjusted" with the reason.
+
+sequence (control "sequence"): style "standard" (hook over the gameplay, then replay, result, end card) or "result_first" (the result for 1.5 s at the very start, then how it happened); replay (a slow-motion replay of the last moves); result_screen (the game's own "Level Completed" / "Out of Time!" screen); end_card (always true: the end card holds the button).
+
+assets (control "assets"): an uploaded file may ONLY be used if the request refers to it (by name, or as "our logo", "this image", "the attached ..."). Otherwise leave it out and say so in the assets row's plan. The game's own sprites can also be used: CoinPile.png, stopwatch.png. role: "logo" (small, in a top corner for the whole ad), "mascot" or "sticker" (a picture beside the hook, or on the end card), "cursor" (replaces the tap ring), "end_art" (the picture on the end card), "end_background" (the end card's background). when: "whole", "hook", "end_card". where: "auto", "top_left", "top_right", "beside_hook", "end_card". Never invent a file name.
+
+audio (control "assets"): sfx false only if the request asks for no sound. There is no music or voice-over.
+
+keep (control "unchanged"): what must stay exactly as it is: level, gameplay, timing, camera, visuals, copy, sequence, assets, sound.
+
+controls: exactly 8 rows, one per control, in this order: level, gameplay, difficulty_pacing, visuals, concept, sequence, assets, unchanged.
+- asked: an exact excerpt of the USER'S REQUEST about this control, or null if the request says nothing about it (never quote this instruction text or the file list).
+- plan: what the tool will do, in plain words.
+- status: "applied" (asked and done), "default" (not asked), "adjusted" (asked, but changed to something the game can do), "not_supported" (asked, but impossible here).
+- why: the reason for "adjusted" or "not_supported", else null.
+Anything the request asks for that no field can express (for example 3D characters, a different game mechanic, voice-over, music, real people, another game) goes into the closest row as "not_supported" with a short reason. Never ignore part of the request.
+
+assumptions: what you had to guess because the request was ambiguous, each with the alternative (e.g. "'this object' read as the cursor; could also mean the end-card picture"). [] if nothing was guessed.
+
+summary: one sentence describing the ad that will be made."""
+
+EDIT = """This is an EDIT of an existing ad. The current brief is below. Return the complete brief with ONLY the changes the edit request asks for; copy every other field exactly. Mark "asked" only for the controls the edit request talks about (others: asked null, status "default", but keep their plan text). If the request says to keep something, list it in keep. If the request says "keep everything else" or similar, list everything except what it changes.
+
+CURRENT BRIEF:
+"""
+
+
+def load_env(path: Path = REPO / ".env") -> None:
+    if path.is_file():
+        for line in path.read_text().splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+class NvidiaClient:
+    """Chat completions with a JSON schema, on NVIDIA's hosted API, trying the models in order."""
+
+    def __init__(self, models=MODELS, key: str | None = None):
+        load_env()
+        self.key = key or os.environ.get("NVIDIA_API_KEY")
+        if not self.key:
+            raise ValueError("no NVIDIA_API_KEY: set it in the environment or in cbj-creative/.env")
+        self.models = models
+        self.last_model = None
+
+    def complete(self, system: str, user: str, schema: dict) -> str:
+        errors = []
+        for model in self.models:
+            body = {"model": model, "temperature": 0, "max_tokens": 6000,
+                    "chat_template_kwargs": {"enable_thinking": False},
+                    "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                    "response_format": {"type": "json_schema",
+                                        "json_schema": {"name": "brief", "schema": schema, "strict": True}}}
+            req = urllib.request.Request(NVIDIA_URL, data=json.dumps(body).encode(),
+                                         headers={"Authorization": f"Bearer {self.key}",
+                                                  "Content-Type": "application/json"})
+            for attempt in range(2):
+                try:
+                    with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
+                        out = json.load(r)
+                    self.last_model = model
+                    return out["choices"][0]["message"].get("content") or ""
+                except urllib.error.HTTPError as e:
+                    errors.append(f"{model}: HTTP {e.code} {e.read()[:200]!r}")
+                    if e.code not in (429, 500, 502, 503, 504):
+                        break
+                except (urllib.error.URLError, TimeoutError) as e:
+                    errors.append(f"{model}: {e}")
+                time.sleep(2 * (attempt + 1))
+        raise ValueError("the planner could not reach a model: " + "; ".join(errors[-3:]))
+
+
+def _ask(client, system: str, user: str) -> dict:
+    text = client.complete(system, user, B.SCHEMA)
+    try:
+        return json.loads(text, strict=False)  # strict=False: models sometimes put raw newlines in strings
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start >= 0 and end > start:
+            return json.loads(text[start:end + 1], strict=False)
+        raise ValueError(f"the planner did not return JSON: {text[:200]!r}")
+
+
+UPLOAD_WORDS = ("logo", "attach", "upload", "image", "picture", "photo", "png", "jpg", "asset", "mascot",
+                "sticker", "character", "icon", "hand", "file", "this")
+
+
+def _only_mentioned_uploads(raw: dict, prompt: str, uploads: dict) -> None:
+    """An uploaded file is used only if the prompt refers to it (its name, or words like "our
+    logo", "the attached image"). Otherwise it is left out, and the assets row says why."""
+    text = prompt.lower()
+    mentioned = any(w in text for w in UPLOAD_WORDS)
+    keep = []
+    for a in raw.get("assets", []):
+        f = a.get("file", "")
+        if f in uploads and not (Path(f).stem.lower() in text or mentioned):
+            row = B.control(raw, "assets")
+            row["why"] = (row.get("why") or "") + f" {f} was uploaded but the prompt does not say how to use it, so it is left out."
+            continue
+        keep.append(a)
+    raw["assets"] = keep
+
+
+TRANSLATE = """Translate these short ad captions for the puzzle game Color Block Jam into the language with code "{lang}". Keep each one short and punchy. Keep anything in braces exactly as it is (for example {{clock_left}} or {{colour}}): those are filled in later. Do not add claims, numbers or statistics. Return JSON with the same keys."""
+
+
+def _translate_defaults(brief: dict, client) -> None:
+    """A non-English ad must not mix languages: the default captions the prompt did not write are
+    translated by the model (and checked like any text)."""
+    from .ad import END_FACTS, HOOKS
+    ending = brief["gameplay"]["ending"]
+    defaults = {"hook": HOOKS[ending], "mistake": "I can't reach {colour}!", "fix": "Aha! Move {colour} first",
+                "hurry": "Hurry!", "cascade": "So satisfying!", "end_fact": END_FACTS[ending], "cta": "PLAY NOW",
+                "result": {"near_fail": "Phew! {clock_left} left", "time_out": "So close!",
+                           "cliffhanger": "Can you see the move?"}.get(ending)}
+    todo = {k: v for k, v in defaults.items() if v and brief["concept"].get(k) is None}
+    if not todo:
+        return
+    schema = {"type": "object", "properties": {k: {"type": "string"} for k in todo}, "required": list(todo),
+              "additionalProperties": False}
+    try:
+        out = json.loads(client.complete(TRANSLATE.format(lang=brief["language"]), json.dumps(todo), schema),
+                         strict=False)
+    except Exception as e:  # the ad still works in English; say so
+        B.adjust(brief, "concept", f"the default captions could not be translated ({e}); they stay in English.")
+        return
+    for k, v in out.items():
+        if k in todo and isinstance(v, str) and v.strip() and not B._texts_ok(v):
+            brief["concept"][k] = v.strip()
+    left = [k for k in todo if brief["concept"].get(k) is None]
+    if left:
+        B.adjust(brief, "concept", f"no {brief['language']} text could be made for {', '.join(left)}; those stay "
+                                   f"in English.")
+
+
+def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprites: set[str] | None = None,
+         current: dict | None = None) -> dict:
+    """A checked brief for a prompt. With `current`, the prompt edits that brief: only the
+    controls the prompt talks about may change. Returns the brief, with `planner` notes."""
+    client = client or NvidiaClient()
+    files = sorted(uploads or {})
+    user = f"REQUEST:\n{prompt.strip()}\n\nUPLOADED FILES: {', '.join(files) if files else 'none'}"
+    system = SYSTEM
+    if current is not None:
+        # the fields only: the previous version's reasons and notes would leak into the edit
+        shown = {k: v for k, v in current.items() if k not in ("planner", "controls", "assumptions", "summary")}
+        user = EDIT + json.dumps(shown, indent=1) + "\n\nEDIT " + user
+    t0 = time.time()
+    raw = _ask(client, system, user)
+    _only_mentioned_uploads(raw, prompt, uploads or {})
+    label = (raw.get("level") or {}).get("label")
+    if label is not None and str(label) not in prompt:
+        raw["level"]["label"] = None  # a HUD number must come from the prompt, not a guess
+    # A control the prompt did not talk about keeps its default (a new ad) or its previous value
+    # (an edit): the model may not fill unasked fields, such as copy nobody asked for.
+    base = current if current is not None else B.check(B.default_brief())
+    brief, restored = B.merge_edit(base, B.check(raw, uploads, sprites), keep_plans=current is not None)
+    brief = B.check(brief, uploads, sprites)
+    if brief["language"] != "en":
+        _translate_defaults(brief, client)
+    brief["planner"] = {"model": getattr(client, "last_model", None), "seconds": round(time.time() - t0, 1),
+                        "prompt": prompt.strip(), "edit": current is not None, "restored": restored}
+    return brief

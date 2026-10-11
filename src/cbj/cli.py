@@ -1,4 +1,5 @@
-"""Command line: `cbj show|solve|table|difficulty|check|build-player|render|scenario|rerun|compare|ad|compose`.
+"""Command line: `cbj show|solve|table|difficulty|check|build-player|render|scenario|rerun|compare|ad|compose|
+ad-diff|plan|make|ui`.
 
     uv run cbj show  data/levels/Level_03.json
     uv run cbj solve data/levels/Level_03.json [--json out.json]
@@ -7,6 +8,9 @@
     uv run cbj check data/levels/Level_03.json data/solutions/Level_03.moves.json
     uv run cbj build-player
     uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json
+    uv run cbj plan "a difficult level with a narrow centre where the player almost fails"
+    uv run cbj make "the same prompt"   # plan, then make the creative (studio/<id>/v1)
+    uv run cbj ui                       # the test UI at http://127.0.0.1:8765
 
 Errors print one line, "cbj: <reason>", and exit with code 1.
 """
@@ -312,6 +316,58 @@ def _cmd_ad_diff(args) -> int:
     return 0 if d["ok"] else 1
 
 
+def _print_brief(b: dict) -> None:
+    from .brief import CONTROL_TITLES
+    print(f"Summary: {b['summary']}")
+    for c in b["controls"]:
+        asked = f'"{c["asked"]}"' if c["asked"] else "(not mentioned)"
+        print(f"  {CONTROL_TITLES[c['control']]:40s} {c['status']:13s} {asked}")
+        print(f"      -> {c['plan']}")
+        if c.get("why"):
+            print(f"      why: {c['why']}")
+    for a in b.get("assumptions") or []:
+        if a and len(a) > 2:
+            print(f"  assumed: {a}")
+    p = b.get("planner", {})
+    print(f"Planner: {p.get('model')}, {p.get('seconds')} s")
+
+
+def _cmd_plan(args) -> int:
+    from . import planner, studio
+    current = studio.versions(args.edit)[-1]["brief"] if args.edit else None
+    ups = {n: p for n, p in studio.uploads().items() if n in (args.upload or [])}
+    b = planner.plan(args.prompt, uploads=ups, sprites=studio.sprite_names(), current=current)
+    _print_brief(b)
+    if args.json:
+        Path(args.json).write_text(json.dumps(b, indent=1))
+        print(f"Brief: {args.json}")
+    return 0
+
+
+def _cmd_make(args) -> int:
+    from . import planner, studio
+    current = studio.versions(args.edit)[-1]["brief"] if args.edit else None
+    ups = {n: p for n, p in studio.uploads().items() if n in (args.upload or [])}
+    if args.brief:
+        b = json.loads(Path(args.brief).read_text())
+    else:
+        b = planner.plan(args.prompt, uploads=ups, sprites=studio.sprite_names(), current=current)
+    _print_brief(b)
+    v = studio.make(args.prompt, b, args.edit, draft=args.draft)
+    print(f"Version: studio/{v['id']}/v{v['n']} ({v['length_s']:.2f} s, made in {v['seconds']:.0f} s)")
+    print(f"Video: studio/{v['video']}")
+    if v.get("proof"):
+        for k, x in v["proof"].items():
+            print(f"  {k}: {x}")
+    return 0
+
+
+def _cmd_ui(args) -> int:
+    from .app import serve
+    serve(port=args.port)
+    return 0
+
+
 def _cmd_rerun(args) -> int:
     from .render import compare_recordings, rerun
     print(f"Recording {args.folder} again into {args.out} from its job.json and level.json...")
@@ -511,6 +567,25 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("a")
     s.add_argument("b")
     s.set_defaults(func=_cmd_compare)
+
+    s = sub.add_parser("plan", help="read a prompt into a creative brief (the LLM planner), and print it")
+    s.add_argument("prompt")
+    s.add_argument("--edit", metavar="CREATIVE", help="plan an edit of this creative's latest version")
+    s.add_argument("--upload", action="append", metavar="NAME", help="an uploaded file (studio/uploads) to offer")
+    s.add_argument("--json", help="also write the brief to this file")
+    s.set_defaults(func=_cmd_plan)
+
+    s = sub.add_parser("make", help="plan a prompt and make the creative (or edit one with --edit)")
+    s.add_argument("prompt")
+    s.add_argument("--edit", metavar="CREATIVE", help="make a new version of this creative")
+    s.add_argument("--upload", action="append", metavar="NAME")
+    s.add_argument("--brief", help="use this brief.json instead of planning (no LLM call)")
+    s.add_argument("--draft", action="store_true")
+    s.set_defaults(func=_cmd_make)
+
+    s = sub.add_parser("ui", help="the test UI: prompts in, creatives out (http://127.0.0.1:8765)")
+    s.add_argument("--port", type=int, default=8765)
+    s.set_defaults(func=_cmd_ui)
 
     s = sub.add_parser("table", help="solve every level in a folder")
     s.add_argument("dir")

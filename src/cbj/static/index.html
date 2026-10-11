@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CBJ Creative Studio</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f5f3fa; --panel: #ffffff; --ink: #1d1530; --muted: #6b6480; --line: #e4dff0;
+    --accent: #5a1e9b; --accent-soft: #efe6fb; --ok: #1f8a4c; --ok-soft: #e3f5ea; --warn: #a86400;
+    --warn-soft: #fff1d9; --bad: #b3261e; --bad-soft: #fde4e2; --def: #6b6480; --def-soft: #eeecf3;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { display: flex; align-items: baseline; gap: 14px; padding: 14px 22px; background: var(--accent);
+           color: #fff; }
+  header h1 { margin: 0; font-size: 19px; letter-spacing: .2px; }
+  header .sub { opacity: .8; font-size: 13px; }
+  header .right { margin-left: auto; font-size: 12px; opacity: .85; }
+  main { display: grid; grid-template-columns: 250px minmax(420px, 1fr) 420px; gap: 16px; padding: 16px;
+         align-items: start; }
+  @media (max-width: 1250px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+          margin-bottom: 14px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
+             margin: 0 0 10px; font-weight: 650; }
+  button { font: inherit; border: 1px solid var(--accent); background: var(--accent); color: #fff;
+           padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  button.ghost { background: #fff; color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  textarea { width: 100%; min-height: 96px; resize: vertical; font: inherit; padding: 10px 12px;
+             border: 1px solid var(--line); border-radius: 8px; background: #fcfbfe; }
+  textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .mode { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .mode b { color: var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { font-size: 12px; padding: 4px 9px; border-radius: 999px; background: var(--accent-soft);
+          color: var(--accent); cursor: pointer; border: 0; font-weight: 500; }
+  .chip.file { background: #f1eef7; color: var(--ink); cursor: default; }
+  .chip.file span { cursor: pointer; margin-left: 6px; color: var(--muted); }
+  .drop { margin-top: 10px; border: 1.5px dashed var(--line); border-radius: 8px; padding: 8px 10px;
+          color: var(--muted); font-size: 12.5px; cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  label.small { font-size: 12.5px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 6px 6px;
+       border-bottom: 1px solid var(--line); }
+  td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.ctl { font-weight: 600; width: 22%; }
+  td .asked { font-style: italic; color: var(--ink); }
+  td .none { color: var(--muted); }
+  td .why { margin-top: 4px; font-size: 12.5px; color: var(--warn); }
+  td .why.bad { color: var(--bad); }
+  .st { display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; font-weight: 650;
+        white-space: nowrap; }
+  .st.applied { background: var(--ok-soft); color: var(--ok); }
+  .st.default { background: var(--def-soft); color: var(--def); }
+  .st.adjusted { background: var(--warn-soft); color: var(--warn); }
+  .st.not_supported { background: var(--bad-soft); color: var(--bad); }
+  .summary { font-size: 14.5px; margin: 0 0 10px; }
+  .assume { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; padding-left: 18px; }
+  details { margin-top: 10px; font-size: 12.5px; }
+  details pre { max-height: 360px; overflow: auto; background: #faf9fc; border: 1px solid var(--line);
+                padding: 8px; border-radius: 6px; font-size: 11.5px; }
+  .history .item { padding: 8px 9px; border-radius: 8px; cursor: pointer; margin-bottom: 4px;
+                   border: 1px solid transparent; }
+  .history .item:hover { background: var(--accent-soft); }
+  .history .item.active { border-color: var(--accent); background: var(--accent-soft); }
+  .history .p { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                overflow: hidden; }
+  .history .m { font-size: 11.5px; color: var(--muted); }
+  .player video { width: 100%; max-height: 72vh; aspect-ratio: 9 / 16; background: #120c1f; border-radius: 10px;
+                  display: block; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .tab { font-size: 12.5px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer;
+         background: #fff; }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .links { font-size: 12.5px; margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .links a { color: var(--accent); }
+  .vprompt { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }
+  .stages { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .stage { font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: var(--def-soft); color: var(--def); }
+  .stage.on { background: var(--accent); color: #fff; }
+  .stage.done { background: var(--ok-soft); color: var(--ok); }
+  .log { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 230px; overflow: auto;
+         background: #faf9fc; border: 1px solid var(--line); border-radius: 6px; padding: 8px; white-space: pre-wrap; }
+  .err { color: var(--bad); font-weight: 600; margin-top: 8px; white-space: pre-wrap; }
+  .proof dl { margin: 0; display: grid; grid-template-columns: 130px 1fr; gap: 4px 10px; font-size: 13px; }
+  .proof dt { color: var(--muted); }
+  .proof dd { margin: 0; }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CBJ Creative Studio</h1>
+  <span class="sub">Text-to-creative test bench: a prompt in, a finished Color Block Jam ad out</span>
+  <span class="right" id="meta"></span>
+</header>
+<main>
+  <aside>
+    <div class="card history">
+      <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+        <h2 style="margin: 0;">Creatives</h2>
+        <button class="ghost" onclick="newCreative()">New</button>
+      </div>
+      <div id="history"><div class="muted">None yet.</div></div>
+    </div>
+  </aside>
+
+  <section>
+    <div class="card">
+      <div class="mode" id="mode"><b>New creative</b>: describe the ad you want.</div>
+      <textarea id="prompt" placeholder="e.g. Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost fails before solving it."></textarea>
+      <div class="drop" id="drop">Attach images (logo, mascot, hand, end-card art): drop here or click. Say in the prompt how to use them.</div>
+      <input type="file" id="file" accept="image/png,image/jpeg,image/webp" multiple class="hidden">
+      <div class="chips" id="files"></div>
+      <div class="row" style="margin-top: 12px;">
+        <button id="btnPlanMake" onclick="planAndMake()">Plan &amp; make</button>
+        <button id="btnPlan" class="ghost" onclick="plan(false)">Plan only</button>
+        <button id="btnMake" class="ghost hidden" onclick="make()">Make this plan</button>
+        <label class="small" title="Faster, lower-quality encode"><input type="checkbox" id="draft"> draft render</label>
+      </div>
+      <div class="chips" id="examples"></div>
+    </div>
+
+    <div class="card" id="understood">
+      <h2>What I understood</h2>
+      <div id="understoodBody" class="muted">Plan a prompt to see how each of the case's eight prompt controls was read.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card player">
+      <h2>Creative</h2>
+      <div class="tabs" id="tabs"></div>
+      <video id="video" controls playsinline class="hidden"></video>
+      <div id="noVideo" class="muted">The finished ad plays here.</div>
+      <div class="vprompt" id="vprompt"></div>
+      <div class="links" id="links"></div>
+    </div>
+    <div class="card proof hidden" id="proofCard">
+      <h2>What this edit changed</h2>
+      <dl id="proof"></dl>
+    </div>
+    <div class="card">
+      <h2>Progress</h2>
+      <div class="stages" id="stages"></div>
+      <div class="log" id="log">Idle.</div>
+      <div class="err hidden" id="err"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const STAGES = ["plan", "level", "recording", "compose", "proof", "done"];
+const NEW_EXAMPLES = [
+  "Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost fails before solving it.",
+  "An easy level with a satisfying clean solve, fast-paced, 20 seconds, no replay.",
+  "The player makes two wrong moves, gets stuck, then solves it with one second left.",
+  "Cliffhanger for TikTok: stop with two blocks left and ask if they can see the move.",
+  "Candy theme: pink, mint and lemon blocks on a soft pink background, hook 'Sweet puzzle!'",
+  "Show the win first, then how it happened. Use a hand instead of the circle.",
+  "The player fails at the end but make it look like they almost won.",
+  "Make the blocks into 3D cats.",
+];
+const EDIT_EXAMPLES = [
+  "Keep everything exactly the same, but make the hook say 'Beat this in 20 seconds'.",
+  "Same ad, but remove the 'Hurry!' caption.",
+  "Keep everything, but put our logo (attached) in the top left corner.",
+  "Same ad without the slow-motion replay.",
+  "Keep the gameplay but use yellow captions with a dark outline.",
+  "Same ad, but in Turkish.",
+];
+const S = { cid: null, versions: [], shown: null, brief: null, briefPrompt: "", files: [], job: null, lines: 0, meta: {} };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"},
+                                                          body: JSON.stringify(body)});
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+function setMode() {
+  const v = S.versions.length ? S.versions[S.versions.length - 1] : null;
+  $("mode").innerHTML = S.cid
+    ? `<b>Editing</b> ${esc(S.cid)} (latest: v${v ? v.n : "?"}). Describe the change; everything you do not mention stays as it is.`
+    : `<b>New creative</b>: describe the ad you want.`;
+  const ex = S.cid ? EDIT_EXAMPLES : NEW_EXAMPLES;
+  $("examples").innerHTML = ex.map(e => `<button class="chip" title="${esc(e)}">${esc(e.length > 60 ? e.slice(0, 58) + "…" : e)}</button>`).join("");
+  [...$("examples").children].forEach((c, i) => c.onclick = () => { $("prompt").value = ex[i]; $("prompt").focus(); });
+}
+
+function busy(on) {
+  ["btnPlanMake", "btnPlan", "btnMake"].forEach(id => $(id).disabled = on);
+}
+
+function renderStages(current, failed) {
+  const idx = STAGES.indexOf(current);
+  $("stages").innerHTML = STAGES.map((s, i) =>
+    `<span class="stage ${i < idx || current === "done" ? "done" : i === idx ? "on" : ""}">${s}</span>`).join("");
+}
+
+async function poll(jid) {
+  S.job = jid; S.lines = 0; $("log").textContent = ""; $("err").classList.add("hidden");
+  while (true) {
+    const j = await api(`/api/jobs/${jid}?since=${S.lines}`);
+    for (const l of j.lines) $("log").textContent += `${l.t.toFixed(1).padStart(6)} s  [${l.stage}] ${l.text}\n`;
+    S.lines = j.n_lines;
+    $("log").scrollTop = $("log").scrollHeight;
+    renderStages(j.status === "done" && j.kind === "make" ? "done" : j.stage);
+    if (j.status === "done") return j.result;
+    if (j.status === "failed") {
+      $("err").textContent = j.error; $("err").classList.remove("hidden");
+      throw new Error(j.error);
+    }
+    await new Promise(r => setTimeout(r, 700));
+  }
+}
+
+function renderBrief(b, title) {
+  if (!b) { $("understoodBody").innerHTML = '<span class="muted">Nothing planned.</span>'; return; }
+  const rows = b.controls.map(c => `<tr>
+      <td class="ctl">${esc(S.meta.controls?.[c.control] || c.control)}</td>
+      <td>${c.asked ? `<span class="asked">“${esc(c.asked)}”</span>` : '<span class="none">not mentioned</span>'}</td>
+      <td>${esc(c.plan)}${c.why ? `<div class="why ${c.status === "not_supported" ? "bad" : ""}">${esc(c.why)}</div>` : ""}${(c.engine || []).map(n => `<div class="why">While making it: ${esc(n)}</div>`).join("")}</td>
+      <td><span class="st ${c.status}">${c.status.replace("_", " ")}</span></td></tr>`).join("");
+  const p = b.planner || {};
+  const restored = (p.restored || []).length ? `<p class="muted">${p.edit ? "Kept from the previous version (the edit did not ask about it)" : "Left at the defaults (the prompt did not ask about it, so the planner's suggestions there were not used)"}: ${esc(p.restored.map(r => r.split(" (")[0]).join(", "))}</p>` : "";
+  const facts = [`ending: <b>${esc(b.gameplay.ending.replace("_", "-"))}</b>`, `${b.pacing.length_s} s, ${esc(b.pacing.tempo)} tempo`,
+                 `level: ${esc(b.level.source)}${b.level.shape !== "any" ? " / " + esc(b.level.shape) : ""}${b.level.difficulty !== "any" ? " / " + esc(b.level.difficulty) : ""}`,
+                 `theme: ${esc(b.visuals.theme)}`, `sequence: ${esc(b.sequence.style.replace("_", " "))}${b.sequence.replay ? "" : ", no replay"}`,
+                 `channel: ${esc(b.channel)}`, `language: ${esc(b.language)}`];
+  $("understoodBody").innerHTML = `
+    ${title ? `<div class="muted" style="margin-bottom:6px">${esc(title)}</div>` : ""}
+    <p class="summary">${esc(b.summary)}</p>
+    <div class="muted" style="margin-bottom:10px">${facts.join(" · ")}</div>
+    <table><thead><tr><th>Prompt control</th><th>Asked</th><th>What the tool does</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    ${(b.assumptions || []).filter(a => a && a.length > 2).length ? `<ul class="assume">${b.assumptions.filter(a => a && a.length > 2).map(a => `<li>Assumed: ${esc(a)}</li>`).join("")}</ul>` : ""}
+    ${restored}
+    <div class="muted" style="margin-top:8px">${p.model ? `Planner: ${esc(p.model)}, ${p.seconds} s` : ""}</div>
+    <details><summary>Brief as data (what the engine executes)</summary><pre>${esc(JSON.stringify(b, null, 1))}</pre></details>`;
+}
+
+function renderVersion(v) {
+  S.shown = v;
+  $("tabs").innerHTML = S.versions.map(x => `<span class="tab ${x.n === v.n ? "active" : ""}" data-n="${x.n}">v${x.n}${x.edit ? " (edit)" : ""}</span>`).join("");
+  [...$("tabs").children].forEach(t => t.onclick = () => renderVersion(S.versions.find(x => x.n == t.dataset.n)));
+  const vid = $("video");
+  vid.src = `/studio/${v.video}?t=${Date.now()}`; vid.poster = `/studio/${v.poster}`;
+  vid.classList.remove("hidden"); $("noVideo").classList.add("hidden");
+  $("vprompt").innerHTML = `<b>v${v.n} prompt:</b> ${esc(v.prompt)}<br>${esc(v.length_s)} s · level: ${esc(v.level.why)} · gameplay ${v.recording.reused ? "reused (not re-recorded)" : "recorded in the game"} · made in ${v.seconds} s` +
+    (v.qa.warnings.length ? `<br>QA: ${esc(v.qa.warnings.join("; "))}` : "");
+  const base = `/studio/${v.ad_dir}`;
+  $("links").innerHTML = [["ad.mp4", "video"], ["ad.json", "ad.json"], ["compose.json", "proof (compose.json)"]]
+    .map(([f, l]) => `<a href="${base}/${f}" target="_blank">${l}</a>`).join("") +
+    `<a href="/studio/${v.id}/v${v.n}/brief.json" target="_blank">brief.json</a><a href="/studio/${v.level.file}" target="_blank">level.json</a>`;
+  renderBrief(v.brief, `Brief of v${v.n}, after the engine's checks`);
+  if (v.proof) {
+    const pr = v.proof;
+    const items = [["Asked to change", (pr.changed_controls || []).join(", ") || "nothing"], ["Gameplay", pr.gameplay],
+                   ["Frames", pr.frames], ["Pixels", pr.pixels], ["Layers changed", (pr.layers_changed || []).join(", ")],
+                   ["Sound", pr.sound], ["Check", pr.ok === false ? "FAILED" : pr.ok ? "passed" : ""]];
+    $("proof").innerHTML = items.filter(([, x]) => x).map(([k, x]) => `<dt>${esc(k)}</dt><dd>${esc(x)}</dd>`).join("");
+    $("proofCard").classList.remove("hidden");
+  } else $("proofCard").classList.add("hidden");
+}
+
+async function loadCreative(cid, n) {
+  S.cid = cid;
+  S.versions = await api(`/api/creatives/${cid}`);
+  renderVersion(n ? S.versions.find(v => v.n === n) : S.versions[S.versions.length - 1]);
+  setMode(); refreshHistory();
+}
+
+async function refreshHistory() {
+  const list = await api("/api/creatives");
+  $("history").innerHTML = list.length ? list.map(c => `<div class="item ${c.id === S.cid ? "active" : ""}" data-id="${esc(c.id)}">
+      <div class="p">${esc(c.prompt)}</div><div class="m">${c.versions} version${c.versions > 1 ? "s" : ""} · ${esc(c.id.slice(0, 11))}</div></div>`).join("")
+    : '<div class="muted">None yet.</div>';
+  [...$("history").children].forEach(el => el.onclick = () => el.dataset.id && loadCreative(el.dataset.id));
+}
+
+function newCreative() {
+  S.cid = null; S.versions = []; S.brief = null; S.shown = null;
+  $("prompt").value = ""; $("tabs").innerHTML = ""; $("video").classList.add("hidden"); $("noVideo").classList.remove("hidden");
+  $("vprompt").textContent = ""; $("links").innerHTML = ""; $("proofCard").classList.add("hidden");
+  $("btnMake").classList.add("hidden"); renderBrief(null); setMode(); refreshHistory();
+}
+
+async function plan(thenMake) {
+  const prompt = $("prompt").value.trim();
+  if (!prompt) { $("prompt").focus(); return; }
+  busy(true); $("btnMake").classList.add("hidden");
+  try {
+    const {job} = await api("/api/plan", {prompt, creative_id: S.cid, uploads: S.files});
+    S.brief = await poll(job); S.briefPrompt = prompt;
+    renderBrief(S.brief, S.cid ? "Planned edit (not made yet)" : "Planned (not made yet)");
+    if (thenMake) await make(); else $("btnMake").classList.remove("hidden");
+  } catch (e) { console.error(e); }
+  finally { busy(false); }
+}
+
+async function make() {
+  if (!S.brief) return;
+  busy(true); $("btnMake").classList.add("hidden");
+  try {
+    const {job} = await api("/api/make", {prompt: S.briefPrompt, brief: S.brief, creative_id: S.cid, draft: $("draft").checked});
+    const v = await poll(job);
+    S.brief = null; S.files = []; renderFiles(); $("prompt").value = "";
+    await loadCreative(v.id, v.n);
+  } catch (e) { console.error(e); }
+  finally { busy(false); }
+}
+
+function planAndMake() { plan(true); }
+
+function renderFiles() {
+  $("files").innerHTML = S.files.map((f, i) => `<span class="chip file">${esc(f)}<span data-i="${i}">✕</span></span>`).join("");
+  [...$("files").querySelectorAll("span[data-i]")].forEach(x => x.onclick = () => { S.files.splice(+x.dataset.i, 1); renderFiles(); });
+}
+
+async function upload(fileList) {
+  const fd = new FormData();
+  for (const f of fileList) fd.append("files", f);
+  const r = await fetch("/api/upload", {method: "POST", body: fd});
+  const j = await r.json();
+  if (!r.ok) { alert(j.detail || "upload failed"); return; }
+  S.files.push(...j.uploaded.filter(n => !S.files.includes(n))); renderFiles();
+}
+
+$("drop").onclick = () => $("file").click();
+$("file").onchange = e => upload(e.target.files);
+$("drop").ondragover = e => { e.preventDefault(); $("drop").classList.add("over"); };
+$("drop").ondragleave = () => $("drop").classList.remove("over");
+$("drop").ondrop = e => { e.preventDefault(); $("drop").classList.remove("over"); upload(e.dataTransfer.files); };
+$("prompt").addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) planAndMake(); });
+
+(async () => {
+  S.meta = await api("/api/meta");
+  $("meta").textContent = `planner: ${S.meta.models[0].split("/").pop()}`;
+  renderStages(""); setMode(); refreshHistory();
+})();
+</script>
+</body>
+</html>
