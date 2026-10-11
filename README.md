@@ -29,6 +29,8 @@ uv run cbj build-player                                     # once: build the Un
 uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json  # record it in the game
 uv run cbj compare renders/Level_03 renders/Level_03_b       # how close two recordings are
 uv run cbj scenario data/levels/gen/narrow_center_01.json --ending near_fail   # human play toward an ending
+uv run cbj scenario data/levels/gen/narrow_center_01.json --ending win --finish streak --plan-only  # one key move, then all leave
+uv run cbj generate --shape ring --difficulty hard --pieces big -o levels/ring.json   # a level to a spec, plus a picture
 uv run cbj rerun renders/nc01_near_fail -o renders/nc01_again   # record a folder again from its files, and compare
 uv run cbj ad renders/nc01_near_fail                          # a finished 30 s ad from a recording
 uv run cbj compose ads/nc01_near_fail_30s/ad.json -o ads/edited  # render an (edited) ad.json
@@ -65,14 +67,16 @@ repositioning drags, how many blocks can leave with their first drag, and how
 many different first drags there are. From a simulated naive player (the
 "simulated human" idea used to rate puzzle difficulty): it takes an exit
 whenever one is available, otherwise drags a random block to a random reachable
-cell, 200 seeded runs.
+cell where the board has not been before (a person does not go back to a position
+they already tried), 200 seeded runs. It gives up after 12 drags per block; the mean
+is over the runs that finished, and the ones that gave up are counted apart.
 
 | level | min drags | extra drags | exits at start | naive player mean (p90) |
 |---|---|---|---|---|
 | Level_01 | 2 | 0 | 2 | 2.0 (2) |
 | Level_02 | 2 | 0 | 2 | 2.0 (2) |
 | Level_03 | 3 | 0 | 2 | 3.0 (3) |
-| Level_04 | 4 | 1 | 0 | 5.0 (7) |
+| Level_04 | 4 | 1 | 0 | 5.0 (6) |
 | Level_05 | 5 | 0 | 2 | 5.0 (5) |
 | Level_06 | 8 | 0 | 4 | 8.0 (8) |
 
@@ -369,7 +373,7 @@ into its neighbour. The runner logs the frame on which each cell was entered (`c
 
 **The narrow-centre level.** `data/levels/gen/narrow_center_01.json` is the case's example
 prompt ("a difficult level with a narrow center section... the player almost fails"): a 6x8
-hourglass with a two-lane waist, 7 blocks, 9 minimum drags (2 repositioning), naive player 1.29x
+hourglass with a two-lane waist, 7 blocks, 9 minimum drags (2 repositioning), naive player 1.26x
 the minimum. Its cliffhanger is two blocks head-on in the waist.
 
 **Finding a cliffhanger.** For each pair of blocks to keep, a greedy search clears the other
@@ -518,9 +522,9 @@ reason (for example "turn the blocks into 3D cats"). Nothing is dropped silently
 
 | Control | In the brief | What the engine does with it |
 |---|---|---|
-| Type or structure of the level | shape (open, narrow centre, door, holes), size, blocks, colours, HUD number | the level generator (`generate.py`), or a shipped level |
-| Gameplay behaviour | ending, mistakes and their kind, hesitations | the scenario planner, recorded in the real game |
-| Difficulty or pacing | easy / medium / hard, length, tempo | the generator's difficulty band; the recording's pauses; the ad's sizing |
+| Type or structure of the level | shape (open, narrow centre, door, pillars, cross, ring, lanes), size, blocks, piece shapes, looks (symmetric, packed, colourful), colours, HUD number | the level generator (`generate.py`), or a shipped level |
+| Gameplay behaviour | ending, mistakes and their kind, hesitations, the order of interactions, a satisfying finish, seconds left at a near-fail | the scenario planner (`play.py`, `events.py`), recorded in the real game |
+| Difficulty or pacing | easy / medium / hard, length, tempo, pacing curve | the generator's difficulty band; the recording's pauses; the ad's sizing |
 | Visual elements | theme or per-colour paint (with names), background, board, caption colours, zoom, cursor, HUD | the recorder repaints the game's own materials; the compositor styles the captions |
 | Creative concept | angle, hook, every caption, end-card texts, language | the ad's texts (non-English: the defaults are translated too) |
 | Sequence of events | standard or result-first, replay, result screen | the ad's segments |
@@ -531,7 +535,7 @@ reason (for example "turn the blocks into 3D cats"). Nothing is dropped silently
 each with a gate of its colour, then keeps the candidates that the game's rules accept, the
 exact solver can solve, and the difficulty measure puts in the requested band (easy: nothing to
 reposition, most blocks can leave at once; hard: no block can leave at the start, two or more
-repositioning drags, a naive player needs 1.2-4x the minimum and always finishes). Harder levels
+repositioning drags, a naive player needs 1.2-4x the minimum and gives up on at most 5 % of its runs). Harder levels
 put gates across the board, so blocks must cross each other's paths. When the prompt gives no
 block count, the level is sized to the ad's length. The same spec and seed give the same level,
 and levels are cached. A hard narrow centre that the search cannot find in its time budget falls
@@ -555,6 +559,39 @@ Recordings and levels are stored under a hash of everything that decides them
 Each version (`studio/<id>/v<n>`) keeps its prompt, brief, level, the recording it used, the
 ad and its proof.
 
+## Level & gameplay generation (core requirement 2)
+
+The case asks for gameplay "appropriate for the requested concept": a specific type of level, a
+visually interesting board, a difficult or easy level, a gameplay progression, a near-fail moment,
+a satisfying solve, a specific sequence of interactions. The LLM still only writes the brief;
+each of these is a brief field that deterministic code builds, plays in the real game and then
+checks on the recording.
+
+| Asked for | Brief field | How it is made |
+|---|---|---|
+| A specific type of level | `level.shape` (7 shapes), `level.pieces` (small, big: plus, 2x3, L4; long: 3-4 bars), size, blocks, colours | the generator places those pieces on that board; every gate is one its block can actually reach |
+| A visually interesting board | `level.style`: symmetric (blocks, colours and gates mirrored), packed (55-75 % of the cells hold blocks, one gate per colour, as in the real game), colourful (every colour, touching blocks differ) | a looks score (contrast, gate sides, fill, symmetry) in the generator's ranking |
+| Difficult or easy | `level.difficulty` | bands from the exact solver and a naive player that never repeats a position; boards where it gives up more than 5 % of the time are unfair and rejected; local search (move a block, move a gate, swap colours, change a piece) improves the best boards |
+| A gameplay progression | `pacing.curve` (speeds up, slows down), and colour-by-colour orders | pauses and finger speeds follow the curve; one level per ad in this version |
+| A near-fail moment | `gameplay.ending` near-fail, `gameplay.clock_left_s` 1-3, mistakes | the clock shows 00:01-00:03 as the last block leaves |
+| A satisfying solve | `gameplay.finish: streak` | the shortest solution with the longest final run of exits: one key move, then every block leaves one after another ("One move frees them all!") |
+| A specific sequence of interactions | `gameplay.events`: leaves / moves / stuck / hesitates, for a colour and any / biggest / smallest / longest, all, first / next / last | an exact A* search over (position, steps done) finds the fewest drags that do the steps in order; "stuck" is a blocked attempt by that block, "hesitates" a pick-up-and-put-back |
+
+The events solver (`events.py`) does not use the free solver's "take any open exit first" shortcut:
+with a requested order, an early exit can make a later step impossible, so the order of exits is
+part of the search (it agrees with the free solver on 122 random boards when no steps are given).
+An order that cannot happen on a level is said so, and the play goes on without it.
+
+**Checks from the recording.** Each version gets a list of checks (`checks.py`), shown in the UI
+under *Level & gameplay* with where each was measured. From the recording (`result.json`): every
+drag moved the planned block through the planned cells to the planned outcome; the ending and
+the clock; the mistakes; each step of the order and the drag that did it; the final run of exits
+and its key move; the pauses in the first and last third. From the level file: the difficulty
+numbers, block count, block shapes, board shape and looks.
+
+**Level only.** The UI's *Level only* button plans the prompt, builds the level and plans the
+moves without recording (seconds instead of minutes), with the board picture and the move list.
+
 ## Layout
 
 ```
@@ -572,7 +609,10 @@ src/cbj/sound.py     synthesized sound effects and the mix
 src/cbj/video.py     frame-exact decode and bit-exact encode with matched colour
 src/cbj/brief.py     the creative brief: schema, checks, edit merging, colours
 src/cbj/planner.py   prompt -> brief with an LLM (NVIDIA Nemotron), with checks in code
-src/cbj/generate.py  the level generator: shape, size, blocks, colours, difficulty band
+src/cbj/generate.py  the level generator: shape, size, blocks, pieces, looks, colours, difficulty band, events fit
+src/cbj/events.py    gameplay events (an order of interactions), their solver and check; the satisfying finish
+src/cbj/checks.py    what was asked, checked on the recording and the level file
+src/cbj/preview.py   a picture of a level, drawn from its file
 src/cbj/studio.py    brief -> level -> recording -> ad, versions, cached stages, edit proofs
 src/cbj/app.py       the test UI (FastAPI); the page is src/cbj/static/index.html
 src/cbj/cli.py       command line

@@ -153,7 +153,8 @@ def _cmd_difficulty(args) -> int:
                      f"{d.first_moves} | {d.naive_mean:.1f} | {d.naive_p90} | {d.naive_capped} | {d.naive_ratio:.2f} |")
     print("\n".join(lines))
     print(f"\nNaive player: takes an exit when one is available, otherwise drags a random block to a "
-          f"random reachable cell; {args.runs} runs, seed {args.seed}, capped at 200 drags.")
+          f"random reachable cell it has not had the board in before; {args.runs} runs, seed {args.seed}, gives up "
+          f"after 12 drags per block (capped). The mean is over the runs that finished.")
     return 0
 
 
@@ -316,6 +317,28 @@ def _cmd_ad_diff(args) -> int:
     return 0 if d["ok"] else 1
 
 
+def _cmd_generate(args) -> int:
+    from .generate import BAND_WORDS, Spec, generate
+    from .preview import save_board
+    spec = Spec(shape=args.shape, width=args.width, height=args.height, blocks=args.blocks, colours=args.colour,
+                difficulty=args.difficulty, seed=args.seed, budget_s=args.budget, pieces=args.pieces,
+                style=args.style, finish=args.finish)
+    d, r, stats = generate(spec, log=print)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(d, indent=2))
+    pic = save_board(load_level(out), out.with_suffix(".png"))
+    lk = stats["looks"]
+    print(f"{out}: {stats['spec']['shape']} {d['gridWidth']}x{d['gridHeight']}, {r.blocks} blocks, {r.min_drags} drags "
+          f"minimum ({r.extra_drags} repositioning), {r.exits_at_start} can leave at once, naive player "
+          f"{r.naive_ratio:.2f}x -> {BAND_WORDS[stats['band']]}; looks {lk['score']:.2f} (fill {lk['fill']:.0%}"
+          f"{', symmetry %.0f%%' % (100 * lk['symmetry']) if 'symmetry' in lk else ''})"
+          + (f"; finish {stats['streak']:.0%} of the blocks in a row" if "streak" in stats else "")
+          + f"; {stats['seconds']} s, {stats['tried']} tried")
+    print(f"Picture: {pic}")
+    return 0
+
+
 def _print_brief(b: dict) -> None:
     from .brief import CONTROL_TITLES
     print(f"Summary: {b['summary']}")
@@ -328,6 +351,13 @@ def _print_brief(b: dict) -> None:
     for a in b.get("assumptions") or []:
         if a and len(a) > 2:
             print(f"  assumed: {a}")
+    lv, gp, pc = b["level"], b["gameplay"], b["pacing"]
+    print(f"Level: {lv['source']}, shape {lv['shape']}, difficulty {lv['difficulty']}, pieces {lv.get('pieces', 'mixed')}, "
+          f"style {lv.get('style') or '-'}; gameplay: {gp['ending']}, finish {gp.get('finish', 'auto')}, "
+          f"clock left {gp.get('clock_left_s') or '-'}; pacing: {pc['tempo']}, curve {pc.get('curve', 'even')}")
+    if gp.get("events"):
+        from .events import describe
+        print("Order of interactions: " + " -> ".join(describe(e) for e in gp["events"]))
     p = b.get("planner", {})
     print(f"Planner: {p.get('model')}, {p.get('seconds')} s")
 
@@ -417,8 +447,12 @@ def _cmd_scenario(args) -> int:
         ok, why = time_out_allowed(d)
         if not ok:
             raise ValueError(f"{level.name} is too easy for a believable time-out: {why}")
+    from .events import from_brief
+    events, ev_notes = from_brief(level, json.loads(args.events)) if args.events else ([], [])
     script = plan(level, args.ending, mistakes=args.mistakes, seed=args.seed, left=args.left,
-                  hesitations=args.hesitations)
+                  hesitations=args.hesitations, events=events, finish=args.finish, curve=args.curve,
+                  clock_left=args.clock_left)
+    script.notes[:0] = ev_notes
     labels = block_labels(level)
     n_mistakes = sum(b.kind == "mistake" for b in script.beats)
     print(f"{level.name}: {args.ending} ({END_MODE[args.ending]} ending), {n_mistakes} mistake(s), seed {args.seed}")
@@ -533,11 +567,35 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--label", type=int, help="the number in the HUD's Level badge (default: from the file name)")
     s.add_argument("--allow-fail", action="store_true",
                    help="required for time_out (opt-in, social tests; hard levels only)")
+    s.add_argument("--events", help='the order of interactions, as in the brief: a JSON list like '
+                                    '\'[{"block": {"colour": "Red", "which": "any", "all": false}, "action": "moves", '
+                                    '"when": "first"}]\'')
+    s.add_argument("--finish", choices=["auto", "streak"], default="auto",
+                   help="streak: one key move, then every block leaves one after another")
+    s.add_argument("--curve", choices=["even", "speeds_up", "slows_down"], default="even", help="pacing over the video")
+    s.add_argument("--clock-left", type=int, default=1, help="near_fail: seconds on the clock at the last exit (1-3)")
     s.add_argument("--plan-only", action="store_true", help="print the beats, do not start Unity")
     s.add_argument("--hide", action="append", metavar="NAME",
                    help="hide another game object (RestartButton is always hidden)")
     s.add_argument("-o", "--out", help="output folder (default: renders/<level>_<ending>)")
     s.set_defaults(func=_cmd_scenario)
+
+    s = sub.add_parser("generate", help="generate a level to a spec: shape, size, pieces, looks, difficulty")
+    s.add_argument("--shape", default="any", choices=["any", "open", "narrow_center", "door", "holes", "cross", "ring",
+                                                      "lanes"])
+    s.add_argument("--difficulty", default="medium", choices=["easy", "medium", "hard"])
+    s.add_argument("--width", type=int)
+    s.add_argument("--height", type=int)
+    s.add_argument("--blocks", type=int)
+    s.add_argument("--pieces", default="mixed", choices=["mixed", "small", "big", "long"])
+    s.add_argument("--style", action="append", choices=["symmetric", "packed", "colourful"], default=[])
+    s.add_argument("--colour", action="append", default=[], help="a game colour the level uses (repeatable)")
+    s.add_argument("--finish", choices=["auto", "streak"], default="auto",
+                   help="streak: prefer boards where one move lets every block leave in a row")
+    s.add_argument("--seed", type=int, default=0)
+    s.add_argument("--budget", type=float, default=25.0, help="seconds of search")
+    s.add_argument("-o", "--out", required=True, help="the level file to write (.json); a picture is written next to it")
+    s.set_defaults(func=_cmd_generate)
 
     s = sub.add_parser("ad", help="make a finished ad (hook, captions, cursor, replay, sound, end card) from a recording")
     s.add_argument("recording", help="a `cbj scenario` folder")

@@ -91,6 +91,21 @@
   .proof dl { margin: 0; display: grid; grid-template-columns: 130px 1fr; gap: 4px 10px; font-size: 13px; }
   .proof dt { color: var(--muted); }
   .proof dd { margin: 0; }
+  .gp { display: grid; grid-template-columns: minmax(180px, 300px) 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 760px) { .gp { grid-template-columns: 1fr; } }
+  .gp img { width: 100%; border-radius: 8px; display: block; }
+  .moves { margin: 0; padding-left: 22px; font-size: 12.5px; max-height: 340px; overflow: auto; }
+  .moves li { margin-bottom: 3px; }
+  .moves .k { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 999px;
+              margin-right: 5px; background: var(--def-soft); color: var(--def); text-transform: uppercase; }
+  .moves .k.mistake { background: var(--bad-soft); color: var(--bad); }
+  .moves .k.hesitate { background: var(--warn-soft); color: var(--warn); }
+  .moves .k.key { background: var(--ok-soft); color: var(--ok); }
+  .moves .k.exit { background: var(--accent-soft); color: var(--accent); }
+  .checks td { font-size: 12.5px; }
+  .st.pass { background: var(--ok-soft); color: var(--ok); }
+  .st.failed { background: var(--bad-soft); color: var(--bad); }
+  .st.info { background: var(--def-soft); color: var(--def); }
   .hidden { display: none !important; }
   .muted { color: var(--muted); font-size: 12.5px; }
 </style>
@@ -123,6 +138,7 @@
       <div class="row" style="margin-top: 12px;">
         <button id="btnPlanMake" onclick="planAndMake()">Plan &amp; make</button>
         <button id="btnPlan" class="ghost" onclick="plan(false)">Plan only</button>
+        <button id="btnLevel" class="ghost" onclick="levelOnly()" title="Plan, build the level and plan the moves, without recording">Level only</button>
         <button id="btnMake" class="ghost hidden" onclick="make()">Make this plan</button>
         <label class="small" title="Faster, lower-quality encode"><input type="checkbox" id="draft"> draft render</label>
       </div>
@@ -132,6 +148,11 @@
     <div class="card" id="understood">
       <h2>What I understood</h2>
       <div id="understoodBody" class="muted">Plan a prompt to see how each of the case's eight prompt controls was read.</div>
+    </div>
+
+    <div class="card" id="gameplay">
+      <h2>Level &amp; gameplay</h2>
+      <div id="gameplayBody" class="muted">The level, the moves and the checks of what was asked appear here. "Level only" shows them in seconds, without recording.</div>
     </div>
   </section>
 
@@ -168,6 +189,14 @@ const NEW_EXAMPLES = [
   "Show the win first, then how it happened. Use a hand instead of the circle.",
   "The player fails at the end but make it look like they almost won.",
   "Make the blocks into 3D cats.",
+  "A symmetric, colourful board using every colour, gates on all four sides.",
+  "Make it packed like a real jam level, a hard one.",
+  "A ring-shaped board with chunky blocks, medium difficulty.",
+  "A satisfying solve: one move frees everything and they all fly out.",
+  "First move the yellow block out of the way, then the blue one escapes, then the rest.",
+  "Clear the board colour by colour: all the blue blocks first, then red, then yellow.",
+  "The red block gets stuck first, then the player figures it out and wins with 3 seconds left.",
+  "Start slow and speed up until the end.",
 ];
 const EDIT_EXAMPLES = [
   "Keep everything exactly the same, but make the hook say 'Beat this in 20 seconds'.",
@@ -200,7 +229,7 @@ function setMode() {
 
 function busy(on) {
   S.busy = on;
-  ["btnPlanMake", "btnPlan", "btnMake"].forEach(id => $(id).disabled = on);
+  ["btnPlanMake", "btnPlan", "btnLevel", "btnMake"].forEach(id => $(id).disabled = on);
 }
 
 function renderStages(current, failed) {
@@ -237,7 +266,14 @@ function renderBrief(b, title) {
       <td><span class="st ${c.status}">${c.status.replace("_", " ")}</span></td></tr>`).join("");
   const p = b.planner || {};
   const restored = (p.restored || []).length ? `<p class="muted">${p.edit ? "Kept from the previous version (the edit did not ask about it)" : "Left at the defaults (the prompt did not ask about it, so the planner's suggestions there were not used)"}: ${esc(p.restored.map(r => r.split(" (")[0]).join(", "))}</p>` : "";
-  const facts = [`ending: <b>${esc(b.gameplay.ending.replace("_", "-"))}</b>`, `${b.pacing.length_s} s, ${esc(b.pacing.tempo)} tempo`,
+  const gp = b.gameplay, lv = b.level;
+  const evText = e => `${e.block.all ? "all " : ""}${e.block.which !== "any" ? e.block.which + " " : ""}${e.block.colour || "block"} ${e.action}${e.when !== "next" ? " " + e.when : ""}`;
+  const facts = [`ending: <b>${esc(b.gameplay.ending.replace("_", "-"))}</b>${gp.clock_left_s ? ` (00:0${gp.clock_left_s} left)` : ""}`,
+                 `${b.pacing.length_s} s, ${esc(b.pacing.tempo)} tempo${b.pacing.curve !== "even" ? ", " + esc(b.pacing.curve.replace("_", " ")) : ""}`,
+                 ...(gp.events.length ? [`order: ${esc(gp.events.map(evText).join(" → "))}`] : []),
+                 ...(gp.finish !== "auto" ? [`finish: ${esc(gp.finish)}`] : []),
+                 ...(lv.pieces !== "mixed" ? [`pieces: ${esc(lv.pieces)}`] : []),
+                 ...(lv.style.length ? [`board: ${esc(lv.style.join(", "))}`] : []),
                  `level: ${esc(b.level.source)}${b.level.shape !== "any" ? " / " + esc(b.level.shape) : ""}${b.level.difficulty !== "any" ? " / " + esc(b.level.difficulty) : ""}`,
                  `theme: ${esc(b.visuals.theme)}`, `sequence: ${esc(b.sequence.style.replace("_", " "))}${b.sequence.replay ? "" : ", no replay"}`,
                  `channel: ${esc(b.channel)}`, `language: ${esc(b.language)}`];
@@ -251,6 +287,47 @@ function renderBrief(b, title) {
     ${restored}
     <div class="muted" style="margin-top:8px">${p.model ? `Planner: ${esc(p.model)}, ${p.seconds} s` : ""}</div>
     <details><summary>Brief as data (what the engine executes)</summary><pre>${esc(JSON.stringify(b, null, 1))}</pre></details>`;
+}
+
+function renderGameplay(d, title) {
+  if (!d) { $("gameplayBody").innerHTML = '<span class="muted">Nothing yet.</span>'; return; }
+  const kind = b => b.tag === "key" ? ["key", "key move"] : b.kind === "mistake" ? ["mistake", "mistake"] :
+    b.kind === "hesitate" ? ["hesitate", "hesitates"] : b.kind === "short" ? ["mistake", "cut short"] :
+    b.kind === "bump" || b.kind === "attempt" ? ["mistake", "blocked"] : b.exits ? ["exit", "leaves"] : ["", "moves"];
+  const moves = (d.beats || []).map((b, i) => {
+    const [cls, word] = kind(b);
+    const t = d.frames && d.frames[i] ? ` <span class="muted">${(d.frames[i][0] / 30).toFixed(1)} s</span>` : "";
+    return `<li><span class="k ${cls}">${word}</span>${esc(b.note)}${t}</li>`;
+  }).join("");
+  const checks = (d.checks || []).map(c => `<tr><td><span class="st ${c.status}">${c.status}</span></td><td><b>${esc(c.check)}</b><div>${esc(c.detail)}</div></td><td class="muted">${esc(c.from)}</td></tr>`).join("");
+  $("gameplayBody").innerHTML = `
+    <div class="muted" style="margin-bottom:8px">${esc(title)}</div>
+    <div class="gp">
+      <div>${d.board ? `<img src="/studio/${esc(d.board)}?t=${Date.now()}" alt="the level">` : '<div class="muted">(made before the board picture existed)</div>'}<div class="muted" style="margin-top:6px">${esc(d.level_why)}</div></div>
+      <div><b style="font-size:12.5px">Moves</b><ol class="moves">${moves}</ol>
+        ${(d.notes || []).length ? `<div class="why" style="font-size:12.5px;color:var(--warn);margin-top:6px">${d.notes.map(esc).join("<br>")}</div>` : ""}</div>
+    </div>
+    ${checks ? `<table class="checks" style="margin-top:12px"><thead><tr><th>Status</th><th>Check</th><th>From</th></tr></thead><tbody>${checks}</tbody></table>` : ""}`;
+}
+
+async function levelOnly() {
+  const prompt = $("prompt").value.trim();
+  if (!prompt) { $("prompt").focus(); return; }
+  $("err").classList.add("hidden");
+  busy(true);
+  try {
+    if (!S.brief || S.briefPrompt !== prompt) {
+      const {job} = await api("/api/plan", {prompt, creative_id: S.cid, uploads: S.files});
+      S.brief = await poll(job); S.briefPrompt = prompt;
+    }
+    const {job} = await api("/api/preview", {prompt, brief: S.brief, creative_id: S.cid});
+    const d = await poll(job);
+    S.brief.controls = d.controls;
+    renderBrief(S.brief, "Planned (not made yet)");
+    renderGameplay(d, "Preview: the level and the planned moves, not recorded yet. Make this plan to record it.");
+    $("btnMake").classList.remove("hidden");
+  } catch (e) { showError(e); }
+  finally { busy(false); }
 }
 
 function renderVersion(v) {
@@ -267,6 +344,12 @@ function renderVersion(v) {
     .map(([f, l]) => `<a href="${base}/${f}" target="_blank">${l}</a>`).join("") +
     `<a href="/studio/${v.id}/v${v.n}/brief.json" target="_blank">brief.json</a><a href="/studio/${v.level.file}" target="_blank">level.json</a>`;
   renderBrief(v.brief, `Brief of v${v.n}, after the engine's checks`);
+  fetch(`/studio/${v.recording.dir}/play.json`).then(r => r.ok ? r.json() : null).then(play => {
+    if (S.shown !== v) return;
+    renderGameplay({board: v.board, level_why: v.level.why, checks: v.checks || [], beats: play ? play.beats : [],
+                    notes: play ? play.notes : [], frames: play?.measured?.beat_frames},
+                   `v${v.n}: recorded in the game. Checks read from the recording and the level file.`);
+  }).catch(() => {});
   if (v.proof) {
     const pr = v.proof;
     const items = [["Asked to change", (pr.changed_controls || []).join(", ") || "nothing"], ["Gameplay", pr.gameplay],
@@ -296,7 +379,7 @@ function newCreative() {
   S.cid = null; S.versions = []; S.brief = null; S.shown = null;
   $("prompt").value = ""; $("tabs").innerHTML = ""; $("video").classList.add("hidden"); $("noVideo").classList.remove("hidden");
   $("vprompt").textContent = ""; $("links").innerHTML = ""; $("proofCard").classList.add("hidden");
-  $("btnMake").classList.add("hidden"); renderBrief(null); setMode(); refreshHistory();
+  $("btnMake").classList.add("hidden"); renderBrief(null); renderGameplay(null); setMode(); refreshHistory();
 }
 
 async function plan(thenMake) {

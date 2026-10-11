@@ -470,7 +470,12 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
                                 "diameter": diameter,
                                 "safe_exempt": "covers the game's own HUD level circle, which sits there",
                                 "start": {"seg": "replay", "at": 0}, "end": {"seg": "replay", "at": "end"}}
-    if ending == "win" and len(bf) >= 3:
+    key = next((i for i, b in enumerate(beats) if b.get("tag") == "key"), None)
+    if ending == "win" and key is not None and key + 2 < len(bf):
+        # A satisfying finish: from the key move, every block leaves one after another.
+        layers["cap_cascade"] = _text("One move frees them all!", {"seg": "play", "event": f"beat.{key}.start"},
+                                      end={"seg": "play", "at": "end"}, style="title_l")
+    elif ending == "win" and len(bf) >= 3:
         # The closing cascade is the satisfying part of a clean solve.
         layers["cap_cascade"] = _text("So satisfying!", {"seg": "play", "event": f"beat.{len(bf) - 3}.start"},
                                       end={"seg": "play", "at": "end"}, style="title_xl")

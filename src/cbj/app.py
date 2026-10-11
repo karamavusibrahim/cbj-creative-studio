@@ -98,6 +98,11 @@ def _make(log: studio.Log, req: MakeRequest) -> dict:
     return studio.make(req.prompt, brief, req.creative_id, log, draft=req.draft)
 
 
+def _preview(log: studio.Log, req: MakeRequest) -> dict:
+    brief = B.check(req.brief, studio.uploads(), studio.sprite_names())
+    return studio.preview(brief, req.creative_id, log)
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (STATIC / "index.html").read_text()
@@ -113,6 +118,11 @@ def api_plan(req: PlanRequest):
 @app.post("/api/make")
 def api_make(req: MakeRequest):
     return {"job": _job("make", _make, req)}
+
+
+@app.post("/api/preview")
+def api_preview(req: MakeRequest):
+    return {"job": _job("preview", _preview, req)}
 
 
 @app.get("/api/jobs/{jid}")

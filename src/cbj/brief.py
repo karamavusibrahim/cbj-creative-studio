@@ -46,7 +46,16 @@ GAME_HEX = {"Green": "#14FF17", "Yellow": "#FFCC04", "Blue": "#1469FF", "Red": "
             "Purple": "#D007FD", "DarkGreen": "#065C13"}
 ENDINGS = ("win", "near_fail", "cliffhanger", "time_out")
 MISTAKE_KINDS = ("blocked", "wrong_way", "fidget")
-SHAPES = ("any", "open", "narrow_center", "door", "holes")
+SHAPES = ("any", "open", "narrow_center", "door", "holes", "cross", "ring", "lanes")
+PIECES = ("mixed", "small", "big", "long")
+STYLES = ("symmetric", "packed", "colourful")
+EVENT_ACTIONS = ("leaves", "moves", "stuck", "hesitates")
+EVENT_WHEN = ("first", "next", "last")
+EVENT_WHICH = ("any", "biggest", "smallest", "longest")
+FINISHES = ("auto", "streak")
+CURVES = ("even", "speeds_up", "slows_down")
+CLOCK_LEFT_RANGE = (1, 3)
+MAX_EVENTS = 6
 THEMES = ("game", "candy", "pastel", "neon", "dark", "custom")
 SEQUENCES = ("standard", "result_first")
 ASSET_ROLES = ("logo", "mascot", "sticker", "cursor", "end_art", "end_background")
@@ -115,6 +124,8 @@ SCHEMA = _obj({
         "colours": {"type": "array", "items": _enum(COLOURS)},
         "difficulty": _enum(("any", "easy", "medium", "hard")),
         "label": _nullable(_I),
+        "pieces": _enum(PIECES),
+        "style": {"type": "array", "items": _enum(STYLES)},
     }),
     "gameplay": _obj({
         "ending": _enum(ENDINGS),
@@ -123,8 +134,13 @@ SCHEMA = _obj({
         "hesitations": _nullable(_I),
         "timer_s": _nullable(_I),
         "seed": _nullable(_I),
+        "events": {"type": "array", "items": _obj({
+            "block": _obj({"colour": _nullable(_enum(COLOURS)), "which": _enum(EVENT_WHICH), "all": _B}),
+            "action": _enum(EVENT_ACTIONS), "when": _enum(EVENT_WHEN)})},
+        "finish": _enum(FINISHES),
+        "clock_left_s": _nullable(_I),
     }),
-    "pacing": _obj({"length_s": _N, "tempo": _enum(("calm", "normal", "fast"))}),
+    "pacing": _obj({"length_s": _N, "tempo": _enum(("calm", "normal", "fast")), "curve": _enum(CURVES)}),
     "visuals": _obj({
         "theme": _enum(THEMES),
         "blocks": {"type": "array", "items": _obj({"slot": _enum(COLOURS), "hex": _S, "name": _S})},
@@ -155,10 +171,11 @@ def default_brief() -> dict:
         "language": "en",
         "format": "9:16",
         "level": {"source": "auto", "shipped": None, "shape": "any", "width": None, "height": None,
-                  "blocks": None, "colours": [], "difficulty": "any", "label": None},
+                  "blocks": None, "colours": [], "difficulty": "any", "label": None, "pieces": "mixed",
+                  "style": []},
         "gameplay": {"ending": "near_fail", "mistakes": None, "mistake_kinds": [], "hesitations": None,
-                     "timer_s": None, "seed": None},
-        "pacing": {"length_s": 30.0, "tempo": "normal"},
+                     "timer_s": None, "seed": None, "events": [], "finish": "auto", "clock_left_s": None},
+        "pacing": {"length_s": 30.0, "tempo": "normal", "curve": "even"},
         "visuals": {"theme": "game", "blocks": [], "background": [], "board": None, "caption_fill": None,
                     "caption_outline": None, "camera_zoom": None, "cursor": "ring", "hud_timer": True,
                     "hud_level": True, "names": {}, "names_src": {}},
@@ -322,6 +339,57 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
         elif not 10 <= gp["timer_s"] <= 300:
             gp["timer_s"] = min(300, max(10, gp["timer_s"]))
             adjust(b, "difficulty_pacing", f"the clock must be 10-300 s; {gp['timer_s']} s is used.")
+    # ---- level looks, gameplay events, finish, near-fail clock, pacing curve ----
+    if lv["pieces"] not in PIECES:
+        lv["pieces"] = "mixed"
+    lv["style"] = [x for x in dict.fromkeys(lv["style"]) if x in STYLES]
+    if lv["source"] == "shipped" and (lv["pieces"] != "mixed" or lv["style"]):
+        adjust(b, "level", "the game's own levels are fixed boards; a level is generated to the description instead.")
+        lv["source"], lv["shipped"] = "generate", None
+    events = []
+    for e in gp["events"] or []:
+        blk = e.get("block") or {}
+        colour = blk.get("colour")
+        if e.get("action") not in EVENT_ACTIONS or (colour is not None and colour not in COLOURS):
+            adjust(b, "gameplay", f"the event {e} names no game colour or action the engine knows; it is left out.")
+            continue
+        events.append({"block": {"colour": colour, "which": blk.get("which") if blk.get("which") in EVENT_WHICH else "any",
+                                 "all": bool(blk.get("all"))},
+                       "action": e["action"], "when": e.get("when") if e.get("when") in EVENT_WHEN else "next"})
+    if len(events) > MAX_EVENTS:
+        adjust(b, "gameplay", f"{len(events)} steps are more than one short level can show in order; the first "
+                              f"{MAX_EVENTS} are played.")
+        events = events[:MAX_EVENTS]
+    stuck = [e for e in events if e["action"] == "stuck"]
+    if len(stuck) > 3:
+        adjust(b, "gameplay", "at most 3 blocks can get stuck in one short level; the first 3 are played.")
+        events = [e for e in events if e["action"] != "stuck" or e in stuck[:3]]
+    if gp["ending"] in ("cliffhanger", "time_out") and any(e["when"] == "last" for e in events):
+        why = ("a cliffhanger stops before the last block leaves" if gp["ending"] == "cliffhanger" else
+               "a time-out cuts the last block short of its gate")
+        adjust(b, "gameplay", f"{why}, so nothing can leave last; that step is played in its order instead.")
+        for e in events:
+            e["when"] = "next" if e["when"] == "last" else e["when"]
+    gp["events"] = events
+    if gp["finish"] not in FINISHES:
+        gp["finish"] = "auto"
+    if gp["finish"] == "streak" and gp["ending"] not in ("win", "near_fail"):
+        adjust(b, "gameplay", f"a satisfying finish (one move, then every block leaves) needs a cleared board; a "
+                              f"{gp['ending'].replace('_', '-')} stops before that.")
+        gp["finish"] = "auto"
+    v = gp["clock_left_s"]
+    if v is not None:
+        lo_c, hi_c = CLOCK_LEFT_RANGE
+        if gp["ending"] != "near_fail":
+            adjust(b, "difficulty_pacing", f"seconds left on the clock at the end belong to a near-fail win; this ad is "
+                                           f"a {gp['ending'].replace('_', '-')}, so {v} s is not used.")
+            gp["clock_left_s"] = None
+        elif not lo_c <= v <= hi_c:
+            gp["clock_left_s"] = min(hi_c, max(lo_c, v))
+            adjust(b, "difficulty_pacing", f"a near-fail ends with {lo_c}-{hi_c} s on the clock (with more, there is no "
+                                           f"'Hurry!' moment); {gp['clock_left_s']} s is used.")
+    if pc["curve"] not in CURVES:
+        pc["curve"] = "even"
     # ---- pacing ----
     lo, hi = LENGTH_RANGE_S
     length = pc["length_s"] if isinstance(pc["length_s"], (int, float)) else 30.0
@@ -418,13 +486,19 @@ GROUPS = {
     "level.colours": ("level", [("level", "colours")]),
     "level.label": ("level", [("level", "label")]),
     "level.difficulty": ("difficulty_pacing", [("level", "difficulty")]),
+    "level.pieces": ("level", [("level", "pieces")]),
+    "level.style": ("level", [("level", "style")]),
     "gameplay.ending": ("gameplay", [("gameplay", "ending")]),
     "gameplay.mistakes": ("gameplay", [("gameplay", "mistakes"), ("gameplay", "mistake_kinds")]),
     "gameplay.hesitations": ("gameplay", [("gameplay", "hesitations")]),
     "gameplay.retake": ("gameplay", [("gameplay", "seed")]),
     "gameplay.clock": ("difficulty_pacing", [("gameplay", "timer_s")]),
+    "gameplay.events": ("gameplay", [("gameplay", "events")]),
+    "gameplay.finish": ("gameplay", [("gameplay", "finish")]),
+    "gameplay.clock_left": ("gameplay", [("gameplay", "clock_left_s")]),
     "pacing.length": ("difficulty_pacing", [("pacing", "length_s")]),
     "pacing.tempo": ("difficulty_pacing", [("pacing", "tempo")]),
+    "pacing.curve": ("difficulty_pacing", [("pacing", "curve")]),
     "channel": ("gameplay", [("channel",)]),
     "visuals.colours": ("visuals", [("visuals", "theme"), ("visuals", "blocks")]),
     "visuals.background": ("visuals", [("visuals", "background")]),
@@ -442,7 +516,9 @@ GROUPS = {
 }  # "keep" is not a group: it is always this prompt's own list (see merge)
 # Groups a model tends to fill without being asked (copy, board sizes, colours, a level number,
 # assets): accepted only when declared AND the prompt's words show it asked for them.
-PRONE = {"level.size", "level.blocks", "level.colours", "level.label", "assets",
+PRONE = {"level.size", "level.blocks", "level.colours", "level.label", "assets", "level.pieces", "level.style", "level.shape",
+         "level.difficulty",
+         "gameplay.events", "gameplay.finish", "gameplay.clock_left", "pacing.curve", "pacing.length",
          *(f"concept.{k}" for k in CONCEPT_TEXTS)}
 COLOUR_WORDS_ANY = ("red", "blue", "green", "yellow", "orange", "purple", "pink", "teal", "mint", "lemon", "lilac",
                     "violet", "gold", "black", "white", "brown", "grey", "gray", "cyan", "magenta", "lime", "navy",
@@ -450,6 +526,39 @@ COLOUR_WORDS_ANY = ("red", "blue", "green", "yellow", "orange", "purple", "pink"
 NUMBER_WORDS_ANY = ("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "few", "many",
                     "lots", "dozen")
 SIZE_WORDS = ("big", "large", "small", "tiny", "huge", "wide", "tall", "narrow board", "compact")
+DIFFICULTY_WORDS = ("easy", "easier", "simple", "hard", "harder", "difficult", "difficulty", "tough", "tricky",
+                    "challenging", "challenge", "medium", "moderate", "impossible", "beginner", "beginners", "kid",
+                    "kids", "child", "children", "novice", "expert", "brutal", "insane", "relaxing", "relax", "calm",
+                    "asmr", "rage", "frustrating", "frustration", "nightmare", "brain", "genius", "nothing can leave",
+                    "level up", "makes you think", "make you think", "nobody can solve", "no one can solve",
+                    "can't solve", "cannot solve", "experienced", "pro", "pros", "advanced", "intense", "chill",
+                    "laid-back", "laid back", "relaxed", "hardcore", "casual")
+SHAPE_WORDS = ("narrow", "centre", "center", "middle", "waist", "bottleneck", "hourglass", "door", "doorway", "room",
+               "rooms", "gap", "hole", "holes", "pillar", "pillars", "obstacle", "obstacles", "cross", "plus", "ring",
+               "donut", "doughnut", "loop", "lane", "lanes", "corridor", "corridors", "shape", "shaped", "open",
+               "rectangle", "square", "layout", "structure", "wall", "walls", "maze", "empty", "plain", "corner",
+               "corners", "column", "columns", "row", "rows")
+PIECE_WORDS = ("big", "bigger", "chunky", "large", "huge", "giant", "small", "smaller", "tiny", "little", "long",
+               "longer", "bar", "bars", "stick", "sticks", "line", "lines", "short")
+STYLE_WORDS = ("symmetric", "symmetrical", "symmetry", "mirror", "mirrored", "packed", "full", "jam", "jammed",
+               "crowded", "dense", "busy", "colourful", "colorful", "rainbow", "every colour", "every color",
+               "all colours", "all colors", "all the colours", "all the colors", "visually", "pretty", "beautiful",
+               "interesting", "eye-catching", "eye catching", "striking", "satisfying to look", "looks", "gorgeous",
+               "stunning", "lots of colours", "lots of colors", "many colours", "many colors", "eye candy")
+ORDER_WORDS = ("first", "then", "last", "before", "after", "order", "one by one", "colour by colour",
+               "color by color", "finally", "next", "followed", "sequence", "until", "stuck", "hesitate",
+               "hesitates", "doubt", "pick up", "picks up", "picked up", "grab", "grabs", "out of the way",
+               "start", "starts", "start with", "begin", "begins", "end", "ends", "at the end", "very end",
+               "finish with", "finishes with", "escape", "escapes", "exit", "exits", "aside", "save", "saved",
+               "blocked", "gets blocked", "trapped", "can't reach", "cannot reach")
+BLOCK_WORDS = ("biggest", "smallest", "longest", "big", "small", "long", "block", "blocks", "piece", "one")
+FINISH_WORDS = ("satisfying", "satisfy", "one move", "single move", "chain", "cascade", "domino", "combo", "streak",
+                "in a row", "fly out", "flies out", "frees", "free them", "unlock", "relaxing", "relax", "asmr",
+                "calming", "calm", "oddly", "smooth", "speedrun", "flow", "one after another", "one after the other")
+CURVE_WORDS = ("tension", "tense", "build", "builds", "building", "rise", "rising", "rises", "escalate", "escalates",
+               "speeds up", "speed up", "faster and faster", "gets faster", "getting faster", "accelerate", "accelerates", "accelerating",
+               "slows down", "slow down", "slower and slower", "gets slower", "build up", "builds up", "ramp",
+               "start slow", "starts slow", "slow start", "start fast", "starts fast", "picks up pace", "pick up pace")
 COPY_WORDS = ("hook", "caption", "text", "copy", "say", "says", "tone", "angle", "line", "title", "button", "cta",
               "message", "slogan", "tagline", "ask", "question", "headline", "word", "write", "end card")
 
@@ -495,6 +604,34 @@ def _evidence(group: str, prompt: str, new: dict) -> str | None:
     if group == "level.label":
         label = new["level"]["label"]
         return None if label is None or str(label) in text else "the prompt gives no level number"
+    if group == "level.difficulty":
+        return None if _has_word(text, DIFFICULTY_WORDS) else "the prompt asks for no difficulty"
+    if group == "pacing.length":
+        clock = r"(?!\s*(left|remaining|on the clock|to spare|to go))"  # "2 seconds left" is the clock, not the ad
+        if re.search(rf"\d+\s*-?\s*(s|sec|secs|second|seconds|min|minute|minutes)\b{clock}", text) or \
+                _has_word(text, ("short", "shorter", "long", "longer", "minute", "half a minute", "quick ad", "brief",
+                                 "snappy", "quick one", "shortest", "longest")):
+            return None
+        return "the prompt gives no length for the ad"
+    if group == "level.shape":
+        return None if _has_word(text, SHAPE_WORDS) else "the prompt asks for no board shape"
+    if group == "level.pieces":
+        return None if _has_word(text, PIECE_WORDS) else "the prompt says nothing about the blocks' shapes"
+    if group == "level.style":
+        return None if _has_word(text, STYLE_WORDS) else "the prompt asks for no particular look of the board"
+    if group == "gameplay.events":
+        if _has_word(text, ORDER_WORDS) and (_has_word(text, COLOUR_WORDS_ANY) or _has_word(text, BLOCK_WORDS)):
+            return None
+        return "the prompt names no order of moves for particular blocks"
+    if group == "gameplay.finish":
+        return None if _has_word(text, FINISH_WORDS) else "the prompt asks for no particular finish"
+    if group == "gameplay.clock_left":
+        if re.search(r"\d+\s*(s|sec|secs|second|seconds)\b", text) or re.search(r"\b0?0:0\d\b", text) or \
+                _has_word(text, ("one second", "two seconds", "three seconds", "last second", "a second")):
+            return None
+        return "the prompt gives no seconds left on the clock"
+    if group == "pacing.curve":
+        return None if _has_word(text, CURVE_WORDS) else "the prompt asks for no change of pace over the video"
     if group.startswith("concept."):
         if QUOTED.search(prompt) or _has_word(text, COPY_WORDS + ("captions", "texts", "words", "says", "saying")):
             return None

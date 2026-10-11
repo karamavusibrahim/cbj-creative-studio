@@ -104,3 +104,18 @@ def test_creative_ids_cannot_reach_outside_the_studio(client, tmp_path, cid):
 def test_only_local_host_names_are_served(client):
     assert client.get("/api/meta", headers={"host": "evil.example"}).status_code == 400
     assert client.get("/api/meta", headers={"host": "127.0.0.1:8765"}).status_code == 200
+
+
+def test_level_only_preview_runs_without_recording(client, monkeypatch):
+    seen = {}
+
+    def fake_preview(brief, cid, log):
+        seen["brief"] = brief
+        log("planned 9 moves")
+        return {"level_why": "x", "board": "previews/a.png", "beats": [], "notes": [], "checks": [],
+                "controls": brief["controls"]}
+    monkeypatch.setattr(A.studio, "preview", fake_preview)
+    jid = client.post("/api/preview", json={"prompt": "x", "brief": B.default_brief()}).json()["job"]
+    j = wait(client, jid)
+    assert j["status"] == "done" and j["result"]["board"] == "previews/a.png"
+    assert seen["brief"]["gameplay"]["events"] == []  # the brief went through the engine's checks

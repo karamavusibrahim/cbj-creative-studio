@@ -5,9 +5,11 @@ Two kinds of numbers:
   many blocks can leave at the very start.
 - From a simulated naive player (the "simulated human" idea used to rate puzzle
   difficulty): it takes an exit whenever one is available, otherwise drags a random block
-  to a random reachable cell. The more drags it needs compared with the minimum, the
+  to a random reachable cell it has not had the board in before (a person does not go back
+  to a position they already tried). The more drags it needs compared with the minimum, the
   easier it is to go wrong on that board. The same naive moves are the believable
-  mistakes a near-fail creative can show.
+  mistakes a near-fail creative can show. It gives up after 12 drags per block; a board it
+  often gives up on is a maze, not a puzzle (the generator's fairness rule).
 
 The numbers are descriptive. Bands like "easy" or "hard" need calibration against real
 player data, so none are assigned here.
@@ -41,9 +43,14 @@ class Difficulty:
         return self.naive_mean / self.min_drags if self.min_drags else 1.0
 
 
+CAP_PER_BLOCK = 12
+
+
 def naive_play(level: Level, rng: random.Random, cap: int = 200) -> int | None:
-    """Drags a naive player uses to clear the level, or None if it hits the cap."""
+    """Drags a naive player uses to clear the level, or None if it hits the cap. It never drags
+    into a position it has had before, unless every drag leads back to one."""
     state = initial_state(level)
+    seen = {state}
     for used in range(cap):
         if all(p is None for p in state):
             return used
@@ -53,11 +60,16 @@ def naive_play(level: Level, rng: random.Random, cap: int = 200) -> int | None:
             if pivot is not None:
                 moves.extend(drag_outcomes(level, state, bid, occ, paths=False))
         exits = [m for m in moves if m.exits]
-        state = apply_drag(state, rng.choice(exits) if exits else rng.choice(moves))
+        if exits:
+            state = apply_drag(state, rng.choice(exits))
+        else:
+            fresh = [m for m in moves if apply_drag(state, m) not in seen]
+            state = apply_drag(state, rng.choice(fresh or moves))
+        seen.add(state)
     return used + 1 if all(p is None for p in state) else None
 
 
-def rate(level: Level, runs: int = 200, seed: int = 0, cap: int = 200,
+def rate(level: Level, runs: int = 200, seed: int = 0, cap: int | None = None,
          solution: Solution | None = None) -> Difficulty | None:
     """Difficulty numbers for a level, or None if it is unsolvable. The minimum comes from the A*
     solver (the same minimum as the BFS one, about 100x faster on hard boards), or from a solution
@@ -75,11 +87,13 @@ def rate(level: Level, runs: int = 200, seed: int = 0, cap: int = 200,
         first_moves += len(outs)
         exits_at_start += any(o.exits for o in outs)
     rng = random.Random(seed)
+    cap = cap or CAP_PER_BLOCK * max(1, len(level.blocks))
     results = [naive_play(level, rng, cap) for _ in range(runs)]
     done = sorted(r for r in results if r is not None)
     capped = runs - len(done)
-    # A capped run counts as the cap, so a board the naive player often fails cannot look easy.
-    counted = sorted(done + [cap] * capped)
+    # The mean is over the runs that finished; the ones that gave up are counted apart
+    # (naive_capped), and the generator refuses boards where more than a few do.
+    counted = done or [cap]
     return Difficulty(
         level_name=level.name,
         blocks=len(level.blocks),
@@ -87,8 +101,8 @@ def rate(level: Level, runs: int = 200, seed: int = 0, cap: int = 200,
         extra_drags=sol.extra_drags,
         exits_at_start=exits_at_start,
         first_moves=first_moves,
-        naive_mean=sum(counted) / runs,
-        naive_p90=counted[min(runs - 1, int(0.9 * runs))],
+        naive_mean=sum(counted) / len(counted),
+        naive_p90=counted[min(len(counted) - 1, int(0.9 * len(counted)))],
         naive_capped=capped,
         runs=runs,
     )

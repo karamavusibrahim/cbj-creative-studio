@@ -247,7 +247,7 @@ def test_rate_uses_the_fast_solver_with_the_same_numbers():
     from test_ad import LEVEL
     d = rate(load_level(LEVEL))
     assert (d.min_drags, d.extra_drags, d.exits_at_start) == (9, 2, 1)
-    assert round(d.naive_ratio, 2) == 1.29
+    assert round(d.naive_ratio, 2) == 1.26  # 1.29 before the naive player stopped repeating positions
 
 
 # ---------- the ad options a brief sets ----------

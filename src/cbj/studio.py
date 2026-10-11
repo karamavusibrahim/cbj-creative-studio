@@ -83,17 +83,73 @@ class Log:
 
 def resolve_level(brief: dict, log: Log) -> tuple[Path, str]:
     """The level file for the brief, and what was chosen. A prompt that says anything about the
-    level (shape, size, blocks, colours, difficulty) gets a generated one; a prompt that says
-    nothing gets the showcase: the hand-checked hard narrow-centre level."""
+    level (shape, size, blocks, piece shapes, looks, colours, difficulty) gets a generated one; a
+    prompt that says nothing gets the showcase: the hand-checked hard narrow-centre level, if it
+    can play the requested order of events, else a generated level that can."""
     from .generate import generate_for_brief
-    lv = brief["level"]
+    lv, gp = brief["level"], brief["gameplay"]
     if lv["source"] == "shipped" and lv["shipped"]:
         return LEVELS / f"Level_{lv['shipped']:02d}.json", f"the game's own Level {lv['shipped']}"
     described = (any(lv[k] is not None for k in ("width", "height", "blocks")) or lv["colours"]
-                 or lv["shape"] != "any" or lv["difficulty"] != "any")
+                 or lv["shape"] != "any" or lv["difficulty"] != "any" or lv["pieces"] != "mixed" or lv["style"])
     if lv["source"] == "generate" or described:
         return generate_for_brief(brief, STUDIO / "levels", log)
+    if gp["events"]:
+        why = _cannot_play(brief, NARROW)
+        if why:
+            log(f"the showcase level cannot play this order ({why}); generating a level that can...")
+            return generate_for_brief(brief, STUDIO / "levels", log)
+        return NARROW, "the hand-checked hard narrow-centre level (6x8, 7 blocks), which can play the requested order"
     return NARROW, "the hand-checked hard narrow-centre level (6x8, 7 blocks)"
+
+
+def _cannot_play(brief: dict, level_path: Path) -> str | None:
+    """Why this level cannot play the brief's events (None if it can, at most one drag longer)."""
+    from .events import SOLVER_ACTIONS, from_brief, try_solve_events
+    from .level import load_level
+    from .solver import solve_fast
+    level = load_level(level_path)
+    evs, notes = from_brief(level, brief["gameplay"]["events"])
+    if len(evs) < len(brief["gameplay"]["events"]):
+        return next((n for n in notes if "no such block" in n), notes[0])
+    solver = [e for e in evs if e.action in SOLVER_ACTIONS]
+    if solver:
+        sol = try_solve_events(level, solver)
+        if sol is None:
+            return "the steps cannot happen in that order"
+        if sol.min_drags > solve_fast(level).min_drags + 1:
+            return f"that order costs {sol.min_drags - solve_fast(level).min_drags} extra drags"
+    try:
+        script = _plan(brief, level, 0)
+    except ValueError as e:
+        return str(e)
+    missed = [n for n in script.notes if "not shown" in n or "not played" in n or "cannot happen" in n]
+    return missed[0] if missed else None
+
+
+def _plan(brief: dict, level, seed: int):
+    """The play script for the brief on a level (events resolved on it)."""
+    from .events import from_brief
+    from .play import plan
+    gp, pc = brief["gameplay"], brief["pacing"]
+    evs, notes = from_brief(level, gp["events"])
+    kw = dict(mistakes=gp["mistakes"], seed=seed, hesitations=gp["hesitations"],
+              kinds=tuple(gp["mistake_kinds"]) or None, clock_left=gp["clock_left_s"] or 1,
+              finish=gp["finish"], curve=pc["curve"])
+    try:
+        script = plan(level, gp["ending"], events=evs, **kw)
+    except ValueError as e:
+        if not evs:
+            raise
+        why = "" if "events cannot" in str(e) else f": {str(e).split(': ', 1)[-1]}"
+        notes.append(f"the requested order cannot happen on this level ({'; '.join(x.text for x in evs)}){why}; the "
+                     f"steps that need it are played without it")
+        try:
+            script = plan(level, gp["ending"], events=[x for x in evs if x.action in ("stuck", "hesitates")], **kw)
+        except ValueError:
+            script = plan(level, gp["ending"], events=[], **kw)
+    script.notes[:0] = notes
+    return script
 
 
 # ---------- recording ----------
@@ -115,10 +171,20 @@ def _recording_spec(brief: dict, level_path: Path) -> dict:
     gp, pc, vs = brief["gameplay"], brief["pacing"], brief["visuals"]
     hide = ["RestartButton"] + hud_hide(vs)
     label = brief["level"]["label"] or hud_label(load_level(level_path), level_path)
-    return {"level_sha": _sha(level_path.read_bytes()), "ending": gp["ending"], "mistakes": gp["mistakes"],
+    spec = {"level_sha": _sha(level_path.read_bytes()), "ending": gp["ending"], "mistakes": gp["mistakes"],
             "kinds": gp["mistake_kinds"], "hesitations": gp["hesitations"], "seed": gp["seed"] or 0,
             "tempo": pc["tempo"], "length_s": pc["length_s"], "label": label, "hide": hide,
             "zoom": vs["camera_zoom"] or 1.0, "timer_s": gp["timer_s"], "visuals": game_visuals(brief)}
+    # Written only when set, so a recording made before these existed keeps its key.
+    if gp["events"]:
+        spec["events"] = gp["events"]
+    if gp["finish"] != "auto":
+        spec["finish"] = gp["finish"]
+    if gp["clock_left_s"] not in (None, 1):
+        spec["clock_left"] = gp["clock_left_s"]
+    if pc["curve"] != "even":
+        spec["curve"] = pc["curve"]
+    return spec
 
 
 def _usable(folder: Path) -> bool:
@@ -175,7 +241,7 @@ def ensure_recording(brief: dict, level_path: Path, log: Log) -> tuple[Path, boo
     """The recording for the brief: found by its spec's hash, or made in the real game."""
     from .difficulty import rate
     from .level import load_level
-    from .play import END_MODE, plan, run, time_out_allowed
+    from .play import run, time_out_allowed
     from .render import Camera, level_label
     spec = _recording_spec(brief, level_path)
     key = _sha(json.dumps(spec, sort_keys=True))[:16]
@@ -200,8 +266,7 @@ def ensure_recording(brief: dict, level_path: Path, log: Log) -> tuple[Path, boo
                                         f"recorded instead.")
             gp["ending"] = "near_fail"
             return ensure_recording(brief, level_path, log)
-    script = plan(level, gp["ending"], mistakes=gp["mistakes"], seed=spec["seed"], hesitations=gp["hesitations"],
-                  kinds=tuple(gp["mistake_kinds"]) or None)
+    script = _plan(brief, level, spec["seed"])
     for n in script.notes:
         B.engine_note(brief, "gameplay", n + ".")
     n_m = sum(b.kind == "mistake" for b in script.beats)
@@ -217,8 +282,7 @@ def ensure_recording(brief: dict, level_path: Path, log: Log) -> tuple[Path, boo
     if result["problems"]:
         # A length fit can leave the clock fit no room; record again with the planned pauses.
         log("recording again with the planned pauses (no length fit)...")
-        script = plan(level, gp["ending"], mistakes=gp["mistakes"], seed=spec["seed"],
-                      hesitations=gp["hesitations"], kinds=tuple(gp["mistake_kinds"]) or None)
+        script = _plan(brief, level, spec["seed"])
         shutil.rmtree(out)
         result = run(level, level_path, script, out, **kw)
         for p in result["problems"]:
@@ -320,6 +384,52 @@ def build_and_render(brief: dict, rec_dir: Path, out: Path, log: Log, draft: boo
     return result
 
 
+# ---------- checks ----------
+
+def board_picture(brief: dict, level_path: Path, out: Path) -> None:
+    """The level drawn from its file, in the colours the ad shows (for the UI and reports)."""
+    from .level import load_level
+    from .preview import save_board
+    shown = B.display_colours(brief)
+    save_board(load_level(level_path), out, colours={s: v["hex"] for s, v in shown.items() if v["repainted"]})
+
+
+def gameplay_and_level_checks(brief: dict, rec_dir: Path, level_path: Path, log: Log) -> list[dict]:
+    """What the brief asked for, checked on the level file and on the recording."""
+    from .checks import gameplay_checks, level_checks
+    out = level_checks(brief, level_path) + gameplay_checks(brief, rec_dir, level_path)
+    for c in out:
+        if c["status"] != "info":
+            log(f"check: {c['check']}: {c['status']} ({c['detail']})")
+    return out
+
+
+def preview(brief: dict, cid: str | None, log: Log) -> dict:
+    """The level and the planned moves for a brief, without recording (seconds, not minutes): the
+    board picture, the move list, and what the plan had to change."""
+    from .level import load_level
+    for row in brief["controls"]:
+        row["engine"] = []
+    prev = versions(cid)[-1] if cid and creative_dir(cid).is_dir() and versions(cid) else None
+    log.begin("level", "choosing the level...")
+    if prev is not None and prev["brief"]["level"] == brief["level"]:
+        level_path, why = STUDIO / prev["level"]["file"], prev["level"]["why"]
+        log(f"the edit does not touch the level: v{prev['n']}'s level is kept")
+    else:
+        level_path, why = resolve_level(brief, log)
+    log(f"level: {why}")
+    level = load_level(level_path)
+    log.begin("recording", "planning the moves (no recording)...")
+    script = _plan(brief, level, brief["gameplay"]["seed"] or 0)
+    out = STUDIO / "previews" / f"{_sha(level_path.read_bytes() + json.dumps(game_visuals(brief)).encode())[:16]}.png"
+    board_picture(brief, level_path, out)
+    log(f"planned {len(script.beats)} moves" + (f"; {'; '.join(script.notes)}" if script.notes else ""))
+    from .checks import level_checks
+    return {"level_why": why, "board": str(out.resolve().relative_to(STUDIO.resolve())),
+            "beats": script.to_dict(level)["beats"], "notes": script.notes, "checks": level_checks(brief, level_path),
+            "controls": brief["controls"]}
+
+
 # ---------- versions ----------
 
 def _new_id(prompt: str) -> str:
@@ -345,7 +455,9 @@ def versions(cid: str) -> list[dict]:
     folder = creative_dir(cid)
     out = []
     for v in sorted(folder.glob("v*/version.json"), key=lambda p: int(p.parent.name[1:])):
-        out.append(json.loads(v.read_text()))
+        rec = json.loads(v.read_text())
+        rec["brief"] = B._complete(rec["brief"])  # a version made before a field existed has its default
+        out.append(rec)
     return out
 
 
@@ -456,8 +568,10 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
         level_path, level_why = stage("level", resolve_level, brief, log)
     shutil.copy(level_path, vdir / "level.json")
     log(f"level: {level_why}")
+    board_picture(brief, level_path, vdir / "board.png")
     log.begin("recording", "gameplay...")
     rec_dir, reused = stage("recording", ensure_recording, brief, level_path, log)
+    checks = gameplay_and_level_checks(brief, rec_dir, level_path, log)
     log.begin("compose", "the ad...")
     ad_dir = vdir / "ad"
     result = stage("compose", build_and_render, brief, rec_dir, ad_dir, log, draft)
@@ -468,6 +582,7 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
                   if level_path.resolve().is_relative_to(REPO.resolve()) else str(level_path),
                   "why": level_why, "sha": _sha(level_path.read_bytes())},
         "recording": {"dir": rel(rec_dir), "reused": reused},
+        "board": rel(vdir / "board.png"), "checks": checks,
         "ad_dir": rel(ad_dir), "video": rel(ad_dir / "ad.mp4"), "poster": rel(ad_dir / "poster.png"),
         "length_s": result["duration_s"], "qa": result["qa"], "stages": stages,
         "seconds": round(time.time() - t0, 1), "created": time.strftime("%Y-%m-%d %H:%M:%S"),
