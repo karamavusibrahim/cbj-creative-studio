@@ -55,7 +55,7 @@ visuals (control "visuals"):
 - blocks: repaint colour slots: [{"slot": "Red", "hex": "#FF69B4", "name": "pink"}]. name is how captions call that colour. Only slots the request wants repainted.
 - background: 0, 1 or 2 colours "#RRGGBB" (top and bottom of a gradient). board: the board's cell colour "#RRGGBB" or null.
 - caption_fill, caption_outline: "#RRGGBB" or null (the game's white text with a purple outline).
-- camera_zoom: 1.0-1.6 to frame the board closer, or null. cursor: "ring" (a tap ring, default), "hand" (a pointing hand), "none".
+- camera_zoom: 1.0-1.12 to frame the board a little closer (more crops the side gates), or null. cursor: "ring" (a tap ring, default), "hand" (a pointing hand), "none".
 - hud_timer, hud_level: false to hide the HUD's clock or level badge (default true).
 
 concept (control "concept"): angle = the idea in one line. Texts: hook (first frame), mistake (caption on the mistake), fix (on the move that fixes it), hurry (the last 5 seconds), cascade (the fast finish of a win), result (on the result screen), end_title, end_fact, cta (the button). LEAVE EVERY TEXT null UNLESS the request asks for specific copy, a tone, an angle or a language: the defaults are written for each ending and use measured facts. "" removes that caption (not the cta). Keep captions under 6 words. Texts may use facts measured from the recording, in braces: {clock_left} (e.g. 00:01), {time_used} (seconds used), {colour} (the colour of the block in the mistake or the fix), {blocks_left_phrase} (e.g. "two blocks"), {blocks_left}, {timer}, {blocks}. Any number about the play must be one of these facts. NEVER write statistics, odds, percentages, rankings or IQ claims ("only 1% can solve this" is forbidden by ad rules); dares are fine ("Can you beat it?"). If the request asks for such a claim, write the closest honest dare and set the concept row to "adjusted" with the reason.
@@ -79,7 +79,7 @@ assumptions: what you had to guess because the request was ambiguous, each with 
 
 summary: one sentence describing the ad that will be made.
 
-changed: the field groups the REQUEST asks to set or change, and nothing else. Groups: level.source, level.shape, level.size, level.blocks, level.colours, level.label, level.difficulty, gameplay.ending, gameplay.mistakes, gameplay.hesitations, gameplay.retake, gameplay.clock, pacing.length, pacing.tempo, channel, visuals.colours, visuals.background, visuals.board, visuals.captions, visuals.zoom, visuals.cursor, visuals.hud, format, language, concept.hook, concept.mistake, concept.fix, concept.hurry, concept.cascade, concept.result, concept.end_title, concept.end_fact, concept.cta, sequence, assets, audio, keep. Only fields in these groups are used; everything else keeps the tool's default (or, for an edit, its current value). So: "no sound" -> audio; "use a hand" -> visuals.cursor; "make the hook say X" -> concept.hook only; "a difficult level" -> level.difficulty."""
+changed: the field groups the REQUEST asks to set or change, and nothing else. Groups: level.source, level.shape, level.size, level.blocks, level.colours, level.label, level.difficulty, gameplay.ending, gameplay.mistakes, gameplay.hesitations, gameplay.retake, gameplay.clock, pacing.length, pacing.tempo, channel, visuals.colours, visuals.background, visuals.board, visuals.captions, visuals.zoom, visuals.cursor, visuals.hud, format, language, concept.hook, concept.mistake, concept.fix, concept.hurry, concept.cascade, concept.result, concept.end_title, concept.end_fact, concept.cta, sequence, assets, audio. (What to keep goes in "keep", not here.) Only fields in these groups are used; everything else keeps the tool's default (or, for an edit, its current value). So: "no sound" -> audio; "use a hand" -> visuals.cursor; "make the hook say X" -> concept.hook only; "a difficult level" -> level.difficulty."""
 
 EDIT = """This is an EDIT of an existing ad. The current brief is below. Return the complete brief with ONLY the changes the edit request asks for; copy every other field exactly. Mark "asked" only for the controls the edit request talks about (others: asked null, status "default", but keep their plan text). If the request says to keep something, list it in keep. If the request says "keep everything else" or similar, list everything except what it changes.
 
@@ -180,9 +180,16 @@ def _translate_defaults(brief: dict, client) -> None:
                            "cliffhanger": "Can you see the move?"}.get(ending)}
     todo = {k: v for k, v in defaults.items() if v and brief["concept"].get(k) is None}
     fresh = {**brief, "visuals": {**brief["visuals"], "names": {}}}  # names in English, before any translation
-    names = {f"colour_{slot}": v["name"] for slot, v in B.display_colours(fresh).items()}  # for the {colour} fact
-    brief["visuals"]["names"] = {}
+    english = {slot: v["name"] for slot, v in B.display_colours(fresh).items()}  # for the {colour} fact
+    old, src = brief["visuals"].get("names") or {}, brief["visuals"].get("names_src") or {}
+    # an edit keeps the earlier translation of a colour whose English name did not change, so
+    # captions it does not touch stay the same
+    brief["visuals"]["names"] = {s: n for s, n in old.items() if src.get(s) == english.get(s)}
+    brief["visuals"]["names_src"] = {s: english[s] for s in brief["visuals"]["names"]}
+    names = {f"colour_{slot}": name for slot, name in english.items() if slot not in brief["visuals"]["names"]}
     todo.update(names)
+    if not todo:
+        return
     schema = {"type": "object", "properties": {k: {"type": "string"} for k in todo}, "required": list(todo),
               "additionalProperties": False}
     try:
@@ -195,7 +202,9 @@ def _translate_defaults(brief: dict, client) -> None:
         if not (k in todo and isinstance(v, str) and v.strip()):
             continue
         if k.startswith("colour_"):
-            brief["visuals"]["names"][k[len("colour_"):]] = v.strip().lower()
+            slot = k[len("colour_"):]
+            brief["visuals"]["names"][slot] = v.strip().lower()
+            brief["visuals"]["names_src"][slot] = english[slot]
         elif not B._texts_ok(v):
             brief["concept"][k] = v.strip()
     row = B.control(brief, "concept")
@@ -235,7 +244,7 @@ def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprit
     if brief["language"] != "en":
         _translate_defaults(brief, client)
     else:
-        brief["visuals"]["names"] = {}
+        brief["visuals"]["names"], brief["visuals"]["names_src"] = {}, {}
     brief["planner"] = {"model": getattr(client, "last_model", None), "seconds": round(time.time() - t0, 1),
                         "prompt": prompt.strip(), "edit": current is not None, "restored": restored}
     return brief

@@ -371,3 +371,53 @@ def test_a_failed_recording_is_never_reused(tmp_path):
 def test_zoom_is_capped_to_keep_the_side_gates():
     b = B.check(raw_brief(visuals={"camera_zoom": 1.3}))
     assert b["visuals"]["camera_zoom"] == B.ZOOM_RANGE[1] and B.control(b, "visuals")["status"] == "adjusted"
+
+
+# ---------- the fixes from the Fable 5.1 confirmation ----------
+
+def test_keep_is_this_prompts_own_list():
+    old = B.check(raw_brief(keep=["level"]))
+    new = copy.deepcopy(old)
+    new["keep"] = ["level", "assets"]  # not declared as a change: still taken
+    merged, dropped = B.merge(old, new, "Keep the level and the logo, but make it harder.")
+    assert merged["keep"] == ["level", "assets"] and not any(d.startswith("keep") for d in dropped)
+    new["keep"] = []
+    merged, _ = B.merge(old, new, "Make it harder.")
+    assert merged["keep"] == []  # never inherited from the version being edited
+
+
+def test_keep_conflict_is_reported():
+    from cbj.studio import _keep_conflicts
+    old = B.check(B.default_brief())
+    new = copy.deepcopy(old)
+    new["level"]["difficulty"], new["keep"] = "hard", ["level"]
+    _keep_conflicts(old, new)
+    assert any("asked to keep the level" in n for n in B.control(new, "unchanged")["engine"])
+
+
+@pytest.mark.parametrize("group,prompt,ok", [
+    ("level.colours", "Cleared in a hundred seconds, centred board", False),
+    ("level.colours", "red and blue blocks", True),
+    ("level.size", "A 20-second ad, level 47", False),
+    ("level.size", "An 8x8 board", True),
+    ("level.size", "a big board", True),
+    ("level.blocks", "A 20-second ad", False),
+    ("level.blocks", "with 9 blocks", True),
+    ("concept.hook", "the player's first move is wrong", False),
+    ("concept.hook", "a rectangle online task", False),
+    ("concept.hook", "make the hook say 'Beat this!'", True),
+    ("concept.hook", 'end card: "Your turn"', True),
+])
+def test_evidence_matches_words_not_substrings(group, prompt, ok):
+    assert (B._evidence(group, prompt, B.default_brief()) is None) == ok
+
+
+def test_an_edit_keeps_earlier_colour_translations():
+    b = B.check(raw_brief(language="tr"))
+    b["visuals"]["names"], b["visuals"]["names_src"] = {"Red": "kırmızı"}, {"Red": "red"}
+    model = FakeModel({}, {"colour_Blue": "mavi"})
+    planner._translate_defaults(b, model)
+    assert b["visuals"]["names"]["Red"] == "kırmızı"  # kept, not asked again
+    assert b["visuals"]["names"]["Blue"] == "mavi"
+    asked_keys = [json.loads(u) for s, u in model.calls if s.startswith("Translate")][0]
+    assert "colour_Red" not in asked_keys

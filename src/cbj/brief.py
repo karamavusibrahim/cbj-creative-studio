@@ -161,7 +161,7 @@ def default_brief() -> dict:
         "pacing": {"length_s": 30.0, "tempo": "normal"},
         "visuals": {"theme": "game", "blocks": [], "background": [], "board": None, "caption_fill": None,
                     "caption_outline": None, "camera_zoom": None, "cursor": "ring", "hud_timer": True,
-                    "hud_level": True, "names": {}},
+                    "hud_level": True, "names": {}, "names_src": {}},
         "concept": {"angle": "", **{k: None for k in CONCEPT_TEXTS}},
         "sequence": {"style": "standard", "replay": True, "result_screen": True, "end_card": True},
         "assets": [],
@@ -439,8 +439,7 @@ GROUPS = {
     "sequence": ("sequence", [("sequence",)]),
     "assets": ("assets", [("assets",)]),
     "audio": ("assets", [("audio",)]),
-    "keep": ("unchanged", [("keep",)]),
-}
+}  # "keep" is not a group: it is always this prompt's own list (see merge)
 # Groups a model tends to fill without being asked (copy, board sizes, colours, a level number,
 # assets): accepted only when declared AND the prompt's words show it asked for them.
 PRONE = {"level.size", "level.blocks", "level.colours", "level.label", "assets",
@@ -467,27 +466,37 @@ def _set(d: dict, path: tuple, value) -> None:
     d[path[-1]] = value
 
 
+def _has_word(text: str, words) -> bool:
+    return any(re.search(rf"\b{re.escape(w)}\b", text) for w in words)
+
+
+QUOTED = re.compile(r"[\"“«]([^\"”»]{2,})[\"”»]|(?<![a-z])['‘]([^'’]{2,})['’](?![a-z])")
+
+
 def _evidence(group: str, prompt: str, new: dict) -> str | None:
     """None if the prompt's words support changing this group, else the reason it is not used."""
     text = prompt.lower()
-    words = set(re.findall(r"[a-z]+", text))
+    # numbers that are lengths, clocks or counts of other things are not board sizes
+    sized = re.sub(r"\d+(\.\d+)?\s*-?\s*(s|sec|secs|second|seconds|min|minute|minutes|%|percent)\b", " ", text)
+    sized = re.sub(r"\b(level|lvl)\s*\d+", " ", sized)
     if group == "level.size":
-        if re.search(r"\d", text) or any(w in text for w in SIZE_WORDS):
+        if re.search(r"\d\s*(x|by|×)\s*\d", sized) or _has_word(sized, ("big", "large", "small", "tiny", "huge", "wide",
+                                                                           "tall", "compact")):
             return None
         return "the prompt gives no board size"
     if group == "level.blocks":
-        if re.search(r"\d", text) or words & set(NUMBER_WORDS_ANY):
+        if re.search(r"\d", sized) or _has_word(sized, NUMBER_WORDS_ANY):
             return None
         return "the prompt gives no block count"
     if group == "level.colours":
-        if any(w in text for w in COLOUR_WORDS_ANY):
+        if _has_word(text, COLOUR_WORDS_ANY + ("colours", "colors")):
             return None
         return "the prompt names no colours"
     if group == "level.label":
         label = new["level"]["label"]
         return None if label is None or str(label) in text else "the prompt gives no level number"
     if group.startswith("concept."):
-        if any(q in prompt for q in "'\"“”‘’«»") or any(w in text for w in COPY_WORDS):
+        if QUOTED.search(prompt) or _has_word(text, COPY_WORDS + ("captions", "texts", "words", "says", "saying")):
             return None
         return "the prompt asks for no wording"
     return None
@@ -505,6 +514,9 @@ def merge(base: dict, new: dict, prompt: str) -> tuple[dict, list[str]]:
     declared = set(new.get("changed") or [])
     asked = {c["control"] for c in new["controls"] if c.get("asked") and c["control"] != "unchanged"}
     lang_changed = new.get("language") != base.get("language")
+    # What to keep is always this prompt's own list: never inherited from the version being
+    # edited (it would contradict the next edit) and never gated (it changes nothing by itself).
+    merged["keep"] = [k for k in dict.fromkeys(new.get("keep") or []) if k in KEEP]
     taken, dropped = [], []
     for group, (ctl, paths) in GROUPS.items():
         if all(_get(new, p) == _get(base, p) for p in paths):

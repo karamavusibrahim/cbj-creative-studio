@@ -351,6 +351,8 @@ def _proof(prev: dict, cur: dict) -> dict:
     """What changed between two versions, with the strongest proof each case allows."""
     from .compose import diff
     changed = B.changed_controls(prev["brief"], cur["brief"])
+    if prev["level"]["sha"] != cur["level"]["sha"] and "level" not in changed:
+        changed = ["level", *changed]  # a new level, even if only its difficulty was asked for
     proof = {"changed_controls": [B.CONTROL_TITLES[c] for c in changed]}
     if prev["recording"]["dir"] == cur["recording"]["dir"]:
         proof["gameplay"] = "identical: the same recording was reused (not re-recorded)"
