@@ -142,7 +142,10 @@ def test_texts_use_facts_only():
                                       ("Can you beat the clock?", False), ("Phew! 00:01 left", False),
                                       ("Only 00:01 to spare!", False), ("Only one block left", False),
                                       ("Level 3 in 12 seconds", False), ("1/100 can do it", True),
-                                      ("One in a hundred solve it", True), ("only 5 users finish", True)])
+                                      ("One in a hundred solve it", True), ("only 5 users finish", True),
+                                      ("1/5 of players fail", True), ("Level 10/12", False),
+                                      ("2 in 1 puzzle", False), ("1 in 10 moves", False),
+                                      ("3 in a row", False), ("Cleared in 12 seconds", False)])
 def test_copy_guard(text, bad):
     assert bool(copy_problems(text)) == bad
 
@@ -389,6 +392,23 @@ def test_ad_diff_fails_a_hidden_locked_change_and_refuses_a_failed_render(render
     render(bad, tmp_path / "failed", draft=True)
     with pytest.raises(ValueError, match="failed QA"):
         diff(out_a, tmp_path / "failed")
+
+
+def test_ad_diff_never_calls_the_video_identical_when_a_keyframe_moved(rendered, tmp_path, capsys):
+    """Moving a layer that draws nothing changes no composited frame, but its new boundary is a new
+    IDR frame, so the MP4 does differ there. ad-diff must say so and show the decoded result."""
+    out_a, _ = rendered
+    base = json.loads((out_a / "ad.json").read_text())
+    base["layers"]["urgency"]["max_alpha"] = 0
+    moved = copy.deepcopy(base)
+    moved["layers"]["urgency"]["start"]["offset"] = 0.5
+    ra, rb = render(base, tmp_path / "base", draft=True), render(moved, tmp_path / "moved", draft=True)
+    assert ra["keyframes"] != rb["keyframes"] and ra["frame_sha256"] == rb["frame_sha256"]
+    d = diff(tmp_path / "base", tmp_path / "moved", decode=True)
+    assert d["changed_frames"] == [] and not d["same_keyframes"] and d["mp4_local"]
+    assert cli.main(["ad-diff", str(tmp_path / "base"), str(tmp_path / "moved"), "--decode"]) == 0
+    out = capsys.readouterr().out
+    assert "video is identical" not in out and "keyframes moved" in out and "MP4 decoded" in out
 
 
 def test_a_window_may_not_run_past_its_segment(ad):

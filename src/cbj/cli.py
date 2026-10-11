@@ -297,15 +297,18 @@ def _cmd_ad_diff(args) -> int:
               + ("every change is inside them" if d["contained"] else "SOME CHANGES ARE OUTSIDE THEM"))
     if d["same_mp4"]:
         print("MP4: identical files")
-    elif n == 0:
+        return 0 if d["ok"] else 1
+    if n == 0 and d["same_keyframes"]:
+        # No frame drew differently and every GOP starts where it did: the encoder saw the same input.
         print("MP4: the video is identical" + ("" if d["same_sound"] else "; only the sound changed"))
     else:
+        # A keyframe that moves re-encodes its GOP even when no composited frame changed.
         how = ("same keyframes, so only the GOPs holding a changed frame can differ"
                if d["same_keyframes"] else "keyframes moved (a timing edit), so the video can differ from there on")
         print(f"MP4: {how}: frames {fmt(d['mp4_may_differ'])}")
-        if "mp4_differs" in d:
-            print(f"MP4 decoded: frames that differ {fmt(d['mp4_differs'])}: "
-                  + ("all inside those GOPs" if d["mp4_local"] else "SOME OUTSIDE THEM"))
+    if "mp4_differs" in d:
+        print(f"MP4 decoded: frames that differ {fmt(d['mp4_differs'])}: "
+              + ("all inside those GOPs" if d["mp4_local"] else "SOME OUTSIDE THEM"))
     return 0 if d["ok"] else 1
 
 

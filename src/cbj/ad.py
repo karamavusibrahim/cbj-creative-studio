@@ -56,9 +56,11 @@ UNITS = r"(seconds?|secs?|minutes?|mins?|moves?|drags?|tries|attempts|levels?|bl
 FORBIDDEN = [(r"\d\s*(%|percent\b)", "a percentage"),
              (rf"\bonly\s+(\d+|one|a\s+few)\s*{WHO}", "'only N' about players"),
              (r"\bonly\s+\d+\s*(can|could|will|get|solve)\b", "'only N' about players"),
-             (r"\bIQ\b", "an IQ claim"),
-             (rf"\b(\d+|one)\s+(in|out\s+of)\s+(a\s+)?(\d+|hundred|thousand|million)\b(?!\s*{UNITS})", "odds"),
-             (r"\b\d+\s*/\s*\d{2,}\b", "odds")]
+             (r"\bIQ\b", "an IQ claim")]
+# Odds are a fraction: "1 in 100", "one in a hundred", "1/5 of players". Not odds: a count or a
+# time ("Level 3 in 12 seconds", "1 in 10 moves"), a counter ("Level 10/12"), "2 in 1".
+ODDS = re.compile(r"\b(\d+|one)\s*(?:\bin\b|\bout\s+of\b|/)\s*(?:a\s+)?(\d+|hundred|thousand|million)\b", re.I)
+_AMOUNT = {"one": 1, "hundred": 100, "thousand": 1000, "million": 1000000}
 FACT_KEYS = ("clock_left", "colour", "timer", "blocks", "time_used", "blocks_left", "blocks_left_phrase")
 NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
 NBSP = "\u00a0"  # keeps a multi-word fact ("dark green") on one line
@@ -274,9 +276,21 @@ def reading_s(text: str) -> float:
     return max(0.8, 0.4 + 0.3 * len(text.replace(NBSP, " ").split()))
 
 
+def _states_odds(text: str) -> bool:
+    for m in ODDS.finditer(text):
+        num, den = (int(g) if g.isdigit() else _AMOUNT[g.lower()] for g in m.groups())
+        before, after = text[:m.start()], text[m.end():]
+        if (num < den and not re.match(rf"\s*{UNITS}\b", after, re.I)
+                and not re.search(r"\b(level|lvl|stage)\s*$", before, re.I)):
+            return True
+    return False
+
+
 def copy_problems(text: str) -> list[str]:
-    return [f"text {text!r} states {what}; ad rules allow dares, not invented odds"
-            for pat, what in FORBIDDEN if re.search(pat, text, re.I)]
+    found = [what for pat, what in FORBIDDEN if re.search(pat, text, re.I)]
+    if _states_odds(text):
+        found.append("odds")
+    return [f"text {text!r} states {what}; ad rules allow dares, not invented odds" for what in found]
 
 
 # ---------- building the default ad ----------
