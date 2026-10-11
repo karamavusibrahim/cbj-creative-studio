@@ -504,10 +504,11 @@ to something the game can do, with the reason. *not supported*: impossible here,
 reason (for example "turn the blocks into 3D cats"). Nothing is dropped silently.
 
 **Checks in code, not in the prompt.** The model is told the rules, but the code enforces them:
-- a control the prompt does not mention keeps its default (a new ad) or its previous value (an
-  edit), so the model cannot add copy, colours or assets nobody asked for;
-- an uploaded image is used only if the prompt refers to it; a HUD level number only if the
-  prompt gives one;
+- the model declares which field groups the prompt changes (`changed` in the brief); only those
+  are taken, and every other field keeps its default (a new ad) or its previous value (an edit);
+- copy, board size, block count, colours, the HUD level number and uploads are also taken only
+  when the prompt's own words ask for them, so the model cannot add copy, sizes or images
+  nobody asked for (an edit keeps the images its version already uses);
 - every text goes through the copy guard and may only use measured facts;
 - repainted colours must stay easy to tell apart (each colour has its own gate);
 - a time-out is a social-channel ending on a medium or hard level; the clock of a near-fail is
