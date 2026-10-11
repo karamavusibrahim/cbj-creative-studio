@@ -119,6 +119,7 @@
       <div class="drop" id="drop">Attach images (logo, mascot, hand, end-card art): drop here or click. Say in the prompt how to use them.</div>
       <input type="file" id="file" accept="image/png,image/jpeg,image/webp" multiple class="hidden">
       <div class="chips" id="files"></div>
+      <div class="chips" id="earlier"></div>
       <div class="row" style="margin-top: 12px;">
         <button id="btnPlanMake" onclick="planAndMake()">Plan &amp; make</button>
         <button id="btnPlan" class="ghost" onclick="plan(false)">Plan only</button>
@@ -198,6 +199,7 @@ function setMode() {
 }
 
 function busy(on) {
+  S.busy = on;
   ["btnPlanMake", "btnPlan", "btnMake"].forEach(id => $(id).disabled = on);
 }
 
@@ -226,10 +228,12 @@ async function poll(jid) {
 
 function renderBrief(b, title) {
   if (!b) { $("understoodBody").innerHTML = '<span class="muted">Nothing planned.</span>'; return; }
+  const groups = S.meta.groups || {};
+  const changedBy = c => (b.changed || []).filter(g => (groups[g] || "") === c.control);
   const rows = b.controls.map(c => `<tr>
       <td class="ctl">${esc(S.meta.controls?.[c.control] || c.control)}</td>
       <td>${c.asked ? `<span class="asked">“${esc(c.asked)}”</span>` : '<span class="none">not mentioned</span>'}</td>
-      <td>${esc(c.plan)}${c.why ? `<div class="why ${c.status === "not_supported" ? "bad" : ""}">${esc(c.why)}</div>` : ""}${(c.engine || []).map(n => `<div class="why">While making it: ${esc(n)}</div>`).join("")}</td>
+      <td>${esc(c.plan)}${changedBy(c).length ? `<div class="muted" style="margin-top:4px">Fields set by the prompt: ${esc(changedBy(c).join(", "))}</div>` : ""}${c.why ? `<div class="why ${c.status === "not_supported" ? "bad" : ""}">${esc(c.why)}</div>` : ""}${(c.engine || []).map(n => `<div class="why">While making it: ${esc(n)}</div>`).join("")}</td>
       <td><span class="st ${c.status}">${c.status.replace("_", " ")}</span></td></tr>`).join("");
   const p = b.planner || {};
   const restored = (p.restored || []).length ? `<p class="muted">${p.edit ? "Kept from the previous version (the edit did not ask about it)" : "Left at the defaults (the prompt did not ask about it, so the planner's suggestions there were not used)"}: ${esc(p.restored.map(r => r.split(" (")[0]).join(", "))}</p>` : "";
@@ -298,14 +302,19 @@ function newCreative() {
 async function plan(thenMake) {
   const prompt = $("prompt").value.trim();
   if (!prompt) { $("prompt").focus(); return; }
+  $("err").classList.add("hidden");
   busy(true); $("btnMake").classList.add("hidden");
   try {
     const {job} = await api("/api/plan", {prompt, creative_id: S.cid, uploads: S.files});
     S.brief = await poll(job); S.briefPrompt = prompt;
     renderBrief(S.brief, S.cid ? "Planned edit (not made yet)" : "Planned (not made yet)");
     if (thenMake) await make(); else $("btnMake").classList.remove("hidden");
-  } catch (e) { console.error(e); }
+  } catch (e) { showError(e); }
   finally { busy(false); }
+}
+
+function showError(e) {
+  $("err").textContent = String(e.message || e); $("err").classList.remove("hidden");
 }
 
 async function make() {
@@ -316,15 +325,23 @@ async function make() {
     const v = await poll(job);
     S.brief = null; S.files = []; renderFiles(); $("prompt").value = "";
     await loadCreative(v.id, v.n);
-  } catch (e) { console.error(e); }
+  } catch (e) { showError(e); if (S.brief) $("btnMake").classList.remove("hidden"); }
   finally { busy(false); }
 }
 
 function planAndMake() { plan(true); }
 
+function renderEarlier() {
+  const rest = (S.meta.uploads || []).filter(f => !S.files.includes(f));
+  $("earlier").innerHTML = rest.length ? `<span class="muted" style="align-self:center">Uploaded before:</span>` +
+    rest.map(f => `<button class="chip" data-f="${esc(f)}">+ ${esc(f)}</button>`).join("") : "";
+  [...$("earlier").querySelectorAll("button[data-f]")].forEach(b => b.onclick = () => { S.files.push(b.dataset.f); renderFiles(); });
+}
+
 function renderFiles() {
   $("files").innerHTML = S.files.map((f, i) => `<span class="chip file">${esc(f)}<span data-i="${i}">✕</span></span>`).join("");
   [...$("files").querySelectorAll("span[data-i]")].forEach(x => x.onclick = () => { S.files.splice(+x.dataset.i, 1); renderFiles(); });
+  renderEarlier();
 }
 
 async function upload(fileList) {
@@ -333,7 +350,8 @@ async function upload(fileList) {
   const r = await fetch("/api/upload", {method: "POST", body: fd});
   const j = await r.json();
   if (!r.ok) { alert(j.detail || "upload failed"); return; }
-  S.files.push(...j.uploaded.filter(n => !S.files.includes(n))); renderFiles();
+  S.files.push(...j.uploaded.filter(n => !S.files.includes(n)));
+  S.meta.uploads = [...new Set([...(S.meta.uploads || []), ...j.uploaded])]; renderFiles();
 }
 
 $("drop").onclick = () => $("file").click();
@@ -341,12 +359,12 @@ $("file").onchange = e => upload(e.target.files);
 $("drop").ondragover = e => { e.preventDefault(); $("drop").classList.add("over"); };
 $("drop").ondragleave = () => $("drop").classList.remove("over");
 $("drop").ondrop = e => { e.preventDefault(); $("drop").classList.remove("over"); upload(e.dataTransfer.files); };
-$("prompt").addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) planAndMake(); });
+$("prompt").addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !S.busy) planAndMake(); });
 
 (async () => {
   S.meta = await api("/api/meta");
   $("meta").textContent = `planner: ${S.meta.models[0].split("/").pop()}`;
-  renderStages(""); setMode(); refreshHistory();
+  renderStages(""); setMode(); refreshHistory(); renderEarlier();
 })();
 </script>
 </body>

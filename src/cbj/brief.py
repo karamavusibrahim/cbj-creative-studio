@@ -56,7 +56,7 @@ KEEP = ("level", "gameplay", "timing", "camera", "visuals", "copy", "sequence", 
 CONCEPT_TEXTS = ("hook", "mistake", "fix", "hurry", "cascade", "result", "end_title", "end_fact", "cta")
 FORMATS = ("9:16", "1:1", "4:5", "16:9")
 LENGTH_RANGE_S = (15.0, 60.0)
-ZOOM_RANGE = (1.0, 1.6)
+ZOOM_RANGE = (1.0, 1.12)  # closer crops the side gates of a typical board out of frame
 SHIPPED = range(1, 7)
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -141,6 +141,7 @@ SCHEMA = _obj({
         "file": _S, "role": _enum(ASSET_ROLES), "when": _enum(ASSET_WHEN), "where": _enum(ASSET_WHERE)})},
     "audio": _obj({"sfx": _B}),
     "keep": {"type": "array", "items": _enum(KEEP)},
+    "changed": {"type": "array", "items": {"type": "string"}},
 })
 
 
@@ -160,12 +161,13 @@ def default_brief() -> dict:
         "pacing": {"length_s": 30.0, "tempo": "normal"},
         "visuals": {"theme": "game", "blocks": [], "background": [], "board": None, "caption_fill": None,
                     "caption_outline": None, "camera_zoom": None, "cursor": "ring", "hud_timer": True,
-                    "hud_level": True},
+                    "hud_level": True, "names": {}},
         "concept": {"angle": "", **{k: None for k in CONCEPT_TEXTS}},
         "sequence": {"style": "standard", "replay": True, "result_screen": True, "end_card": True},
         "assets": [],
         "audio": {"sfx": True},
         "keep": [],
+        "changed": [],
     }
 
 
@@ -188,14 +190,15 @@ def adjust(brief: dict, name: str, why: str, status: str = "adjusted") -> None:
         row["why"] = why
 
 
-def engine_note(brief: dict, name: str, text: str, status: str = "adjusted") -> None:
+def engine_note(brief: dict, name: str, text: str, status: str | None = "adjusted") -> None:
     """A note from making this version (the level, the recording, the ad), kept apart from the
-    planner's reasons and cleared when the next version is made."""
+    planner's reasons and cleared when the next version is made. status None: a confirmation
+    (done as asked) that does not change the row's status."""
     row = control(brief, name)
     notes = row.setdefault("engine", [])
     if text not in notes:
         notes.append(text)
-    if row["status"] != "not_supported":
+    if status and row["status"] != "not_supported":
         row["status"] = status
 
 
@@ -219,6 +222,9 @@ def display_colours(brief: dict) -> dict[str, dict]:
         out[slot] = {"hex": hx, "name": name, "repainted": True}
     for e in vs["blocks"]:
         out[e["slot"]] = {"hex": e["hex"], "name": e["name"] or COLOUR_WORDS[e["slot"]], "repainted": True}
+    for slot, name in (vs.get("names") or {}).items():  # names in the ad's language
+        if slot in out and name:
+            out[slot]["name"] = name
     return out
 
 
@@ -400,23 +406,53 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
     return b
 
 
-# The brief fields each control owns (a path of keys; one key = the whole section). An edit may
-# only change the fields of the controls it asks about.
-OWNS = {
-    "level": [("level", k) for k in ("source", "shipped", "shape", "width", "height", "blocks", "colours", "label")],
-    "gameplay": [("gameplay", k) for k in ("ending", "mistakes", "mistake_kinds", "hesitations", "seed")],
-    "difficulty_pacing": [("level", "difficulty"), ("pacing", "length_s"), ("pacing", "tempo"), ("gameplay", "timer_s")],
-    "visuals": [("visuals", k) for k in ("theme", "blocks", "background", "board", "caption_fill", "caption_outline",
-                                         "camera_zoom", "cursor", "hud_timer", "hud_level")] + [("format",)],
-    "concept": [("concept",)],
-    "sequence": [("sequence",)],
-    "assets": [("assets",), ("audio",)],
+# ---------- which fields a prompt may change ----------
+
+# Field groups: what the planner declares it changed ("changed" in the brief), the control each
+# belongs to, and the brief fields in it.
+GROUPS = {
+    "level.source": ("level", [("level", "source"), ("level", "shipped")]),
+    "level.shape": ("level", [("level", "shape")]),
+    "level.size": ("level", [("level", "width"), ("level", "height")]),
+    "level.blocks": ("level", [("level", "blocks")]),
+    "level.colours": ("level", [("level", "colours")]),
+    "level.label": ("level", [("level", "label")]),
+    "level.difficulty": ("difficulty_pacing", [("level", "difficulty")]),
+    "gameplay.ending": ("gameplay", [("gameplay", "ending")]),
+    "gameplay.mistakes": ("gameplay", [("gameplay", "mistakes"), ("gameplay", "mistake_kinds")]),
+    "gameplay.hesitations": ("gameplay", [("gameplay", "hesitations")]),
+    "gameplay.retake": ("gameplay", [("gameplay", "seed")]),
+    "gameplay.clock": ("difficulty_pacing", [("gameplay", "timer_s")]),
+    "pacing.length": ("difficulty_pacing", [("pacing", "length_s")]),
+    "pacing.tempo": ("difficulty_pacing", [("pacing", "tempo")]),
+    "channel": ("gameplay", [("channel",)]),
+    "visuals.colours": ("visuals", [("visuals", "theme"), ("visuals", "blocks")]),
+    "visuals.background": ("visuals", [("visuals", "background")]),
+    "visuals.board": ("visuals", [("visuals", "board")]),
+    "visuals.captions": ("visuals", [("visuals", "caption_fill"), ("visuals", "caption_outline")]),
+    "visuals.zoom": ("visuals", [("visuals", "camera_zoom")]),
+    "visuals.cursor": ("visuals", [("visuals", "cursor")]),
+    "visuals.hud": ("visuals", [("visuals", "hud_timer"), ("visuals", "hud_level")]),
+    "format": ("visuals", [("format",)]),
+    "language": ("concept", [("language",)]),
+    **{f"concept.{k}": ("concept", [("concept", k)]) for k in CONCEPT_TEXTS},
+    "sequence": ("sequence", [("sequence",)]),
+    "assets": ("assets", [("assets",)]),
+    "audio": ("assets", [("audio",)]),
+    "keep": ("unchanged", [("keep",)]),
 }
-# Fields a prompt can reach through more than one control: "a difficult level" may be read as the
-# level control, "solves it fast" as gameplay, "use a hand" as assets, "no sound" as concept. Such
-# a field is restored only if none of its controls was asked about.
-ALSO = {("level", "difficulty"): ("level",), ("pacing", "tempo"): ("gameplay",), ("gameplay", "timer_s"): ("gameplay",),
-        ("visuals", "cursor"): ("assets",), ("assets",): ("visuals",), ("audio",): ("concept",)}
+# Groups a model tends to fill without being asked (copy, board sizes, colours, a level number,
+# assets): accepted only when declared AND the prompt's words show it asked for them.
+PRONE = {"level.size", "level.blocks", "level.colours", "level.label", "assets",
+         *(f"concept.{k}" for k in CONCEPT_TEXTS)}
+COLOUR_WORDS_ANY = ("red", "blue", "green", "yellow", "orange", "purple", "pink", "teal", "mint", "lemon", "lilac",
+                    "violet", "gold", "black", "white", "brown", "grey", "gray", "cyan", "magenta", "lime", "navy",
+                    "turquoise", "peach", "rose", "colour", "color", "candy", "pastel", "neon")
+NUMBER_WORDS_ANY = ("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "few", "many",
+                    "lots", "dozen")
+SIZE_WORDS = ("big", "large", "small", "tiny", "huge", "wide", "tall", "narrow board", "compact")
+COPY_WORDS = ("hook", "caption", "text", "copy", "say", "says", "tone", "angle", "line", "title", "button", "cta",
+              "message", "slogan", "tagline", "ask", "question", "headline", "word", "write", "end card")
 
 
 def _get(d: dict, path: tuple):
@@ -431,28 +467,74 @@ def _set(d: dict, path: tuple, value) -> None:
     d[path[-1]] = value
 
 
-def merge_edit(old: dict, new: dict, keep_plans: bool = True) -> tuple[dict, list[str]]:
-    """An edit may only change what the edit prompt asked about: the fields of every control the
-    planner did not mark as asked are restored from the previous version (the case's "only the
-    requested element should change", p.7). Returns the merged brief and what was restored."""
-    merged = copy.deepcopy(new)
-    asked = {c["control"] for c in new["controls"] if c.get("asked")}
-    restored = []
-    for ctl, paths in OWNS.items():
-        if ctl in asked:
+def _evidence(group: str, prompt: str, new: dict) -> str | None:
+    """None if the prompt's words support changing this group, else the reason it is not used."""
+    text = prompt.lower()
+    words = set(re.findall(r"[a-z]+", text))
+    if group == "level.size":
+        if re.search(r"\d", text) or any(w in text for w in SIZE_WORDS):
+            return None
+        return "the prompt gives no board size"
+    if group == "level.blocks":
+        if re.search(r"\d", text) or words & set(NUMBER_WORDS_ANY):
+            return None
+        return "the prompt gives no block count"
+    if group == "level.colours":
+        if any(w in text for w in COLOUR_WORDS_ANY):
+            return None
+        return "the prompt names no colours"
+    if group == "level.label":
+        label = new["level"]["label"]
+        return None if label is None or str(label) in text else "the prompt gives no level number"
+    if group.startswith("concept."):
+        if any(q in prompt for q in "'\"“”‘’«»") or any(w in text for w in COPY_WORDS):
+            return None
+        return "the prompt asks for no wording"
+    return None
+
+
+def merge(base: dict, new: dict, prompt: str) -> tuple[dict, list[str]]:
+    """The planner's brief, keeping only what the prompt asked to change: every other field keeps
+    its value in `base` (the defaults for a new ad, the current version for an edit). The case:
+    "only the requested element should change" (p.7). Returns the brief and what was not taken,
+    with the reason."""
+    merged = copy.deepcopy(base)
+    for k in ("summary", "controls", "assumptions"):
+        merged[k] = copy.deepcopy(new.get(k, merged.get(k)))
+    merged["concept"]["angle"] = new["concept"].get("angle", "")
+    declared = set(new.get("changed") or [])
+    asked = {c["control"] for c in new["controls"] if c.get("asked") and c["control"] != "unchanged"}
+    lang_changed = new.get("language") != base.get("language")
+    taken, dropped = [], []
+    for group, (ctl, paths) in GROUPS.items():
+        if all(_get(new, p) == _get(base, p) for p in paths):
             continue
-        for path in paths:
-            if any(o in asked for o in ALSO.get(path, ())):
-                continue
-            if _get(merged, path) != _get(old, path):
-                _set(merged, path, copy.deepcopy(_get(old, path)))
-                restored.append(f"{'.'.join(path)} (not asked about: {CONTROL_TITLES[ctl].lower()})")
-        if keep_plans:
-            control(merged, ctl)["plan"] = control(old, ctl).get("plan") or control(merged, ctl)["plan"]
-    merged["keep"] = sorted(set(new.get("keep", [])) & set(KEEP))
-    return merged, restored
+        if group in PRONE:
+            ok = group in declared or (group.startswith("concept.") and lang_changed)
+            why = _evidence(group, prompt, new) if ok else "not among the changes the prompt asked for"
+            if group.startswith("concept.") and lang_changed:
+                why = None  # a new language rewrites the copy
+        else:
+            ok = group in declared or ctl in asked
+            why = None if ok else "not among the changes the prompt asked for"
+        if why is None:
+            for path in paths:
+                _set(merged, path, copy.deepcopy(_get(new, path)))
+            taken.append(group)
+        else:
+            dropped.append(f"{group}: {why}")
+    merged["changed"] = taken
+    return merged, dropped
 
 
 def changed_controls(old: dict, new: dict) -> list[str]:
-    """The controls whose fields differ between two briefs."""
-    return [ctl for ctl, paths in OWNS.items() if any(_get(old, p) != _get(new, p) for p in paths)]
+    """The controls whose fields differ between two briefs, in the case's order."""
+    out = []
+    for group, (ctl, paths) in GROUPS.items():
+        if any(_get(old, p) != _get(new, p) for p in paths) and ctl not in out:
+            out.append(ctl)
+    return sorted(out, key=CONTROLS.index)
+
+
+SCHEMA["properties"]["changed"] = {"type": "array", "items": _enum(GROUPS),
+                                   "description": "Every field group the request asks to set or change."}

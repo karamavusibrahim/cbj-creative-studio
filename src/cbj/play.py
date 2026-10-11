@@ -63,6 +63,7 @@ CASCADE_DRAGS = 3
 
 NEAR_FAIL_LEFT_S = 1.5  # clock left when the last block starts leaving: the HUD shows 00:01
 NEAR_FAIL_RANGE_S = (1.3, 1.7)
+NEAR_FAIL_MARGIN_S = 0.05  # the fit stays this far inside the range: the game's clock is measured in floats
 CLIFF_LEFT_S = 8  # clock left at a cliffhanger's cut: the HUD shows 00:08
 CLIFF_RANGE_S = (5, 12)
 CALM_MARGIN_S = 55  # a plain win keeps the clock above 0:50, where the HUD flashes red
@@ -724,7 +725,7 @@ def fit_clock(script: PlayScript, level: Level, dry_beats: list[Beat], dry: dict
         # Any clock left in NEAR_FAIL_RANGE_S shows 00:01. Try both whole-second timers around the
         # target and every shift that lands in the range, closest to 1.5 s first, until the
         # pauses can absorb it (a short script has little room in its pauses).
-        lo, hi = NEAR_FAIL_RANGE_S
+        lo, hi = NEAR_FAIL_RANGE_S[0] + NEAR_FAIL_MARGIN_S, NEAR_FAIL_RANGE_S[1] - NEAR_FAIL_MARGIN_S
         options = []
         for timer in {max(2, math.floor(e + NEAR_FAIL_LEFT_S)), max(2, math.ceil(e + NEAR_FAIL_LEFT_S))}:
             for delta in range(math.ceil((timer - e - hi) * FPS - 1e-6), math.floor((timer - e - lo) * FPS + 1e-6) + 1):
@@ -805,7 +806,7 @@ def check_ending(script: PlayScript, result: dict, n_blocks: int, predicted: lis
     rem = result.get("timer_end", -1)
     if script.ending == "near_fail":
         lo, hi = NEAR_FAIL_RANGE_S
-        if not lo <= rem <= hi:
+        if not lo - 0.5 / FPS <= rem <= hi + 0.5 / FPS:  # half a frame for float noise (1.2999 is 1.30)
             problems.append(f"near-fail: the clock stopped with {rem:.2f} s left; it must be {lo}-{hi} s (00:01)")
     if script.ending == "win" and script.timer_s is not None and rem < CALM_FLOOR_S:
         problems.append(f"win: the clock fell to {rem:.1f} s, below 0:50 where it flashes red")

@@ -81,7 +81,9 @@ def _plan(log: studio.Log, req: PlanRequest) -> dict:
     all_ups = studio.uploads()
     ups = {n: all_ups[n] for n in req.uploads if n in all_ups}
     log.begin("plan", "reading the prompt" + (" as an edit of the current version" if current else "") + "...")
-    brief = planner.plan(req.prompt, uploads=ups, sprites=studio.sprite_names(), current=current)
+    # the files attached to this prompt are offered to the planner; every upload stays valid, so
+    # an edit keeps the images its version already uses
+    brief = planner.plan(req.prompt, uploads=ups, sprites=studio.sprite_names(), current=current, available=all_ups)
     log(f"planned by {brief['planner']['model']} in {brief['planner']['seconds']} s")
     return brief
 
@@ -137,7 +139,8 @@ def api_creative(cid: str):
 @app.get("/api/meta")
 def api_meta():
     return {"controls": B.CONTROL_TITLES, "uploads": sorted(studio.uploads()), "sprites": sorted(studio.sprite_names()),
-            "models": list(planner.MODELS), "busy": LOCK.locked()}
+            "models": list(planner.MODELS), "busy": LOCK.locked(),
+            "groups": {g: ctl for g, (ctl, _) in B.GROUPS.items()}}
 
 
 @app.post("/api/upload")

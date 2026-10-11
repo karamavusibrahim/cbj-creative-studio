@@ -11,8 +11,8 @@ from cbj import cli, render
 from cbj.difficulty import rate
 from cbj.level import load_level
 from cbj.play import (CALM_MARGIN_S, CASCADE_DRAGS, CLIFF_LEFT_S, DRY_TIMER_S, ENDINGS, FPS, MIN_PAUSE_F,
-                      NEAR_FAIL_LEFT_S, NEAR_FAIL_RANGE_S, PAUSES, PlayScript, _can_exit_now, blocked_attempts,
-                      bumps, check_ending, fit_clock, fit_length, length_range, mistake_options, plan, predict,
+                      NEAR_FAIL_LEFT_S, NEAR_FAIL_MARGIN_S, NEAR_FAIL_RANGE_S, PAUSES, PlayScript, _can_exit_now,
+                      blocked_attempts, bumps, check_ending, fit_clock, fit_length, length_range, mistake_options, plan, predict,
                       spread, time_out_allowed, TIME_OUT_TOUCH_F)
 from cbj.rules import initial_state, occupancy
 from cbj.solver import apply_drag, drag_outcomes, replay, solve_fast
@@ -360,8 +360,11 @@ def test_the_clock_fit_keeps_a_fitted_length(narrow, plans, target):
     for keep in (False, True):
         beats, timer, fit = fit_clock(script, narrow, plans["near_fail"].beats, dry, frames, keep_length=keep)
         total = real["frames"] + sum(b.pause_f - a.pause_f for a, b in zip(plans["near_fail"].beats, beats))
-        assert abs(fit["delta_f"]) <= (9 if keep else 15) and abs(total - target * FPS) <= (9 if keep else 15)
-        assert NEAR_FAIL_RANGE_S[0] <= fit["clock_left_s"] <= NEAR_FAIL_RANGE_S[1]
+        # The clock stays NEAR_FAIL_MARGIN_S inside its range (a fit on the edge, 1.30 s, was measured
+        # as 1.2999 by the game and failed), which can cost the length up to 10 frames.
+        assert abs(fit["delta_f"]) <= (10 if keep else 15) and abs(total - target * FPS) <= (10 if keep else 15)
+        lo, hi = NEAR_FAIL_RANGE_S
+        assert lo + NEAR_FAIL_MARGIN_S - 1e-6 <= fit["clock_left_s"] <= hi - NEAR_FAIL_MARGIN_S + 1e-6
 
 
 def test_time_out_clock_runs_out_on_the_planned_frame(narrow, plans):

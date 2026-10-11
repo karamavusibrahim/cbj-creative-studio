@@ -32,7 +32,16 @@ LEVELS = REPO / "data" / "levels"
 NARROW = LEVELS / "gen" / "narrow_center_01.json"
 SLOT_ENUM = {"Green": "GREEN", "Yellow": "YELLOW", "Blue": "BLUE", "Red": "RED", "Orange": "ORANGE",
              "Purple": "PURPLE", "DarkGreen": "DARK_GREEN"}
-HUD_OBJECTS = {"hud_timer": "TimerBackground", "hud_level": "LevelCircle"}
+# The HUD's parts, by GameObject name (GameScene: GameCanvas/MainCanvas/MainBar/...). The win
+# screen has another "TimeText (1)", which stays.
+HUD_TIMER = ("TimerBackground", "TimerImage", "TimeText")
+HUD_LEVEL = ("LevelCircle",)
+
+
+def hud_hide(visuals: dict) -> list[str]:
+    if not visuals["hud_timer"] and not visuals["hud_level"]:
+        return ["MainBar"]  # the whole bar
+    return [*(HUD_TIMER if not visuals["hud_timer"] else ()), *(HUD_LEVEL if not visuals["hud_level"] else ())]
 REPLAY_EST_S = 3.0  # room an ad keeps for a replay when it picks the recording's length
 
 
@@ -102,12 +111,24 @@ def game_visuals(brief: dict) -> dict:
 
 
 def _recording_spec(brief: dict, level_path: Path) -> dict:
+    from .level import load_level
     gp, pc, vs = brief["gameplay"], brief["pacing"], brief["visuals"]
-    hide = ["RestartButton"] + [obj for key, obj in HUD_OBJECTS.items() if not vs[key]]
+    hide = ["RestartButton"] + hud_hide(vs)
+    label = brief["level"]["label"] or hud_label(load_level(level_path), level_path)
     return {"level_sha": _sha(level_path.read_bytes()), "ending": gp["ending"], "mistakes": gp["mistakes"],
             "kinds": gp["mistake_kinds"], "hesitations": gp["hesitations"], "seed": gp["seed"] or 0,
-            "tempo": pc["tempo"], "length_s": pc["length_s"], "label": brief["level"]["label"], "hide": hide,
+            "tempo": pc["tempo"], "length_s": pc["length_s"], "label": label, "hide": hide,
             "zoom": vs["camera_zoom"] or 1.0, "timer_s": gp["timer_s"], "visuals": game_visuals(brief)}
+
+
+def _usable(folder: Path) -> bool:
+    """A finished recording that passed its checks (a failed one is never reused)."""
+    try:
+        play = json.loads((folder / "play.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return ((folder / "spec.json").is_file() and (folder / "gameplay.mp4").is_file()
+            and not play.get("measured", {}).get("problems"))
 
 
 def _play_key(spec: dict) -> str:
@@ -118,10 +139,8 @@ def _refilm(src: Path, out: Path, spec: dict, log: Log) -> None:
     """Film a cached recording again with a new look: the same job (drags, pauses, clock), only
     the look fields changed, then check the game state matched on every frame."""
     from .render import Camera, compare_recordings, rerun, visuals_job
-    changes = {"visuals": visuals_job(spec["visuals"]),
-               "hide": spec["hide"], "camera": Camera(zoom=spec["zoom"]).to_job()}
-    if spec["label"]:
-        changes["level_label"] = spec["label"]
+    changes = {"visuals": visuals_job(spec["visuals"]), "hide": spec["hide"],
+               "camera": Camera(zoom=spec["zoom"]).to_job(), "level_label": spec["label"]}
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
@@ -161,13 +180,13 @@ def ensure_recording(brief: dict, level_path: Path, log: Log) -> tuple[Path, boo
     spec = _recording_spec(brief, level_path)
     key = _sha(json.dumps(spec, sort_keys=True))[:16]
     out = STUDIO / "recordings" / key
-    if (out / "play.json").is_file() and (out / "gameplay.mp4").is_file():
+    if _usable(out):
         log(f"same gameplay as before: recording {key} reused (nothing re-recorded)")
         return out, True
     play = _play_key(spec)
     for other in sorted((STUDIO / "recordings").glob("*/spec.json")) if (STUDIO / "recordings").is_dir() else []:
         o = json.loads(other.read_text())
-        if _play_key(o) == play and (other.parent / "gameplay.mp4").is_file():
+        if _play_key(o) == play and _usable(other.parent):
             _refilm(other.parent, out, spec, log)
             (out / "spec.json").write_text(json.dumps(spec, indent=1))
             return out, False
@@ -189,7 +208,7 @@ def ensure_recording(brief: dict, level_path: Path, log: Log) -> tuple[Path, boo
     log(f"planned {len(script.beats)} beats ({n_m} mistake(s)); dry run, then recording in the real game...")
     if out.exists():
         shutil.rmtree(out)
-    label = brief["level"]["label"] or hud_label(level, level_path)
+    label = spec["label"]
     kw = dict(difficulty=d, label=label, hide=tuple(spec["hide"]), camera=Camera(zoom=spec["zoom"]),
               visuals=spec["visuals"])
     result = run(level, level_path, script, out, length_pick=_length_pick(spec), **kw)
@@ -205,6 +224,7 @@ def ensure_recording(brief: dict, level_path: Path, log: Log) -> tuple[Path, boo
         for p in result["problems"]:
             log(f"  problem: {p}")
         if result["problems"]:
+            shutil.rmtree(out, ignore_errors=True)  # never reused
             raise ValueError(f"the recording did not match its plan: {result['problems'][0]}")
         B.engine_note(brief, "difficulty_pacing", "the requested pace could not be fitted exactly, so the planned "
                                                   "pauses are used.")
@@ -232,11 +252,13 @@ def _asset_path(name: str, ups: dict[str, Path]) -> str:
 def ad_options(brief: dict, ups: dict[str, Path]) -> dict:
     sq, vs, cc = brief["sequence"], brief["visuals"], brief["concept"]
     o = {"replay": sq["replay"], "result_screen": sq["result_screen"], "teaser": sq["style"] == "result_first",
+         "clock_visible": vs["hud_timer"],
          "texts": {k: cc[k] for k in B.CONCEPT_TEXTS if cc[k] is not None},
          "fill": vs["caption_fill"], "stroke": vs["caption_outline"], "cursor": vs["cursor"],
          "sfx": brief["audio"]["sfx"]}
     shown = B.display_colours(brief)
-    o["colour_names"] = {SLOT_ENUM[s]: v["name"] for s, v in shown.items() if v["repainted"]}
+    translated = brief["visuals"].get("names") or {}
+    o["colour_names"] = {SLOT_ENUM[s]: v["name"] for s, v in shown.items() if v["repainted"] or s in translated}
     for a in brief["assets"]:
         path = _asset_path(a["file"], ups)
         role = a["role"]
@@ -254,13 +276,6 @@ def ad_options(brief: dict, ups: dict[str, Path]) -> dict:
     if bg and not o.get("end_background"):
         o["end_gradient"] = [bg[0], bg[-1]]
     return o
-
-
-def _concept_notes(brief: dict, notes: list[str]) -> None:
-    for n in notes:
-        if "left out" in n or "not used" in n or "no " in n[:3]:
-            ctl = "sequence" if "teaser" in n else "concept"
-            B.engine_note(brief, ctl, n + ".")
 
 
 def build_and_render(brief: dict, rec_dir: Path, out: Path, log: Log, draft: bool = False) -> dict:
@@ -287,7 +302,8 @@ def build_and_render(brief: dict, rec_dir: Path, out: Path, log: Log, draft: boo
         B.engine_note(brief, "difficulty_pacing", f"this gameplay fills {rec.n / FPS:.1f} s, so the ad is "
                                              f"{ad['length_s']:g} s instead of {L:g} s "
                                              f"({'a bigger level or more mistakes would fill more' if ad['length_s'] < L else 'it cannot be shorter with a readable end card'}).")
-    _concept_notes(brief, ad.get("notes", []))
+    for n in ad.get("brief_notes", []):
+        B.engine_note(brief, n["control"], n["text"] + ".", status=n["status"])
     for k in ("logo", "hook_icon", "end_art", "end_background", "cursor_image"):
         if options.get(k):
             log(f"asset: {k.replace('_', ' ')} = {Path(str(options[k]['file'] if k == 'logo' else options[k])).name}")
@@ -372,6 +388,22 @@ def _proof(prev: dict, cur: dict) -> dict:
     return proof
 
 
+KEEP_GROUPS = {"level": ("level.",), "gameplay": ("gameplay.",), "timing": ("pacing.",), "camera": ("visuals.zoom",),
+               "visuals": ("visuals.",), "copy": ("concept.", "language"), "sequence": ("sequence",),
+               "assets": ("assets",), "sound": ("audio",)}
+
+
+def _keep_conflicts(old: dict, new: dict) -> None:
+    """A prompt can ask to keep something and change it in the same breath ("keep the level but
+    make it harder": a harder level is a new level). The change wins; the brief says so."""
+    for k in new.get("keep", []):
+        hit = [g for g, (_, paths) in B.GROUPS.items() if g.startswith(KEEP_GROUPS.get(k, ("-",)))
+               and any(B._get(old, p) != B._get(new, p) for p in paths)]
+        if hit:
+            B.engine_note(new, "unchanged", f"asked to keep the {k}, but the prompt also changes it "
+                                            f"({', '.join(hit)}); the change wins")
+
+
 def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = None, draft: bool = False) -> dict:
     """Make a version of a creative from a checked brief. With cid, the new version follows that
     creative's latest one (an edit). Returns the version record (also saved as version.json)."""
@@ -394,6 +426,8 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
 
     for row in brief["controls"]:  # engine notes belong to the version that made them
         row["engine"] = []
+    if prev is not None:
+        _keep_conflicts(prev["brief"], brief)
     log.begin("level", "choosing the level...")
     if prev is not None and prev["brief"]["level"] == brief["level"]:
         # An edit that does not ask about the level keeps the previous version's level exactly.
@@ -423,8 +457,11 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
     }
     if prev is not None:
         log.begin("proof", "comparing with the previous version...")
+        s0 = time.time()
         record["proof"] = _proof(prev, record)
+        stages.append({"stage": "proof", "seconds": round(time.time() - s0, 1)})
         log(f"proof: {record['proof'].get('gameplay')}; {record['proof'].get('frames', '')}")
+    record["seconds"] = round(time.time() - t0, 1)
     (vdir / "brief.json").write_text(json.dumps(brief, indent=1))
     (vdir / "version.json").write_text(json.dumps(record, indent=1))
     log.begin("done", f"done in {record['seconds']:.0f} s")

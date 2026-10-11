@@ -3,7 +3,7 @@
 An LLM fills the brief's JSON schema (brief.SCHEMA) and nothing else. It never makes levels,
 moves or pixels: the deterministic engine does, from the brief, so the gameplay is real and an
 edit can be proven. The brief is then checked in code (brief.check), and an edit is merged so
-that only what the edit asked about can change (brief.merge_edit).
+that only what the prompt asked to change is taken (brief.merge).
 
 The model runs on NVIDIA's hosted API (NVIDIA_API_KEY, from the environment or a .env file in
 the repo). Tests use a fake client.
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -35,9 +36,9 @@ THE TOOL. It records the REAL game playing a level (real, solvable moves; a scri
 channel: "network" (ad networks; default) or "social" (TikTok, Instagram, Facebook feeds). language: "en" unless the request asks for another language (e.g. "tr", "de"); then write EVERY text in concept in that language. format: "9:16" unless the request asks for another aspect ratio.
 
 level (control "level"; difficulty belongs to control "difficulty_pacing"):
-- source: "auto" (the tool chooses), "shipped" (the game's own levels 1-6: small tutorial levels, ALL EASY), or "generate" (a new level built to the spec below). Use "generate" whenever the request describes a structure, shape, size, block count, colours or difficulty.
+- source: "auto" (the tool's showcase: a hand-checked HARD 6x8 narrow-centre level), "shipped" (the game's own levels 1-6: small tutorial levels, ALL EASY), or "generate" (a new level built to the spec below). Use "generate" whenever the request describes a structure, shape, size, block count, colours or difficulty.
 - shape: "narrow_center" (a narrow middle / centre / waist / bottleneck: an hourglass), "door" (two rooms joined by a narrow gap), "holes" (holes or pillars inside the board), "open" (a plain rectangle), or "any".
-- width 4-9, height 4-10, blocks 2-10: only if the request gives them, else null.
+- width 4-9, height 4-10, blocks 2-10: ONLY if the request gives them (numbers, or words like "big board"); otherwise null and the tool sizes the level to the ad.
 - colours: the game colour SLOTS the level uses: Green, Yellow, Blue, Red, Orange, Purple, DarkGreen ([] = any). If the request names colours the game does not have (pink, teal...), pick the nearest slots here AND repaint them in visuals.blocks.
 - difficulty: "easy", "medium", "hard" or "any".
 - label: the number in the HUD's Level badge ("level 47" -> 47), else null.
@@ -76,7 +77,9 @@ Anything the request asks for that no field can express (for example 3D characte
 
 assumptions: what you had to guess because the request was ambiguous, each with the alternative (e.g. "'this object' read as the cursor; could also mean the end-card picture"). [] if nothing was guessed.
 
-summary: one sentence describing the ad that will be made."""
+summary: one sentence describing the ad that will be made.
+
+changed: the field groups the REQUEST asks to set or change, and nothing else. Groups: level.source, level.shape, level.size, level.blocks, level.colours, level.label, level.difficulty, gameplay.ending, gameplay.mistakes, gameplay.hesitations, gameplay.retake, gameplay.clock, pacing.length, pacing.tempo, channel, visuals.colours, visuals.background, visuals.board, visuals.captions, visuals.zoom, visuals.cursor, visuals.hud, format, language, concept.hook, concept.mistake, concept.fix, concept.hurry, concept.cascade, concept.result, concept.end_title, concept.end_fact, concept.cta, sequence, assets, audio, keep. Only fields in these groups are used; everything else keeps the tool's default (or, for an edit, its current value). So: "no sound" -> audio; "use a hand" -> visuals.cursor; "make the hook say X" -> concept.hook only; "a difficult level" -> level.difficulty."""
 
 EDIT = """This is an EDIT of an existing ad. The current brief is below. Return the complete brief with ONLY the changes the edit request asks for; copy every other field exactly. Mark "asked" only for the controls the edit request talks about (others: asked null, status "default", but keep their plan text). If the request says to keep something, list it in keep. If the request says "keep everything else" or similar, list everything except what it changes.
 
@@ -142,18 +145,20 @@ def _ask(client, system: str, user: str) -> dict:
 
 
 UPLOAD_WORDS = ("logo", "attach", "upload", "image", "picture", "photo", "png", "jpg", "asset", "mascot",
-                "sticker", "character", "icon", "hand", "file", "this")
+                "sticker", "icon", "artwork", "graphic")
 
 
-def _only_mentioned_uploads(raw: dict, prompt: str, uploads: dict) -> None:
+def _only_mentioned_uploads(raw: dict, prompt: str, uploads: dict, current: dict | None) -> None:
     """An uploaded file is used only if the prompt refers to it (its name, or words like "our
-    logo", "the attached image"). Otherwise it is left out, and the assets row says why."""
+    logo", "the attached image"), or the version being edited already uses it. Otherwise it is
+    left out, and the assets row says why."""
     text = prompt.lower()
-    mentioned = any(w in text for w in UPLOAD_WORDS)
+    mentioned = any(re.search(rf"\b{w}", text) for w in UPLOAD_WORDS)
+    used = {a["file"] for a in (current or {}).get("assets", [])}
     keep = []
     for a in raw.get("assets", []):
         f = a.get("file", "")
-        if f in uploads and not (Path(f).stem.lower() in text or mentioned):
+        if f in uploads and f not in used and not (Path(f).stem.lower() in text or mentioned):
             row = B.control(raw, "assets")
             row["why"] = (row.get("why") or "") + f" {f} was uploaded but the prompt does not say how to use it, so it is left out."
             continue
@@ -174,8 +179,10 @@ def _translate_defaults(brief: dict, client) -> None:
                 "result": {"near_fail": "Phew! {clock_left} left", "time_out": "So close!",
                            "cliffhanger": "Can you see the move?"}.get(ending)}
     todo = {k: v for k, v in defaults.items() if v and brief["concept"].get(k) is None}
-    if not todo:
-        return
+    fresh = {**brief, "visuals": {**brief["visuals"], "names": {}}}  # names in English, before any translation
+    names = {f"colour_{slot}": v["name"] for slot, v in B.display_colours(fresh).items()}  # for the {colour} fact
+    brief["visuals"]["names"] = {}
+    todo.update(names)
     schema = {"type": "object", "properties": {k: {"type": "string"} for k in todo}, "required": list(todo),
               "additionalProperties": False}
     try:
@@ -185,20 +192,32 @@ def _translate_defaults(brief: dict, client) -> None:
         B.adjust(brief, "concept", f"the default captions could not be translated ({e}); they stay in English.")
         return
     for k, v in out.items():
-        if k in todo and isinstance(v, str) and v.strip() and not B._texts_ok(v):
+        if not (k in todo and isinstance(v, str) and v.strip()):
+            continue
+        if k.startswith("colour_"):
+            brief["visuals"]["names"][k[len("colour_"):]] = v.strip().lower()
+        elif not B._texts_ok(v):
             brief["concept"][k] = v.strip()
-    left = [k for k in todo if brief["concept"].get(k) is None]
+    row = B.control(brief, "concept")
+    if row.get("why") and "english" in row["why"].lower():
+        row["why"] = None  # the model's own "stays in English" no longer holds
+        if row["status"] == "adjusted":
+            row["status"] = "applied"
+    left = [k for k in todo if not k.startswith("colour_") and brief["concept"].get(k) is None]
     if left:
         B.adjust(brief, "concept", f"no {brief['language']} text could be made for {', '.join(left)}; those stay "
                                    f"in English.")
 
 
 def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprites: set[str] | None = None,
-         current: dict | None = None) -> dict:
-    """A checked brief for a prompt. With `current`, the prompt edits that brief: only the
-    controls the prompt talks about may change. Returns the brief, with `planner` notes."""
+         current: dict | None = None, available: dict[str, Path] | None = None) -> dict:
+    """A checked brief for a prompt. With `current`, the prompt edits that brief: only what the
+    prompt asks to change may change. uploads: the files attached to this prompt (offered to
+    the model); available: every uploaded file (an edit keeps the ones its version uses).
+    Returns the brief, with `planner` notes."""
     client = client or NvidiaClient()
     files = sorted(uploads or {})
+    available = {**(available or {}), **(uploads or {})}
     user = f"REQUEST:\n{prompt.strip()}\n\nUPLOADED FILES: {', '.join(files) if files else 'none'}"
     system = SYSTEM
     if current is not None:
@@ -207,17 +226,16 @@ def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprit
         user = EDIT + json.dumps(shown, indent=1) + "\n\nEDIT " + user
     t0 = time.time()
     raw = _ask(client, system, user)
-    _only_mentioned_uploads(raw, prompt, uploads or {})
-    label = (raw.get("level") or {}).get("label")
-    if label is not None and str(label) not in prompt:
-        raw["level"]["label"] = None  # a HUD number must come from the prompt, not a guess
-    # A control the prompt did not talk about keeps its default (a new ad) or its previous value
-    # (an edit): the model may not fill unasked fields, such as copy nobody asked for.
+    _only_mentioned_uploads(raw, prompt, available, current)
+    # Only what the prompt asks to change is taken; everything else keeps its default (a new ad)
+    # or its current value (an edit). The model may not fill unasked fields, such as copy.
     base = current if current is not None else B.check(B.default_brief())
-    brief, restored = B.merge_edit(base, B.check(raw, uploads, sprites), keep_plans=current is not None)
-    brief = B.check(brief, uploads, sprites)
+    brief, restored = B.merge(base, B.check(raw, available, sprites), prompt)
+    brief = B.check(brief, available, sprites)
     if brief["language"] != "en":
         _translate_defaults(brief, client)
+    else:
+        brief["visuals"]["names"] = {}
     brief["planner"] = {"model": getattr(client, "last_model", None), "seconds": round(time.time() - t0, 1),
                         "prompt": prompt.strip(), "edit": current is not None, "restored": restored}
     return brief

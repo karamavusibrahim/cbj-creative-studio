@@ -200,6 +200,7 @@ def generate(spec: Spec, log=None) -> tuple[dict, Difficulty, dict]:
     rng = random.Random(spec.seed)
     t0 = time.time()
     best = None
+    spare = None  # the best board a cheap screen turned down, rated only if nothing passed
     stats = {"tried": 0, "valid": 0, "solvable": 0, "rated": 0, "in_band": 0}
     while time.time() - t0 < spec.budget_s:
         stats["tried"] += 1
@@ -221,9 +222,11 @@ def generate(spec: Spec, log=None) -> tuple[dict, Difficulty, dict]:
             continue
         stats["solvable"] += 1
         # Cheap screens before the naive-player rating.
-        if spec.difficulty == "hard" and sol.extra_drags < 2:
-            continue
-        if spec.difficulty == "easy" and sol.extra_drags > 0:
+        off = (spec.difficulty == "hard" and sol.extra_drags < 2) or (spec.difficulty == "easy" and sol.extra_drags > 0)
+        if off:
+            cheap = -abs(sol.min_drags - (spec.target_drags or sol.min_drags)) + (sol.extra_drags if spec.difficulty == "hard" else -sol.extra_drags)
+            if spare is None or cheap > spare[0]:
+                spare = (cheap, d, sol)
             continue
         r = rate(lvl, runs=40, seed=1, cap=80, solution=sol)
         stats["rated"] += 1
@@ -240,10 +243,13 @@ def generate(spec: Spec, log=None) -> tuple[dict, Difficulty, dict]:
         if band == spec.difficulty and stats["in_band"] >= 3 and (
                 not spec.target_drags or best[2].min_drags >= reachable - 1):
             break
+    if best is None and spare is not None:
+        _, d, sol = spare
+        r = rate(level_from_dict(d, name="generated"), runs=40, seed=1, cap=80, solution=sol)
+        best = (0.0, d, r, band_of(r))
     if best is None:
-        raise ValueError(f"no valid, solvable {spec.difficulty} {spec.shape} {spec.width}x{spec.height} level with "
-                         f"{spec.blocks} blocks found in {spec.budget_s:g} s ({stats['tried']} tried); try fewer "
-                         f"blocks or a bigger board")
+        raise ValueError(f"no valid, solvable {spec.shape} {spec.width}x{spec.height} level with {spec.blocks} "
+                         f"blocks found in {spec.budget_s:g} s ({stats['tried']} tried)")
     _, d, _, band = best
     lvl = level_from_dict(d, name="generated")
     full = rate(lvl)  # the final rating, with the full naive-player sample
@@ -309,7 +315,25 @@ def generate_for_brief(brief: dict, cache: Path, log) -> tuple[Path, str]:
     else:
         log(f"generating {'an' if r.difficulty == 'easy' else 'a'} {r.difficulty} {SHAPE_WORDS[r.shape]} {r.width}x{r.height} level with {r.blocks} blocks"
             f" (about {r.target_drags} drags for {brief['pacing']['length_s']:g} s)...")
-        d, full, stats = generate(r, log)
+        d = None
+        tries = [r]
+        if lv["blocks"] is None:
+            tries.append(Spec(**{**asdict(r), "blocks": max(3, r.blocks - 1), "budget_s": 12.0}))
+        easier = {"hard": "medium", "medium": "easy"}.get(r.difficulty)
+        if easier:
+            tries.append(Spec(**{**asdict(r), "difficulty": easier, "budget_s": 12.0}))
+        for k, t in enumerate(tries):
+            try:
+                d, full, stats = generate(t, log)
+                break
+            except ValueError as e:
+                if k == len(tries) - 1:
+                    raise
+                log(f"  {e}; relaxing the spec...")
+        if k > 0:
+            B.engine_note(brief, "level", f"no level of exactly the requested kind could be built in time, so the "
+                                          f"closest one was made instead ({tries[k].difficulty}, {tries[k].blocks} "
+                                          f"blocks).")
         path.write_text(json.dumps(d, indent=2))
         meta = {"rating": asdict(full) | {"naive_ratio": round(full.naive_ratio, 3)}, "stats": stats}
         meta_path.write_text(json.dumps(meta, indent=1))
@@ -318,7 +342,7 @@ def generate_for_brief(brief: dict, cache: Path, log) -> tuple[Path, str]:
     rt, band = meta["rating"], meta["stats"]["band"]
     hand = Path(__file__).resolve().parents[2] / "data" / "levels" / "gen" / "narrow_center_01.json"
     if (band != r.difficulty and r.shape == "narrow_center" and r.difficulty == "hard"
-            and (r.width, r.height) == (6, 8) and hand.is_file()):
+            and (r.width, r.height) == (6, 8) and lv["blocks"] is None and not lv["colours"] and hand.is_file()):
         B.engine_note(brief, "level", "the generator's best narrow-centre board in the time budget was not a fair hard "
                                  "level, so the hand-checked one of the same shape (6x8, 7 blocks) is used.")
         return hand, ("the hand-checked hard narrow-centre level, 6x8, 7 blocks: 9 drags minimum, 2 repositioning, "

@@ -51,6 +51,12 @@ def asked(b: dict, *controls: str, words: str = "asked") -> dict:
     return b
 
 
+def declare(b: dict, *groups: str) -> dict:
+    """The field groups the model says the prompt changed."""
+    b["changed"] = sorted(set(b.get("changed", [])) | set(groups))
+    return b
+
+
 # ---------- the brief ----------
 
 def test_default_brief_is_valid_and_all_default():
@@ -109,27 +115,53 @@ def test_clock_is_set_by_a_near_fail_not_the_prompt():
     assert b["gameplay"]["timer_s"] is None and "set by the ending" in B.control(b, "difficulty_pacing")["why"]
 
 
-def test_merge_edit_restores_what_was_not_asked():
+def test_merge_takes_only_the_declared_changes():
     old = B.check(raw_brief(concept={"hook": "Can you beat it?"}, visuals={"theme": "neon"}))
     new = copy.deepcopy(old)
     new["concept"]["hook"] = "Beat this in 20 seconds"
-    new["visuals"]["theme"] = "pastel"  # not asked: must come back
-    new["gameplay"]["ending"] = "win"  # not asked: must come back
-    asked(new, "concept")
-    merged, restored = B.merge_edit(old, new)
-    assert merged["concept"]["hook"] == "Beat this in 20 seconds"
+    new["visuals"]["theme"] = "pastel"  # not declared: must come back
+    new["gameplay"]["ending"] = "win"  # not declared: must come back
+    declare(new, "concept.hook")
+    merged, dropped = B.merge(old, new, "make the hook say 'Beat this in 20 seconds'")
+    assert merged["concept"]["hook"] == "Beat this in 20 seconds" and merged["changed"] == ["concept.hook"]
     assert merged["visuals"] == old["visuals"] and merged["gameplay"]["ending"] == old["gameplay"]["ending"]
-    assert any(r.startswith("visuals") for r in restored) and any("gameplay.ending" in r for r in restored)
+    assert any(d.startswith("visuals.colours") for d in dropped) and any(d.startswith("gameplay.ending") for d in dropped)
     assert B.changed_controls(old, merged) == ["concept"]
 
 
-def test_merge_edit_lets_difficulty_change_without_the_level_control():
+def test_a_request_filed_under_the_wrong_row_still_counts_when_declared():
+    # "no sound effects" filed by the model under "unchanged" (Fable's P9): declared, so taken
     old = B.check(B.default_brief())
     new = copy.deepcopy(old)
-    new["level"]["difficulty"] = "hard"
-    asked(new, "difficulty_pacing")
-    merged, _ = B.merge_edit(old, new)
-    assert merged["level"]["difficulty"] == "hard"
+    new["audio"]["sfx"] = False
+    asked(new, "unchanged", words="no sound effects")
+    declare(new, "audio")
+    merged, _ = B.merge(old, new, "A near-fail ad with no sound effects.")
+    assert merged["audio"]["sfx"] is False
+
+
+def test_copy_and_board_size_need_words_in_the_prompt():
+    old = B.check(B.default_brief())
+    new = copy.deepcopy(old)
+    new["concept"]["hook"] = "Thread the needle!"
+    new["level"].update(width=9, height=10, blocks=6, colours=["Red", "Blue"], difficulty="hard")
+    declare(new, "concept.hook", "level.size", "level.blocks", "level.colours", "level.difficulty")
+    merged, dropped = B.merge(old, new, "A hard board with pillars in the middle")
+    assert merged["level"]["difficulty"] == "hard"  # asked
+    assert (merged["level"]["width"], merged["level"]["blocks"], merged["level"]["colours"]) == (None, None, [])
+    assert merged["concept"]["hook"] is None
+    assert {d.split(":")[0] for d in dropped} >= {"concept.hook", "level.size", "level.blocks", "level.colours"}
+    merged, _ = B.merge(old, new, "An 8x8 board, 6 red and blue blocks, hook 'Thread the needle!'")
+    assert merged["level"]["blocks"] == 6 and merged["concept"]["hook"] == "Thread the needle!"
+
+
+def test_a_new_language_rewrites_the_copy():
+    old = B.check(B.default_brief())
+    new = copy.deepcopy(old)
+    new["language"], new["concept"]["hook"] = "tr", "Saati yenebilir misin?"
+    declare(new, "language")
+    merged, _ = B.merge(old, new, "Same ad, but in Turkish.")
+    assert merged["language"] == "tr" and merged["concept"]["hook"] == "Saati yenebilir misin?"
 
 
 # ---------- the planner (fake model) ----------
@@ -137,6 +169,7 @@ def test_merge_edit_lets_difficulty_change_without_the_level_control():
 def test_planner_resets_controls_the_prompt_did_not_mention():
     raw = raw_brief(concept={"hook": "Wrong turn!"}, gameplay={"ending": "win"})
     asked(raw, "gameplay", words="a clean solve")
+    declare(raw, "gameplay.ending", "concept.hook")
     b = planner.plan("a clean solve", FakeModel(raw))
     assert b["gameplay"]["ending"] == "win"  # asked
     assert b["concept"]["hook"] is None  # copy nobody asked for is not used
@@ -147,21 +180,21 @@ def test_planner_uses_an_upload_only_when_the_prompt_refers_to_it(tmp_path):
     up = tmp_path / "logo.png"
     up.write_bytes(b"x")
     raw = raw_brief(assets=[{"file": "logo.png", "role": "logo", "when": "whole", "where": "top_left"}])
-    asked(raw, "assets")
+    declare(asked(raw, "assets"), "assets")
     assert planner.plan("a clean solve", FakeModel(raw), uploads={"logo.png": up})["assets"] == []
     b = planner.plan("put our logo in the corner", FakeModel(raw), uploads={"logo.png": up})
     assert [a["file"] for a in b["assets"]] == ["logo.png"]
 
 
 def test_planner_drops_a_level_number_the_prompt_did_not_give():
-    raw = asked(raw_brief(level={"label": 1}), "level")
+    raw = declare(asked(raw_brief(level={"label": 1}), "level"), "level.label")
     assert planner.plan("an easy level", FakeModel(raw))["level"]["label"] is None
-    raw = asked(raw_brief(level={"label": 142}), "level")
+    raw = declare(asked(raw_brief(level={"label": 142}), "level"), "level.label")
     assert planner.plan("level 142, easy", FakeModel(raw))["level"]["label"] == 142
 
 
 def test_planner_translates_the_default_captions():
-    raw = asked(raw_brief(language="tr", concept={"hook": "Saati yenebilir misin?"}), "concept")
+    raw = declare(asked(raw_brief(language="tr", concept={"hook": "Saati yenebilir misin?"}), "concept"), "language")
     model = FakeModel(raw, {"mistake": "{colour} rengine ulaşamıyorum!", "cta": "HEMEN OYNA"})
     b = planner.plan("Türkçe reklam", model)
     assert b["concept"]["hook"] == "Saati yenebilir misin?"
@@ -175,7 +208,7 @@ def test_planner_edit_keeps_the_rest():
     raw = copy.deepcopy(current)
     raw["concept"]["hook"] = "Beat this!"
     raw["pacing"]["length_s"] = 45.0  # not asked
-    asked(raw, "concept")
+    declare(asked(raw, "concept"), "concept.hook")
     b = planner.plan("change the hook to 'Beat this!'", FakeModel(raw), current=current)
     assert b["concept"]["hook"] == "Beat this!" and b["pacing"]["length_s"] == current["pacing"]["length_s"]
     assert b["planner"]["edit"]
@@ -282,21 +315,6 @@ def test_game_visuals_for_the_recorder():
                                                         "background_bottom": ""}
 
 
-def test_a_field_two_controls_can_reach_is_kept_if_either_was_asked():
-    old = B.check(B.default_brief())
-    new = copy.deepcopy(old)
-    new["level"].update(difficulty="hard", shape="narrow_center")
-    asked(new, "level")  # "a difficult level with a narrow centre" read as the level control
-    merged, _ = B.merge_edit(old, new)
-    assert merged["level"]["difficulty"] == "hard"
-    new = copy.deepcopy(old)
-    new["visuals"].update(cursor="hand", theme="neon")
-    asked(new, "assets")  # "use a hand" read as an asset: the cursor comes along, the theme does not
-    merged, restored = B.merge_edit(old, new)
-    assert merged["visuals"]["cursor"] == "hand" and merged["visuals"]["theme"] == "game"
-    assert any(r.startswith("visuals.theme") for r in restored)
-
-
 def test_generated_level_size_follows_the_ad_and_the_board():
     from cbj.generate import Spec, _target_drags
     b = B.check(raw_brief(level={"shape": "narrow_center", "difficulty": "hard"}, pacing={"length_s": 30.0}))
@@ -306,3 +324,50 @@ def test_generated_level_size_follows_the_ad_and_the_board():
     probe = Spec("narrow_center", None, None, None, [], "hard").resolved()
     free = probe.width * probe.height - len(holes_for("narrow_center", probe.width, probe.height))
     assert free // 5 == 8  # a 6x8 hourglass holds at most 8 blocks, whatever the length asks for
+
+
+# ---------- the fixes from the Fable 5.1 check ----------
+
+def test_no_result_screen_still_makes_a_near_fail(rec):
+    ad = build_ad(rec, LENGTH, options={"result_screen": False})
+    assert "result" not in ad["order"] and "cap_result" not in ad["layers"]
+    assert not Prepared(ad, draft=True).qa["failures"]
+
+
+def test_hidden_clock_drops_the_copy_that_quotes_it(rec):
+    ad = build_ad(rec, LENGTH, options={"clock_visible": False})
+    texts = [lay.get("text", "") for lay in ad["layers"].values()]
+    assert not any("{clock_left}" in t or "clock" in t.lower() for t in texts)
+    assert ad["layers"]["hook"].get("icon") is None
+
+
+def test_hud_hide_lists():
+    from cbj.studio import hud_hide
+    assert hud_hide({"hud_timer": False, "hud_level": True}) == ["TimerBackground", "TimerImage", "TimeText"]
+    assert hud_hide({"hud_timer": True, "hud_level": False}) == ["LevelCircle"]
+    assert hud_hide({"hud_timer": False, "hud_level": False}) == ["MainBar"]
+
+
+def test_teaser_is_letterboxed_and_notes_are_structured(rec):
+    from cbj.ad import FIT
+    ad = build_ad(rec, LENGTH, options={"teaser": True, "sfx": False, "texts": {"hurry": ""}})
+    assert ad["segments"]["teaser"]["fit"] == FIT  # the hook in the band, above the game's banner
+    by = {(n["control"], n["status"]) for n in ad["brief_notes"]}
+    assert ("assets", None) in by and ("concept", None) in by  # done as asked: no status change
+
+
+def test_a_failed_recording_is_never_reused(tmp_path):
+    from cbj.studio import _usable
+    folder = make_recording(tmp_path / "r")
+    assert not _usable(folder)  # no spec.json
+    (folder / "spec.json").write_text("{}")
+    assert _usable(folder)
+    play = json.loads((folder / "play.json").read_text())
+    play["measured"]["problems"] = ["near-fail: the clock stopped with 1.30 s left"]
+    (folder / "play.json").write_text(json.dumps(play))
+    assert not _usable(folder)
+
+
+def test_zoom_is_capped_to_keep_the_side_gates():
+    b = B.check(raw_brief(visuals={"camera_zoom": 1.3}))
+    assert b["visuals"]["camera_zoom"] == B.ZOOM_RANGE[1] and B.control(b, "visuals")["status"] == "adjusted"

@@ -318,7 +318,10 @@ TEASER_S = 1.5
 # Options a brief can set on the default ad (see build_ad).
 AD_OPTIONS = {"replay": True, "result_screen": True, "teaser": False, "texts": {}, "fill": None, "stroke": None,
               "colour_names": {}, "logo": None, "hook_icon": None, "end_art": None, "end_background": None,
-              "end_gradient": None, "cursor": "ring", "cursor_image": None, "sfx": True}
+              "end_gradient": None, "cursor": "ring", "cursor_image": None, "sfx": True, "clock_visible": True}
+# With the HUD's clock hidden, the default copy may not quote it (the viewer never saw it).
+NO_CLOCK = {"hook": "Can you clear it?", "result": {"near_fail": "Phew! Just in time!"},
+            "end_fact": {"near_fail": "Cleared just in time!", "win": "Cleared!"}}
 TEXT_LAYERS = {"hook": "hook", "mistake": "cap_mistake", "fix": "cap_fix", "hurry": "cap_hurry",
                "cascade": "cap_cascade", "result": "cap_result", "end_title": "end_title", "end_fact": "end_fact",
                "cta": "end_cta"}
@@ -341,6 +344,11 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     option could not do is written into the ad's notes."""
     o = {**AD_OPTIONS, **(options or {})}
     ending = rec.play.get("ending")
+    brief_notes: list[dict] = []  # what the ad could not do, or did as asked, per control of the brief
+
+    def note(control: str, text: str, status: str | None = "adjusted"):
+        notes.append(text)
+        brief_notes.append({"control": control, "status": status, "text": text})
     if ending not in HOOKS:
         raise ValueError(f"{rec.path}: unknown ending {ending!r}")
     beats = rec.play["beats"]
@@ -366,10 +374,12 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         t0 = p + 12  # the result screen once it has dimmed and shown its banner
         teaser = int(TEASER_S * FPS)
         if ending == "cliffhanger" or t0 + teaser > rec.n:
-            notes.append("result-first teaser left out: this recording has no result screen to show first")
+            note("sequence", "result-first teaser left out: this recording has no result screen to show first")
             teaser = 0
         else:
-            seg["teaser"] = {"kind": "clip", "src": src, "from": t0, "to": t0 + teaser, "speed": 1, "fit": dict(NATIVE)}
+            # Letterboxed like the gameplay, so the hook sits in the band above it, not on the game's
+            # own "Level Completed" banner.
+            seg["teaser"] = {"kind": "clip", "src": src, "from": t0, "to": t0 + teaser, "speed": 1, "fit": dict(FIT)}
     fixed = p + sum(seg_frames(seg[a]) for a in after) + teaser
     replay_from, card = None, total - fixed
     for k in range(len(bf) - 1, max(-1, len(bf) - 1 - REPLAY_MAX_BEATS) if o["replay"] else len(bf) - 1, -1):
@@ -409,9 +419,12 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     first = next((i for i, b in enumerate(beats) if b["kind"] in ("mistake", "attempt")), None)
     # The hook is on screen 1.5-3 s from frame 0; it gives way early to a mistake, never drops it.
     intro_s = intro / FPS
-    hook_text = o["texts"].get("hook") or (TEASER_HOOKS.get(ending, HOOKS[ending]) if teaser else HOOKS[ending])
+    default_hook = TEASER_HOOKS.get(ending, HOOKS[ending]) if teaser else HOOKS[ending]
+    if not o["clock_visible"] and "clock" in default_hook:
+        default_hook = NO_CLOCK["hook"]
+    hook_text = o["texts"].get("hook") or default_hook
     if o["texts"].get("hook") == "":
-        notes.append("the hook stays: frame 0 needs it (it is the poster and the first thing a feed shows)")
+        note("concept", "the hook stays: frame 0 needs it (it is the poster and the first thing a feed shows)")
     hook_min = max(1.5, reading_s(fill(hook_text, rec.facts(None))))
     hook_play_end = max(1.0 if intro else 2.4, hook_min - intro_s)
     if first is not None:
@@ -427,7 +440,8 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         # be read.
         hook_end = {"seg": "play", "at": round(max(0.3, hook_min - TEASER_S + 0.2), 4)}
     layers["hook"] = _text(hook_text, {"seg": order[0], "at": 0}, end=hook_end, anim="pop_out",
-                           icon="stopwatch.png" if ending in ("near_fail", "time_out") and not teaser else None)
+                           icon="stopwatch.png" if ending in ("near_fail", "time_out") and not teaser
+                           and o["clock_visible"] else None)
     if first is not None:
         kind = beats[first]["kind"]
         text = "I can't reach {colour}!" if "in the way" in beats[first]["note"] else "Oops!"
@@ -461,11 +475,12 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         layers["cap_cascade"] = _text("So satisfying!", {"seg": "play", "event": f"beat.{len(bf) - 3}.start"},
                                       end={"seg": "play", "at": "end"}, style="title_xl")
     # Result captions wait 0.3 s for the game to dim the screen (the full-size HUD is in the band).
-    if ending == "near_fail":
+    if ending == "near_fail" and "result" in seg:
         # Under the game's "+50" button: the banner and coins fill the top half of the win screen.
-        layers["cap_result"] = _text("Phew! {clock_left} left", {"seg": "result", "at": 0.3},
+        phew = "Phew! {clock_left} left" if o["clock_visible"] else NO_CLOCK["result"]["near_fail"]
+        layers["cap_result"] = _text(phew, {"seg": "result", "at": 0.3},
                                      end={"seg": "result", "at": "end"}, style="title_l", slot="free", pos=[540, 1418])
-    elif ending == "time_out":
+    elif ending == "time_out" and "result" in seg:
         layers["cap_result"] = _text("So close!", {"seg": "result", "at": 0.3}, end={"seg": "result", "at": "end"})
     elif ending == "cliffhanger":
         layers["cap_result"] = _text("Can you see the move?", {"seg": "question", "at": 0},
@@ -475,17 +490,18 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         if text is None or lid is None or lid.startswith("end_") or lid == "hook":
             continue
         if lid not in layers:
-            notes.append(f"no {key} moment in this {ending.replace('_', '-')} ad, so its text is not used")
+            note("concept", f"no {key} moment in this {ending.replace('_', '-')} ad, so its text is not used")
         elif text == "":
             del layers[lid]
-            notes.append(f"{lid} removed, as asked")
+            note("concept", f"the {key} caption is removed, as asked", None)
         else:
             layers[lid]["text"] = text
     if o["hook_icon"] and "hook" in layers:
         layers["hook"]["icon"] = o["hook_icon"]
     names = o["colour_names"]
-    notes += _schedule_band(layers, ["hook", "cap_mistake", "cap_fix", "cap_hurry", "cap_cascade", "cap_result"],
-                            seg, order, rec, src, names)
+    for n in _schedule_band(layers, ["hook", "cap_mistake", "cap_fix", "cap_hurry", "cap_cascade", "cap_result"],
+                            seg, order, rec, src, names):
+        note("concept", n, "adjusted" if "left out" in n else None)
     layers["cursor"] = {"type": "cursor", "image": o["cursor_image"] or ("builtin:hand" if o["cursor"] == "hand" else None),
                         "size": 96, "segments": ["play", "replay"]}
     if o["cursor"] == "none" and not o["cursor_image"]:
@@ -493,7 +509,8 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     cliff = ending == "cliffhanger"
     layers["end_title"] = {"type": "text", "seg": "end", "text": END_TITLE, "style": "hero", "max_h": 150,
                            "pos": [540, 420 if cliff else 520], "anim": "pop"}
-    layers["end_fact"] = {"type": "text", "seg": "end", "text": END_FACTS[ending], "style": "title_m",
+    end_fact = END_FACTS[ending] if o["clock_visible"] else NO_CLOCK["end_fact"].get(ending, END_FACTS[ending])
+    layers["end_fact"] = {"type": "text", "seg": "end", "text": end_fact, "style": "title_m",
                           "max_h": 120, "pos": [540, 560 if cliff else 700], "anim": "pop"}
     if not cliff:
         art = "CoinPile.png" if ending == "win" else "stopwatch.png"
@@ -508,12 +525,12 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         lid = TEXT_LAYERS[key]
         if text == "" and key != "cta":
             del layers[lid]
-            notes.append(f"{lid} removed, as asked")
+            note("concept", f"the {key.replace('_', ' ')} is removed, as asked", None)
         elif text:
             layers[lid]["text"] = text
     if o["end_art"]:
         if cliff:
-            notes.append("end-card picture not used: the cliffhanger's end card shows the unsolved board there")
+            note("assets", "end-card picture not used: the cliffhanger's end card shows the unsolved board there")
         else:
             layers["end_art"] = {"type": "image", "seg": "end", "image": o["end_art"], "box": [460, 420],
                                  "pos": [540, 1000], "anim": "pop"}
@@ -563,13 +580,18 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
                      f"{length_s:g} s)")
     if not o["sfx"]:
         audio["events"] = {}
-        notes.append("no sound effects, as asked (the track is silent)")
+        note("assets", "no sound effects, as asked (the track is silent)", None)
+    if not o["clock_visible"]:
+        for key in ("hook", "result", "end_fact"):
+            if "{clock_left}" in (o["texts"].get(key) or "") or "{time_used}" in (o["texts"].get(key) or ""):
+                note("concept", f"the {key.replace('_', ' ')} quotes the clock, which is hidden in this ad")
 
     ad = {
         "version": 1,
         "concept": ending,
         **({"band": band} if band else {}),
         **({"colour_names": names} if names else {}),
+        "brief_notes": brief_notes,
         "length_s": length_s,
         "output": {"w": W, "h": H, "fps": FPS, "safe": "social", "crf": 16},
         "sources": {src: {"recording": str(rec.path.resolve()), "sha256": rec.sha()}},

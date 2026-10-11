@@ -336,7 +336,8 @@ def _cmd_plan(args) -> int:
     from . import planner, studio
     current = studio.versions(args.edit)[-1]["brief"] if args.edit else None
     ups = {n: p for n, p in studio.uploads().items() if n in (args.upload or [])}
-    b = planner.plan(args.prompt, uploads=ups, sprites=studio.sprite_names(), current=current)
+    b = planner.plan(args.prompt, uploads=ups, sprites=studio.sprite_names(), current=current,
+                     available=studio.uploads())
     _print_brief(b)
     if args.json:
         Path(args.json).write_text(json.dumps(b, indent=1))
@@ -351,7 +352,8 @@ def _cmd_make(args) -> int:
     if args.brief:
         b = json.loads(Path(args.brief).read_text())
     else:
-        b = planner.plan(args.prompt, uploads=ups, sprites=studio.sprite_names(), current=current)
+        b = planner.plan(args.prompt, uploads=ups, sprites=studio.sprite_names(), current=current,
+                     available=studio.uploads())
     _print_brief(b)
     v = studio.make(args.prompt, b, args.edit, draft=args.draft)
     print(f"Version: studio/{v['id']}/v{v['n']} ({v['length_s']:.2f} s, made in {v['seconds']:.0f} s)")
