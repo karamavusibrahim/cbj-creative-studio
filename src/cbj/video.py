@@ -87,8 +87,10 @@ class FrameWriter:
             # A constant quantizer: CRF carries a running complexity estimate from frame to frame,
             # so an edit would nudge the quality (and pixels) of every later frame.
             rate = ["-qp", str(crf)]
-            times = ",".join(f"{k / fps:.6f}" for k in sorted(set(keyframes)))
-            local = ["-force_key_frames", times or "0", "-forced-idr", "1",
+            # Keyframes by frame number. Given as times, ffmpeg puts some one frame late (when k/fps
+            # rounds up), and then the frame before it still references the edited span.
+            expr = "+".join(f"eq(n,{k})" for k in sorted(set(keyframes) | {0}))
+            local = ["-force_key_frames", f"expr:{expr}", "-forced-idr", "1",
                      "-x264-params", "mbtree=0:rc-lookahead=0:bframes=0:scenecut=0:keyint=100000:min-keyint=1"]
         cmd = [ffmpeg_bin(), "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
                "-r", str(fps), "-i", "-", "-vf", _OUT, "-c:v", "libx264", "-preset", preset, *rate,

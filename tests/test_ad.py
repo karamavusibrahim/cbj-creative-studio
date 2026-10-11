@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 from cbj import cli
-from cbj.ad import (BAND, FIT, Recording, build_ad, check_ad, copy_problems, fill, layer_window, timeline,
-                    to_output)
+from cbj.ad import (BAND, FIT, Recording, _schedule_band, build_ad, check_ad, copy_problems, fill, layer_window,
+                    timeline, to_output)
 from cbj.compose import Prepared, anim_state, audio_events, cascade_pitch, cursor_track, diff, render
 from cbj.video import FrameWriter, read_frames
 
@@ -140,7 +140,9 @@ def test_texts_use_facts_only():
                                       ("1 in 100 can do it", True), ("only 5 people", True),
                                       ("Only 3 players can solve it", True), ("99 percent fail", True),
                                       ("Can you beat the clock?", False), ("Phew! 00:01 left", False),
-                                      ("Only 00:01 to spare!", False), ("Only one block left", False)])
+                                      ("Only 00:01 to spare!", False), ("Only one block left", False),
+                                      ("Level 3 in 12 seconds", False), ("1/100 can do it", True),
+                                      ("One in a hundred solve it", True), ("only 5 users finish", True)])
 def test_copy_guard(text, bad):
     assert bool(copy_problems(text)) == bad
 
@@ -274,8 +276,22 @@ def test_ad_diff_proves_the_edit_and_the_mp4_stays_local(rendered, edited, capsy
     b = read_frames(out_b / "ad.mp4", (W, H))
     outside = [i for i, (x, y) in enumerate(zip(a, b)) if not f0 <= i < f1 and not np.array_equal(x, y)]
     assert outside == []
-    assert cli.main(["ad-diff", str(out_a), str(out_b)]) == 0
-    assert "every change is inside them" in capsys.readouterr().out
+    assert diff(out_a, out_b, decode=True)["mp4_local"]
+    assert cli.main(["ad-diff", str(out_a), str(out_b), "--decode"]) == 0
+    out = capsys.readouterr().out
+    assert "every change is inside them" in out and "all inside those GOPs" in out
+
+
+def test_keyframes_land_exactly_where_planned(rendered):
+    """ffmpeg put keyframes given as times one frame late whenever k/fps rounded up; by frame
+    number they are exact. Checked on the real file with ffprobe."""
+    import subprocess
+    out_a, r = rendered
+    flags = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v", "-show_entries", "frame=key_frame",
+                            "-of", "csv=p=0", str(out_a / "ad.mp4")], capture_output=True, text=True).stdout.split()
+    actual = [i for i, k in enumerate(flags) if k.startswith("1")]
+    assert actual == r["keyframes"]
+    assert any(round(k / 30, 6) * 30 > k for k in r["keyframes"])  # at least one boundary that used to slip
 
 
 def test_the_end_card_holds_to_the_last_frame():
@@ -354,3 +370,43 @@ def test_a_render_that_fails_qa_is_not_left_looking_finished(ad, tmp_path):
     r = render(bad, tmp_path / "g", draft=True)
     assert any("end_title" in f and "safe area" in f for f in r["qa"]["failures"])
     assert (tmp_path / "g" / "ad.FAILED.mp4").exists() and not (tmp_path / "g" / "ad.mp4").exists()
+
+
+# ---------- the fixes from the second Fable 5.1 check ----------
+
+def test_ad_diff_fails_a_hidden_locked_change_and_refuses_a_failed_render(rendered, tmp_path):
+    out_a, _ = rendered
+    ad = json.loads((out_a / "ad.json").read_text())
+    ad["segments"]["play"]["fit"]["y"] = 300  # a locked change...
+    from cbj.ad import locked_digests
+    ad["origin"]["locked"] = locked_digests(ad)  # ...with its digests rewritten to slip past compose
+    render(ad, tmp_path / "sneaky", draft=True)
+    d = diff(out_a, tmp_path / "sneaky")
+    assert d["locked_violation"] == ["segments"] and not d["ok"]
+    assert cli.main(["ad-diff", str(out_a), str(tmp_path / "sneaky")]) == 1
+    bad = json.loads((out_a / "ad.json").read_text())
+    bad["layers"]["end_title"]["pos"] = [1000, 520]
+    render(bad, tmp_path / "failed", draft=True)
+    with pytest.raises(ValueError, match="failed QA"):
+        diff(out_a, tmp_path / "failed")
+
+
+def test_a_window_may_not_run_past_its_segment(ad):
+    bad = copy.deepcopy(ad)
+    bad["layers"]["cap_result"]["end"] = None
+    del bad["layers"]["cap_result"]["end"]
+    bad["layers"]["cap_result"]["dur"] = 5
+    assert any("cap_result" in f and "past the end" in f for f in Prepared(bad, True).qa["failures"])
+
+
+def test_the_scheduler_keeps_a_fixed_end_where_it_is(rec):
+    layers = {
+        "a": {"type": "text", "slot": "top", "text": "One", "start": {"seg": "play", "at": 0}, "dur": 1.0},
+        "b": {"type": "text", "slot": "top", "text": "Two", "start": {"seg": "play", "at": 2.0}, "dur": 1.0},
+        "c": {"type": "text", "slot": "top", "text": "Go", "start": {"seg": "play", "at": 0.5},
+              "end": {"seg": "play", "at": 1.9}},
+    }
+    segments = {"play": {"kind": "clip", "src": "main", "from": 0, "to": 126, "speed": 1, "fit": FIT}}
+    _schedule_band(layers, ["a", "b", "c"], segments, ["play"], rec, "main")
+    assert "c" in layers and layers["c"]["start"]["at"] == 1.0  # moved after a, not pushed past b
+    assert layer_window({"order": ["play"], "segments": segments, "layers": layers}, {"main": rec}, "c") == (30, 57)

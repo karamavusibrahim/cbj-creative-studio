@@ -434,9 +434,14 @@ The replay and the result screens play full size. Texts are fitted to the band.
 The encode is bit-exact, so the same `ad.json` gives a byte-identical MP4.
 
 **Edits stay local in the delivered video too.** Every segment and layer boundary starts a new
-GOP (an IDR frame), and the encoder runs with a constant quantizer, no look-ahead and no B-frames.
-So a change inside one span cannot alter a decoded pixel anywhere else. With default x264
-settings, rate control and inter-frame prediction spread an edit into neighbouring frames.
+GOP: an IDR frame, placed by frame number (given as times, ffmpeg put some keyframes one frame
+late). The encoder runs with a constant quantizer, no look-ahead and no B-frames. So with the
+same keyframes, only the GOPs that hold a changed frame can decode differently. A text, style or
+image edit keeps the keyframes: the decoded MP4 then differs exactly in the edited layer's
+frames. A timing edit (moving, adding or removing a layer) moves keyframes, so the video can
+differ from the first moved keyframe on, and `ad-diff` says so. With default x264 settings, rate
+control and inter-frame prediction spread any edit into neighbouring frames. The price is file
+size: about 10 MB for 30 s instead of about 6 MB, well inside platform limits.
 
 `cbj ad-diff ORIGINAL EDITED` is the proof for one edit. It compares the frame hashes, then
 composites both versions of every changed frame again and measures the changed pixels. It
@@ -446,8 +451,10 @@ reports:
   them);
 - whether the gameplay sources, timeline, camera fit, sound and locked parts stayed the same.
 
-It exits 1 if a change escaped its layers or a locked part changed. Tests check this on the
-decoded MP4 as well.
+`--decode` also decodes both MP4s and checks that every differing frame lies in those GOPs. The
+command exits 1 if a change escaped its layers, a locked part changed, or a render failed QA (a
+failed render is refused). Tests check the keyframe positions with ffprobe and the locality on
+the decoded files.
 
 **QA, on every render.** Problems found before drawing stop the render at once (nothing is
 encoded, exit 1). A render that fails a later check is saved as `ad.FAILED.mp4`, never as

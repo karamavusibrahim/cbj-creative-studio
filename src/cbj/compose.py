@@ -30,7 +30,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from . import __version__ as CBJ_VERSION
 from .ad import (BAND, FPS, SAFE, STYLES, TWO_LINE_SIZE, END_CARD_S, Recording, check_ad, copy_problems, fill,
-                 layer_window, resolve_time, seg_frames, source_frame, timeline, to_output)
+                 layer_window, reading_s, resolve_time, seg_frames, source_frame, timeline, to_output)
 from .draw import (PURPLE, WHITE, blend, clamp01, cover, ease_in_out, ease_out_back, ease_out_cubic, fit_text,
                    scaled, sprite, text_image, wrap)
 from .sound import RATE, render_track, write_wav
@@ -154,6 +154,14 @@ def draw_cursor(frame, st: dict, placer: Placer, size: int, speed: float, image:
 
 def layer_image(layer: dict, text: str) -> Image.Image:
     kind = layer["type"]
+    if kind == "tag" and layer.get("shape") == "circle":
+        # A round badge, sized to cover the HUD element it sits on (the level circle).
+        d = int(layer.get("diameter", 252))
+        badge = Image.new("RGBA", (d, d), (0, 0, 0, 0))
+        ImageDraw.Draw(badge).ellipse((3, 3, d - 4, d - 4), fill=(*PURPLE, 255), outline=(*WHITE, 255), width=8)
+        label = fit_text(text, STYLES.get(layer.get("style", "tag"), 54), int(d * 0.8), int(d * 0.5), shadow=False)
+        badge.alpha_composite(label, ((d - label.width) // 2, (d - label.height) // 2))
+        return badge
     if kind == "tag":
         label = text_image(text, STYLES.get(layer.get("style", "tag"), 54), shadow=False)
         w, h = label.width + 40, label.height + 10
@@ -282,6 +290,11 @@ class Prepared:
                     self.qa["failures"].append(f"layer {lid!r}: starts at frame {f0}, outside its segment "
                                                f"{seg_id!r} ({s0}-{s1})")
                     continue
+                end_seg = layer.get("end", {}).get("seg", seg_id) if isinstance(layer.get("end"), dict) else seg_id
+                if f1 > s1 and end_seg == seg_id:
+                    self.qa["failures"].append(f"layer {lid!r}: runs to frame {f1}, past the end of its segment "
+                                               f"{seg_id!r} ({s1}); end it there or anchor its end in the next one")
+                    continue
             entry = {"layer": layer, "f0": f0, "f1": f1, "boxes": []}
             if layer["type"] in TEXT_TYPES:
                 seg_id = layer.get("seg") or layer.get("start", {}).get("seg")
@@ -297,11 +310,10 @@ class Prepared:
                 if layer.get("slot") == "top" and entry["image"].height > BAND["y1"] - BAND["y0"]:
                     self.qa["failures"].append(f"layer {lid!r}: too long for the text band even at the smallest size")
                 if layer["type"] == "text":
-                    words = len(text.replace("\u00a0", " ").split())
-                    need = max(0.8, 0.4 + 0.3 * words)  # time to read it
+                    need = reading_s(text)  # time to read it
                     if (f1 - f0) / FPS < need - 1e-6:
                         self.qa["failures"].append(f"layer {lid!r}: on screen {(f1 - f0) / FPS:.2f} s; "
-                                                   f"{words} words need {need:.1f} s")
+                                                   f"its words need {need:.1f} s")
             elif layer["type"] == "image":
                 entry["image"] = scaled(sprite(layer["image"]), layer.get("scale", 1.0))
             elif layer["type"] == "vignette":
@@ -552,6 +564,8 @@ def _qa(ad, prep, track, hashes):
         box = _union(e["boxes"])
         if lay["type"] == "text" and lay.get("slot") == "top":
             tops.append((e["f0"], e["f1"], lid))
+        if box and lay.get("safe_exempt"):
+            continue  # placed outside the safe area on purpose; the reason is in ad.json
         if box and not (box[0] >= area[0] and box[1] >= area[1] and box[2] <= area[2] and box[3] <= area[3]):
             msg = f"layer {lid!r}: drawn at {box}, outside the {ad['output'].get('safe', 'social')} safe area {list(area)}"
             (qa["warnings"] if lay["type"] == "tag" else qa["failures"]).append(msg)
@@ -583,33 +597,41 @@ def _qa(ad, prep, track, hashes):
 
 # ---------- comparing two renders (the edit proof) ----------
 
-def diff(a_dir: str | Path, b_dir: str | Path) -> dict:
+def diff(a_dir: str | Path, b_dir: str | Path, decode: bool = False) -> dict:
     """What changed between two renders of an ad. Frames are compared by their hashes; for every
-    changed frame both ads are composited again (deterministically) and the changed pixels'
-    box is measured and checked against the boxes of the layers whose entries changed: every
-    change must be one the edit predicts. Also reports locked parts, the gameplay sources, the
-    timeline and the sound."""
+    changed frame both ads are composited again (deterministically) and the changed pixels' box
+    is measured and checked against the boxes of the layers whose entries changed: every change
+    must be one the edit predicts. Also reports locked parts, the gameplay sources, the timeline
+    and the sound.
+
+    The MP4: each segment and layer boundary starts a GOP, so with the same keyframes the decoded
+    video can differ only inside the GOPs that hold a changed frame; `mp4_may_differ` lists those
+    frames. A timing edit moves keyframes, and then the GOPs from the first moved one on may
+    differ too. decode=True decodes both files and measures it (`mp4_differs`)."""
     a_dir, b_dir = Path(a_dir), Path(b_dir)
     for d in (a_dir, b_dir):
         c = d / "compose.json"
         if not c.is_file() or not json.loads(c.read_text()).get("rendered"):
             raise ValueError(f"{d}: no finished render there (no compose.json, or its QA stopped the render)")
+        fails = json.loads(c.read_text())["qa"]["failures"]
+        if fails:
+            raise ValueError(f"{d}: that render failed QA, so it is not a usable ad: {fails[0]}")
     ca, cb = (json.loads((d / "compose.json").read_text()) for d in (a_dir, b_dir))
     ada, adb = (json.loads((d / "ad.json").read_text()) for d in (a_dir, b_dir))
-    if not (ca.get("rendered") and cb.get("rendered")):
-        raise ValueError("both folders need a finished render (compose.json with rendered: true)")
     if ca["draft"] != cb["draft"]:
         raise ValueError("one render is a draft and the other is not; their frames are not comparable")
     out = {"frames": (ca["frames"], cb["frames"]), "same_sources": ca["sources"] == cb["sources"],
            "same_timeline": ca["timeline"] == cb["timeline"], "same_sound": ca["wav_sha256"] == cb["wav_sha256"],
-           "same_mp4": ca["mp4_sha256"] == cb["mp4_sha256"]}
+           "same_mp4": ca["mp4_sha256"] == cb["mp4_sha256"], "same_keyframes": ca["keyframes"] == cb["keyframes"]}
     la, lb = ada.get("locked", []), adb.get("locked", [])
     from .ad import _get_path
     out["locked_changed"] = [p for p in sorted(set(la) | set(lb))
                              if json.dumps(_get_path(ada, p), sort_keys=True) != json.dumps(_get_path(adb, p), sort_keys=True)]
     out["unlocked"] = sorted(set(la) - set(lb))
+    out["locked_violation"] = [p for p in out["locked_changed"] if p not in out["unlocked"]]
     out["layers_changed"] = sorted(k for k in set(ca["layers"]) | set(cb["layers"])
                                    if ca["layers"].get(k) != cb["layers"].get(k) or ada["layers"].get(k) != adb["layers"].get(k))
+    out["ok"] = not out["locked_violation"]
     if ca["frames"] != cb["frames"] or not out["same_timeline"]:
         out["changed_frames"] = None
         out["note"] = "the timeline changed (a timing or gameplay edit), so frames are not compared one to one"
@@ -633,6 +655,26 @@ def diff(a_dir: str | Path, b_dir: str | Path) -> dict:
     pb_ = out["predicted_box"]
     out["contained"] = measured is None or (pb_ is not None and measured[0] >= pb_[0] and measured[1] >= pb_[1]
                                             and measured[2] <= pb_[2] and measured[3] <= pb_[3])
+    # Which decoded MP4 frames can differ: the GOPs holding a changed frame (same keyframes), or
+    # everything from the first keyframe that moved.
+    n = ca["frames"]
+    if out["same_keyframes"]:
+        ks = sorted(set(ca["keyframes"]) | {n})
+        may = set()
+        for a, b in zip(ks, ks[1:]):
+            if any(a <= c < b for c in changed):
+                may.update(range(a, b))
+    else:
+        first = min(set(ca["keyframes"]) ^ set(cb["keyframes"]) | set(changed or [n]))
+        may = set(range(min(first, min(changed) if changed else first), n))
+    out["mp4_may_differ"] = _ranges(sorted(may))
+    if decode:
+        da = read_frames(a_dir / "ad.mp4", (ada["output"]["w"], ada["output"]["h"]))
+        db = read_frames(b_dir / "ad.mp4", (adb["output"]["w"], adb["output"]["h"]))
+        differs = [i for i, (x, y) in enumerate(zip(da, db)) if not np.array_equal(x, y)]
+        out["mp4_differs"] = _ranges(differs)
+        out["mp4_local"] = set(differs) <= may
+    out["ok"] = out["ok"] and out["contained"] and out.get("mp4_local", True)
     return out
 
 

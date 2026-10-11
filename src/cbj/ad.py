@@ -51,10 +51,14 @@ END_TITLE = "Color Block Jam"
 # Copy guard: statements of odds or IQ are not allowed in ads (UK ASA rulings), dares are.
 # "Only 1% can", "only 5 people", "your IQ is 140", "1 in 100" are claims about players; a measured
 # fact like "only 00:01 to spare" is not.
+WHO = r"(people|players|persons|users|gamers|of\s+(you|us|people|players|users))"
+UNITS = r"(seconds?|secs?|minutes?|mins?|moves?|drags?|tries|attempts|levels?|blocks?)"
 FORBIDDEN = [(r"\d\s*(%|percent\b)", "a percentage"),
-             (r"\bonly\s+\d+\s*(people|players|persons|of\s+(you|us|people|players)|can|could|will|get|solve)\b",
-              "'only N' about players"),
-             (r"\bIQ\b", "an IQ claim"), (r"\b\d+\s*(in|out of)\s*\d+\b", "odds")]
+             (rf"\bonly\s+(\d+|one|a\s+few)\s*{WHO}", "'only N' about players"),
+             (r"\bonly\s+\d+\s*(can|could|will|get|solve)\b", "'only N' about players"),
+             (r"\bIQ\b", "an IQ claim"),
+             (rf"\b(\d+|one)\s+(in|out\s+of)\s+(a\s+)?(\d+|hundred|thousand|million)\b(?!\s*{UNITS})", "odds"),
+             (r"\b\d+\s*/\s*\d{2,}\b", "odds")]
 FACT_KEYS = ("clock_left", "colour", "timer", "blocks", "time_used", "blocks_left", "blocks_left_phrase")
 NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
 NBSP = "\u00a0"  # keeps a multi-word fact ("dark green") on one line
@@ -395,7 +399,10 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         # Over the HUD's Level badge: the one spot of a full-size frame that never hides the play.
         circle = next((u for u in rec.result.get("ui_rects", []) if u["name"] == "LevelCircle"), None)
         pos = [round(circle["x"] + circle["w"] / 2), round(circle["y"] + circle["h"] / 2)] if circle else [218, 337]
-        layers["replay_tag"] = {"type": "tag", "text": "REPLAY", "style": "tag", "pos": pos,
+        diameter = round(max(circle["w"], circle["h"]) + 12) if circle else 252
+        layers["replay_tag"] = {"type": "tag", "text": "REPLAY", "style": "tag", "pos": pos, "shape": "circle",
+                                "diameter": diameter,
+                                "safe_exempt": "covers the game's own HUD level circle, which sits there",
                                 "start": {"seg": "replay", "at": 0}, "end": {"seg": "replay", "at": "end"}}
     if ending == "win" and len(bf) >= 3:
         # The closing cascade is the satisfying part of a clean solve.
@@ -403,8 +410,9 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
                                       end={"seg": "play", "at": "end"}, style="title_xl")
     # Result captions wait 0.3 s for the game to dim the screen (the full-size HUD is in the band).
     if ending == "near_fail":
+        # Under the game's "+50" button: the banner and coins fill the top half of the win screen.
         layers["cap_result"] = _text("Phew! {clock_left} left", {"seg": "result", "at": 0.3},
-                                     end={"seg": "result", "at": "end"}, style="title_l")
+                                     end={"seg": "result", "at": "end"}, style="title_l", slot="free", pos=[540, 1418])
     elif ending == "time_out":
         layers["cap_result"] = _text("So close!", {"seg": "result", "at": 0.3}, end={"seg": "result", "at": "end"})
     elif ending == "cliffhanger":
@@ -452,7 +460,7 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         "concept": ending,
         "length_s": length_s,
         "output": {"w": W, "h": H, "fps": FPS, "safe": "social", "crf": 16},
-        "sources": {src: {"recording": str(rec.path), "sha256": rec.sha()}},
+        "sources": {src: {"recording": str(rec.path.resolve()), "sha256": rec.sha()}},
         "order": order,
         "segments": seg,
         "layers": {k: v for k, v in layers.items()},
@@ -489,13 +497,14 @@ def _schedule_band(layers: dict, priority: list[str], segments: dict, order: lis
     tl = timeline(probe)
     taken, notes = [], []
     for lid in priority:
-        if lid not in layers:
-            continue
+        if lid not in layers or layers[lid].get("slot") != "top":
+            continue  # only captions in the shared band compete for time
         lay = layers[lid]
         f0_orig, f1 = layer_window(probe, recs, lid)
         f0 = f0_orig
         for a, b in sorted(taken):
-            if f0 < b and a < f1 + (f0 - f0_orig):
+            end = f1 + (f0 - f0_orig) if "dur" in lay else f1  # a fixed end does not move with the start
+            if f0 < b and a < end:
                 f0 = max(f0, b)
         seg_id = lay["start"].get("seg", "play")
         s1 = tl[seg_id][1]

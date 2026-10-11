@@ -274,29 +274,39 @@ def _cmd_compose(args) -> int:
 
 def _cmd_ad_diff(args) -> int:
     from .compose import diff
-    d = diff(args.a, args.b)
+    d = diff(args.a, args.b, decode=args.decode)
     yes = lambda v: "same" if v else "CHANGED"
     print(f"gameplay sources: {yes(d['same_sources'])}; timeline and camera fit: {yes(d['same_timeline'])}; "
           f"sound: {yes(d['same_sound'])}")
     if d["locked_changed"]:
         print(f"locked parts changed: {', '.join(d['locked_changed'])}"
               + (f" (unlocked on purpose: {', '.join(d['unlocked'])})" if d["unlocked"] else ""))
+        if d["locked_violation"]:
+            print(f"  NOT ALLOWED: {', '.join(d['locked_violation'])} changed while still locked")
     else:
         print("locked parts: same")
     print(f"layers changed: {', '.join(d['layers_changed']) or 'none'}")
     if d["changed_frames"] is None:
         print(d["note"])
-        return 0
-    ranges = ", ".join(f"{a}-{b}" if a != b else f"{a}" for a, b in d["changed_frames"]) or "none"
+        return 0 if d["ok"] else 1
+    fmt = lambda rs: ", ".join(f"{a}-{b}" if a != b else f"{a}" for a, b in rs) or "none"
     n = sum(b - a + 1 for a, b in d["changed_frames"])
-    print(f"frames changed: {n} of {d['frames'][0]} ({ranges})")
+    print(f"frames changed: {n} of {d['frames'][0]} ({fmt(d['changed_frames'])})")
     if d["measured_box"]:
         print(f"pixels changed inside {d['measured_box']}; the changed layers cover {d['predicted_box']}: "
               + ("every change is inside them" if d["contained"] else "SOME CHANGES ARE OUTSIDE THEM"))
-    print("the MP4 files are " + ("identical" if d["same_mp4"] else
-          "different; with keyframes at every layer boundary, decoded frames outside the changed ones are identical"))
-    ok = d["contained"] and not [p for p in d["locked_changed"] if p not in d["unlocked"]]
-    return 0 if ok else 1
+    if d["same_mp4"]:
+        print("MP4: identical files")
+    elif n == 0:
+        print("MP4: the video is identical" + ("" if d["same_sound"] else "; only the sound changed"))
+    else:
+        how = ("same keyframes, so only the GOPs holding a changed frame can differ"
+               if d["same_keyframes"] else "keyframes moved (a timing edit), so the video can differ from there on")
+        print(f"MP4: {how}: frames {fmt(d['mp4_may_differ'])}")
+        if "mp4_differs" in d:
+            print(f"MP4 decoded: frames that differ {fmt(d['mp4_differs'])}: "
+                  + ("all inside those GOPs" if d["mp4_local"] else "SOME OUTSIDE THEM"))
+    return 0 if d["ok"] else 1
 
 
 def _cmd_rerun(args) -> int:
@@ -486,6 +496,7 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("ad-diff", help="what changed between two renders of an ad (the edit proof)")
     s.add_argument("a", help="the original render folder")
     s.add_argument("b", help="the edited render folder")
+    s.add_argument("--decode", action="store_true", help="also decode both MP4s and check the video itself")
     s.set_defaults(func=_cmd_ad_diff)
 
     s = sub.add_parser("rerun", help="record a finished recording again from its folder, and compare")
