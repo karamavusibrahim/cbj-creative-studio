@@ -186,15 +186,16 @@ def layer_image(layer: dict, text: str) -> Image.Image:
     return img
 
 
-def anim_state(layer: dict, t: int, f0: int, f1: int) -> tuple[float, float]:
-    """(scale, opacity) of a layer at output frame t."""
+def anim_state(layer: dict, t: int, f0: int, f1: int, total: int | None = None) -> tuple[float, float]:
+    """(scale, opacity) of a layer at output frame t. A layer that lasts to the end of the ad holds
+    (no fade-out): the last frame is what a feed shows when the ad ends or loops."""
     anim = layer.get("anim", "pop")
     scale, alpha = 1.0, 1.0
     if anim in ("pop",) and t - f0 < 6:
         k = (t - f0) / 6
         scale = 0.6 + 0.4 * ease_out_back(k)
         alpha = clamp01((t - f0 + 1) / 3)
-    if anim in ("pop", "pop_out") and f1 - t <= 4:
+    if anim in ("pop", "pop_out") and f1 - t <= 4 and not (total is not None and f1 >= total):
         k = (f1 - t) / 4
         scale *= 0.85 + 0.15 * k
         alpha *= k
@@ -217,182 +218,247 @@ def vignette_image(size: tuple[int, int], color) -> Image.Image:
 
 # ---------- rendering ----------
 
+ORDER_Z = {"vignette": 0, "cursor": 1, "image": 2, "button": 3, "text": 4, "tag": 5}
+
+
+class Prepared:
+    """An ad.json resolved for drawing: recordings, the timeline, every layer's frames, text and
+    image, sound events, and the QA found before any frame is drawn."""
+
+    def __init__(self, ad: dict, draft: bool = False):
+        check_ad(ad)
+        self.ad, self.draft = ad, draft
+        self.size = (ad["output"]["w"], ad["output"]["h"])
+        self.recs = {sid: Recording.load(s["recording"]) for sid, s in ad["sources"].items()}
+        self.qa = {"failures": [], "warnings": []}
+        for sid, s in ad["sources"].items():
+            if s.get("sha256") and s["sha256"] != self.recs[sid].sha():
+                self.qa["failures"].append(f"source {sid!r}: gameplay.mp4 changed since ad.json was made (hash differs)")
+        self.tl = timeline(ad)
+        self.total = max(e for _, e in self.tl.values())
+        self._check_locked()
+        self.layers = self._resolve_layers()
+        try:
+            self.events = audio_events(ad, self.recs, self.tl, self.total)
+        except (ValueError, KeyError) as e:
+            self.events = []
+            self.qa["failures"].append(f"audio: {e}")
+        self.draw_order = sorted(self.layers, key=lambda k: ORDER_Z[self.layers[k]["layer"]["type"]])
+        self._placers, self._firsts = {}, {}
+
+    def _check_locked(self):
+        """`locked` parts must match the digests written when the ad was made (case p.3: elements
+        that must stay unchanged). To change one on purpose, remove it from `locked` first."""
+        from .ad import locked_digests
+        origin = self.ad.get("origin", {}).get("locked")
+        if origin is None:
+            if self.ad.get("locked"):
+                self.qa["warnings"].append("ad.json has no origin digests, so locked parts cannot be checked")
+            return
+        now = locked_digests(self.ad)
+        for path, digest in now.items():
+            if path in origin and origin[path] != digest:
+                self.qa["failures"].append(f"locked part {path!r} changed; to change it on purpose, remove it "
+                                           f"from 'locked' in ad.json first")
+
+    def _resolve_layers(self) -> dict:
+        ad, recs, tl, total, size = self.ad, self.recs, self.tl, self.total, self.size
+        layers = {}
+        for lid, layer in ad["layers"].items():
+            if layer.get("enabled") is False:
+                continue
+            try:
+                f0, f1 = layer_window(ad, recs, lid) if layer["type"] != "cursor" else (0, total)
+            except (ValueError, KeyError) as e:
+                self.qa["failures"].append(f"layer {lid!r}: {e}")
+                continue
+            if layer["type"] != "cursor":
+                seg_id = layer.get("seg") or layer.get("start", {}).get("seg")
+                s0, s1 = tl.get(seg_id, (0, total))
+                if not (0 <= f0 < f1 <= total):
+                    self.qa["failures"].append(f"layer {lid!r}: frames {f0}-{f1} are not inside the ad (0-{total})")
+                    continue
+                if f0 >= s1 or f0 < s0:
+                    self.qa["failures"].append(f"layer {lid!r}: starts at frame {f0}, outside its segment "
+                                               f"{seg_id!r} ({s0}-{s1})")
+                    continue
+            entry = {"layer": layer, "f0": f0, "f1": f1, "boxes": []}
+            if layer["type"] in TEXT_TYPES:
+                seg_id = layer.get("seg") or layer.get("start", {}).get("seg")
+                src = ad["segments"].get(seg_id, {}).get("src") or next(iter(recs))
+                try:
+                    text = fill(layer["text"], recs[src].facts(layer.get("beat")))
+                except ValueError as e:
+                    self.qa["failures"].append(f"layer {lid!r}: {e}")
+                    continue
+                self.qa["failures"] += [f"layer {lid!r}: {p}" for p in copy_problems(text)]
+                entry["text"] = text
+                entry["image"] = layer_image(layer, text)
+                if layer.get("slot") == "top" and entry["image"].height > BAND["y1"] - BAND["y0"]:
+                    self.qa["failures"].append(f"layer {lid!r}: too long for the text band even at the smallest size")
+                if layer["type"] == "text":
+                    words = len(text.replace("\u00a0", " ").split())
+                    need = max(0.8, 0.4 + 0.3 * words)  # time to read it
+                    if (f1 - f0) / FPS < need - 1e-6:
+                        self.qa["failures"].append(f"layer {lid!r}: on screen {(f1 - f0) / FPS:.2f} s; "
+                                                   f"{words} words need {need:.1f} s")
+            elif layer["type"] == "image":
+                entry["image"] = scaled(sprite(layer["image"]), layer.get("scale", 1.0))
+            elif layer["type"] == "vignette":
+                entry["image"] = vignette_image(size, layer.get("color", [255, 40, 40]))
+                sid = layer["start"].get("seg")
+                seg = ad["segments"][sid]
+                pulses = [to_output(seg, tl[sid][0], f) for f in recs[seg["src"]].event(layer.get("pulse_on", ""))]
+                entry["pulses"] = sorted(p for p in pulses if p is not None)
+            elif layer["type"] == "cursor":
+                entry["image"] = sprite(layer["image"]) if layer.get("image") else None
+                entry["tracks"] = {sid: cursor_track(r) for sid, r in recs.items()}
+            layers[lid] = entry
+        return layers
+
+    def placer(self, src, fit):
+        key = (src, json.dumps(fit, sort_keys=True))
+        if key not in self._placers:
+            if src not in self._firsts:
+                self._firsts[src] = next(read_frames(self.recs[src].video, self.size, 0, 1)).copy()
+            self._placers[key] = Placer(self._firsts[src], fit, self.size, self.draft)
+        return self._placers[key]
+
+    def card_base(self, seg) -> np.ndarray:
+        base = cover(sprite(seg.get("background", "StartBACKGROUND.png")), self.size)
+        th = seg.get("thumb")
+        if th:
+            f = next(read_frames(self.recs[th["src"]].video, self.size, th["frame"], 1))
+            y0, y1 = th.get("crop_y", [0, f.shape[0]])
+            im = scaled(Image.fromarray(f[y0:y1]).convert("RGBA"), th.get("scale", 0.5))
+            framed = Image.new("RGBA", (im.width + 16, im.height + 16), (*WHITE, 255))
+            framed.alpha_composite(im, (8, 8))
+            blend(base, framed, *th.get("pos", [540, 960]))
+        return base
+
+    def keyframes(self) -> list[int]:
+        """Every segment and layer boundary starts a GOP, so a change inside one span cannot touch
+        the decoded pixels of any other (the MP4 stays local to an edit, not just the frames)."""
+        ks = {0}
+        for a, b in self.tl.values():
+            ks.update((a, b))
+        for e in self.layers.values():
+            if e["layer"]["type"] != "cursor":
+                ks.update((e["f0"], e["f1"]))
+        return sorted(k for k in ks if 0 <= k < self.total)
+
+    def frames(self, want: set[int] | None = None):
+        """Yield (t, composited RGB frame) for every output frame, or only those in want (the
+        others are stepped over without drawing)."""
+        W, H = self.size
+        for sid in self.ad["order"]:
+            seg = self.ad["segments"][sid]
+            s0, s1 = self.tl[sid]
+            if want is not None and not any(s0 <= t < s1 for t in want):
+                continue
+            if seg["kind"] == "card":
+                base = self.card_base(seg)
+                source = (base for _ in range(s1 - s0))
+            elif seg["kind"] == "hold":
+                still = next(read_frames(self.recs[seg["src"]].video, self.size, seg["frame"], 1)).copy()
+                placed = self.placer(seg["src"], seg["fit"]).place(still)
+                source = (placed for _ in range(s1 - s0))
+            else:
+                reader = read_frames(self.recs[seg["src"]].video, self.size, seg["from"], seg["to"] - seg["from"])
+                source = _clip_frames(reader, seg, self.placer(seg["src"], seg["fit"]), s1 - s0)
+            for k, base in enumerate(source):
+                t = s0 + k
+                if want is not None and t not in want:
+                    continue
+                frame = base.copy()
+                for lid in self.draw_order:
+                    self._draw(lid, frame, t, sid, seg, k, W, H)
+                yield t, np.ascontiguousarray(frame)
+
+    def _draw(self, lid, frame, t, sid, seg, k, W, H):
+        e = self.layers[lid]
+        lay = e["layer"]
+        if lay["type"] == "cursor":
+            if seg["kind"] == "clip" and sid in lay.get("segments", []):
+                st = e["tracks"][seg["src"]][source_frame(seg, k)]
+                e["boxes"] += draw_cursor(frame, st, self.placer(seg["src"], seg["fit"]), lay.get("size", 96),
+                                          seg.get("speed", 1), e["image"])
+            return
+        if not e["f0"] <= t < e["f1"]:
+            return
+        if lay["type"] == "vignette":
+            a, pf = 0.0, lay.get("pulse_frames", 10)
+            for p in e["pulses"]:
+                if p <= t < p + pf:
+                    a = max(a, math.sin(math.pi * (t - p) / pf))
+            if a > 0:
+                b = blend(frame, e["image"], W / 2, H / 2, a * lay.get("max_alpha", 0.35))
+                if b:
+                    e["boxes"].append(b)
+            return
+        if e.get("image") is None:
+            return
+        sc, op = anim_state(lay, t, e["f0"], e["f1"], self.total)
+        b = blend(frame, scaled(e["image"], sc), *lay.get("pos", [BAND["cx"], BAND["cy"]]), op)
+        if b:
+            e["boxes"].append(b)
+
+
 def render(ad: dict, out_dir: str | Path, draft: bool = False) -> dict:
-    check_ad(ad)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    size = (ad["output"]["w"], ad["output"]["h"])
-    W, H = size
-    recs = {sid: Recording.load(s["recording"]) for sid, s in ad["sources"].items()}
-    qa = {"failures": [], "warnings": []}
-    for sid, s in ad["sources"].items():
-        if s.get("sha256") and s["sha256"] != recs[sid].sha():
-            qa["failures"].append(f"source {sid!r}: gameplay.mp4 changed since ad.json was made (hash differs)")
-    tl = timeline(ad)
-    total = max(e for _, e in tl.values())
-
-    # Resolve every layer: its frames, its text (facts filled in), its image.
-    layers = {}
-    for lid, layer in ad["layers"].items():
-        if layer.get("enabled") is False:
-            continue
-        try:
-            f0, f1 = layer_window(ad, recs, lid) if layer["type"] != "cursor" else (0, total)
-        except (ValueError, KeyError) as e:
-            qa["failures"].append(f"layer {lid!r}: {e}")
-            continue
-        entry = {"layer": layer, "f0": f0, "f1": f1, "boxes": []}
-        if layer["type"] in TEXT_TYPES:
-            seg = layer.get("seg") or layer.get("start", {}).get("seg")
-            src = ad["segments"].get(seg, {}).get("src") or next(iter(recs))
-            try:
-                text = fill(layer["text"], recs[src].facts(layer.get("beat")))
-            except ValueError as e:
-                qa["failures"].append(f"layer {lid!r}: {e}")
-                continue
-            qa["failures"] += [f"layer {lid!r}: {p}" for p in copy_problems(text)]
-            entry["text"] = text
-            entry["image"] = layer_image(layer, text)
-        elif layer["type"] == "image":
-            entry["image"] = scaled(sprite(layer["image"]), layer.get("scale", 1.0))
-        elif layer["type"] == "vignette":
-            entry["image"] = vignette_image(size, layer.get("color", [255, 40, 40]))
-            sid = layer["start"].get("seg")
-            seg = ad["segments"][sid]
-            pulses = [to_output(seg, tl[sid][0], f) for f in recs[seg["src"]].event(layer.get("pulse_on", ""))]
-            entry["pulses"] = sorted(p for p in pulses if p is not None)
-        elif layer["type"] == "cursor":
-            entry["image"] = sprite(layer["image"]) if layer.get("image") else None
-            entry["tracks"] = {sid: cursor_track(r) for sid, r in recs.items()}
-        layers[lid] = entry
-
-    # Problems found so far (a claim the ad rules forbid, an anchor that cannot resolve, a sound at a
-    # moment that is not in the ad) stop here, before any frame is drawn.
-    try:
-        events = audio_events(ad, recs, tl, total)
-    except (ValueError, KeyError) as e:
-        events = []
-        qa["failures"].append(f"audio: {e}")
+    for stale in ("ad.mp4", "ad.FAILED.mp4", "poster.png", "audio.wav", "compose.json"):
+        (out / stale).unlink(missing_ok=True)
+    prep = Prepared(ad, draft)
+    qa, total = prep.qa, prep.total
+    # Problems found so far (a claim the ad rules forbid, an anchor that cannot resolve, a locked
+    # part changed, a text too long to read) stop here, before any frame is drawn.
     if qa["failures"]:
         result = {"rendered": False, "frames": total, "duration_s": round(total / FPS, 3), "draft": draft,
                   "timeline": {}, "layers": {}, "qa": qa}
         (out / "compose.json").write_text(json.dumps(result, indent=1))
         return result
-
-    # Placers (one per source and fit), cards.
-    placers, firsts = {}, {}
-    for sid, rec in recs.items():
-        firsts[sid] = next(read_frames(rec.video, size, 0, 1)).copy()
-
-    def placer(src, fit):
-        key = (src, json.dumps(fit, sort_keys=True))
-        if key not in placers:
-            placers[key] = Placer(firsts[src], fit, size, draft)
-        return placers[key]
-
-    def card_base(seg) -> np.ndarray:
-        base = cover(sprite(seg.get("background", "StartBACKGROUND.png")), size)
-        th = seg.get("thumb")
-        if th:
-            f = next(read_frames(recs[th["src"]].video, size, th["frame"], 1))
-            y0, y1 = th.get("crop_y", [0, f.shape[0]])
-            im = Image.fromarray(f[y0:y1]).convert("RGBA")
-            im = scaled(im, th.get("scale", 0.5))
-            frame_img = Image.new("RGBA", (im.width + 16, im.height + 16), (*WHITE, 255))
-            frame_img.alpha_composite(im, (8, 8))
-            blend(base, frame_img, *th.get("pos", [540, 960]))
-        return base
-
-    order_z = {"vignette": 0, "cursor": 1, "image": 2, "button": 3, "text": 4, "tag": 5}
-    draw_order = sorted(layers, key=lambda k: order_z[layers[k]["layer"]["type"]])
-    writer = FrameWriter(out / "video.mp4", size, FPS, ad["output"].get("crf", 16), draft=draft)
-    hashes = []
-    poster = None
+    writer = FrameWriter(out / "video.mp4", prep.size, FPS, ad["output"].get("crf", 16), draft=draft,
+                         keyframes=prep.keyframes())
+    hashes, poster = [], None
     try:
-        for sid in ad["order"]:
-            seg = ad["segments"][sid]
-            s0, s1 = tl[sid]
-            if seg["kind"] == "card":
-                base = card_base(seg)
-                source = (base for _ in range(s1 - s0))
-            elif seg["kind"] == "hold":
-                still = next(read_frames(recs[seg["src"]].video, size, seg["frame"], 1)).copy()
-                pl = placer(seg["src"], seg["fit"])
-                placed = pl.place(still)
-                source = (placed for _ in range(s1 - s0))
-            else:
-                pl = placer(seg["src"], seg["fit"])
-                reader = read_frames(recs[seg["src"]].video, size, seg["from"], seg["to"] - seg["from"])
-                source = _clip_frames(reader, seg, pl, s1 - s0)
-            for k, base in enumerate(source):
-                t = s0 + k
-                frame = base.copy()
-                for lid in draw_order:
-                    e = layers[lid]
-                    lay = e["layer"]
-                    if lay["type"] == "cursor":
-                        if seg["kind"] == "clip" and sid in lay.get("segments", []):
-                            src_f = source_frame(seg, k)
-                            st = e["tracks"][seg["src"]][src_f]
-                            e["boxes"] += draw_cursor(frame, st, placer(seg["src"], seg["fit"]), lay.get("size", 96),
-                                                      seg.get("speed", 1), e["image"])
-                        continue
-                    if not e["f0"] <= t < e["f1"]:
-                        continue
-                    if lay["type"] == "vignette":
-                        a = 0.0
-                        pf = lay.get("pulse_frames", 10)
-                        for p in e["pulses"]:
-                            if p <= t < p + pf:
-                                a = max(a, math.sin(math.pi * (t - p) / pf))
-                        if a > 0:
-                            b = blend(frame, e["image"], W / 2, H / 2, a * lay.get("max_alpha", 0.35))
-                            if b:
-                                e["boxes"].append(b)
-                        continue
-                    if e.get("image") is None:
-                        continue
-                    sc, op = anim_state(lay, t, e["f0"], e["f1"])
-                    img = scaled(e["image"], sc)
-                    cx, cy = lay.get("pos", [BAND["cx"], BAND["cy"]])
-                    b = blend(frame, img, cx, cy, op)
-                    if b:
-                        e["boxes"].append(b)
-                frame = np.ascontiguousarray(frame)
-                hashes.append(hashlib.sha256(frame.data).hexdigest()[:32])
-                if t == 0:
-                    poster = frame.copy()
-                writer.write(frame)
+        for t, frame in prep.frames():
+            hashes.append(hashlib.sha256(frame.data).hexdigest()[:32])
+            if t == 0:
+                poster = frame.copy()
+            writer.write(frame)
         writer.close()
     except BaseException:
         writer.proc.kill()
         raise
-
-    # Sound.
-    track = render_track(events, total / FPS)
+    track = render_track(prep.events, total / FPS)
     write_wav(track, out / "audio.wav")
     mux(out / "video.mp4", out / "audio.wav", out / "ad.mp4")
     (out / "video.mp4").unlink()
     if poster is not None:
         Image.fromarray(poster).save(out / "poster.png")
-
-    # QA.
-    _qa(ad, layers, tl, total, track, hashes, qa)
+    _qa(ad, prep, track, hashes)
+    if qa["failures"]:
+        (out / "ad.mp4").rename(out / "ad.FAILED.mp4")  # never leave a failed ad looking finished
     (out / "ad.json").write_text(json.dumps(ad, indent=2))
     result = {
         "rendered": True,
-        "tool": {"cbj": CBJ_VERSION, "pillow": PIL.__version__, "numpy": np.__version__, "ffmpeg": _ffmpeg_version()},
+        "tool": {"cbj": CBJ_VERSION, "pillow": PIL.__version__, "numpy": np.__version__, "ffmpeg": _ffmpeg_version(),
+                 "resize": "bilinear" if draft else "lanczos"},
         "ad_sha256": hashlib.sha256(json.dumps(ad, sort_keys=True).encode()).hexdigest(),
-        "sources": {sid: {"recording": s["recording"], "sha256": recs[sid].sha()} for sid, s in ad["sources"].items()},
+        "sources": {sid: {"recording": s["recording"], "sha256": prep.recs[sid].sha()}
+                    for sid, s in ad["sources"].items()},
         "frames": total, "fps": FPS, "duration_s": round(total / FPS, 3),
-        "timeline": {sid: {"frames": list(tl[sid]), "kind": ad["segments"][sid]["kind"],
+        "timeline": {sid: {"frames": list(prep.tl[sid]), "kind": ad["segments"][sid]["kind"],
                            "fit": ad["segments"][sid].get("fit")} for sid in ad["order"]},
         "layers": {lid: {"type": e["layer"]["type"], "frames": [e["f0"], e["f1"]], "text": e.get("text"),
-                         "box": _union(e["boxes"])} for lid, e in layers.items()},
-        "audio_events": events,
+                         "box": _union(e["boxes"])} for lid, e in prep.layers.items()},
+        "keyframes": prep.keyframes(),
+        "audio_events": prep.events,
         "frame_sha256": hashes,  # first 128 bits of each composited RGB frame's SHA-256
         "wav_sha256": hashlib.sha256((out / "audio.wav").read_bytes()).hexdigest(),
-        "mp4_sha256": hashlib.sha256((out / "ad.mp4").read_bytes()).hexdigest(),
+        "mp4_sha256": hashlib.sha256(((out / "ad.mp4") if (out / "ad.mp4").exists()
+                                      else (out / "ad.FAILED.mp4")).read_bytes()).hexdigest(),
         "draft": draft,
         "qa": qa,
     }
@@ -426,6 +492,8 @@ def audio_events(ad: dict, recs: dict, tl: dict, total: int) -> list[dict]:
                 seg = ad["segments"][sid]
                 if seg["kind"] != "clip" or (ev.get("seg") and ev["seg"] != sid):
                     continue
+                if ev.get("slowmo") is False and seg.get("speed", 1) < 1:
+                    continue  # a clock ticking at half speed sounds wrong in a replay
                 frames = [ev["frame"]] if "frame" in ev else recs[seg["src"]].event(ev["event"])
                 for i, f in enumerate(sorted(frames)):
                     o = to_output(seg, tl[sid][0], f)
@@ -437,7 +505,7 @@ def audio_events(ad: dict, recs: dict, tl: dict, total: int) -> list[dict]:
         for o, i, n in times:
             pitch = ev.get("pitch", 1.0)
             if pitch == "cascade":
-                pitch = {n - 3: 1.0, n - 2: 1.12, n - 1: 1.26}.get(i, 1.0)
+                pitch = cascade_pitch(i, n)
             elif pitch == "ticktock":
                 pitch = 1.0 if i % 2 == 0 else 0.84
             e = {"name": name, "sound": ev["sound"], "t": round(o / FPS, 4), "gain": ev.get("gain", 0.5)}
@@ -446,6 +514,11 @@ def audio_events(ad: dict, recs: dict, tl: dict, total: int) -> list[dict]:
             if o < total:
                 out.append(e)
     return sorted(out, key=lambda e: (e["t"], e["name"]))
+
+
+def cascade_pitch(i: int, n: int) -> float:
+    """Exit pops rise over the last three exits: ..., 1.0, 1.12, 1.26 (the final exit highest)."""
+    return 1.26 if i == n - 1 else 1.12 if i == n - 2 else 1.0
 
 
 def _union(boxes):
@@ -461,7 +534,8 @@ def _ffmpeg_version() -> str:
         return "unknown"
 
 
-def _qa(ad, layers, tl, total, track, hashes, qa):
+def _qa(ad, prep, track, hashes):
+    qa, layers, tl, total = prep.qa, prep.layers, prep.tl, prep.total
     want = ad.get("length_s")
     if want and total != int(round(want * FPS)):
         qa["failures"].append(f"the ad is {total / FPS:.2f} s, the target is {want} s")
@@ -476,16 +550,10 @@ def _qa(ad, layers, tl, total, track, hashes, qa):
         if lay["type"] not in TEXT_TYPES:
             continue
         box = _union(e["boxes"])
-        if lay["type"] == "text":
-            if lay.get("slot") == "top" and e["image"].height > BAND["y1"] - BAND["y0"]:
-                qa["failures"].append(f"layer {lid!r}: too long for the text band even at the smallest size")
-            if e["f1"] - e["f0"] < 24:
-                qa["failures"].append(f"layer {lid!r}: on screen {(e['f1'] - e['f0']) / FPS:.2f} s; at least 0.8 s")
-            if lay.get("slot") == "top":
-                tops.append((e["f0"], e["f1"], lid))
+        if lay["type"] == "text" and lay.get("slot") == "top":
+            tops.append((e["f0"], e["f1"], lid))
         if box and not (box[0] >= area[0] and box[1] >= area[1] and box[2] <= area[2] and box[3] <= area[3]):
             msg = f"layer {lid!r}: drawn at {box}, outside the {ad['output'].get('safe', 'social')} safe area {list(area)}"
-            # Inside a full-size replay the tag sits over the board on purpose; text and buttons must be safe.
             (qa["warnings"] if lay["type"] == "tag" else qa["failures"]).append(msg)
     tops.sort()
     for (a0, a1, a), (b0, b1, b) in zip(tops, tops[1:]):
@@ -495,6 +563,10 @@ def _qa(ad, layers, tl, total, track, hashes, qa):
         qa["failures"].append("the hook does not start on frame 0 (the poster)")
     if "hook" not in layers:
         qa["warnings"].append("no hook layer")
+    cta = [lid for lid, e in layers.items() if e["layer"]["type"] == "button"]
+    for lid in cta:
+        if layers[lid]["f1"] < total:
+            qa["failures"].append(f"layer {lid!r}: the call to action is gone before the last frame")
     ends = [sid for sid in ad["order"] if ad["segments"][sid]["kind"] == "card"]
     if ends:
         n = tl[ends[-1]][1] - tl[ends[-1]][0]
@@ -507,3 +579,68 @@ def _qa(ad, layers, tl, total, track, hashes, qa):
         qa["failures"].append(f"audio peak {20 * math.log10(peak):.2f} dBFS; above -1 dBFS")
     if abs(len(track) / RATE - total / FPS) > 1 / FPS:
         qa["failures"].append("audio and video lengths differ")
+
+
+# ---------- comparing two renders (the edit proof) ----------
+
+def diff(a_dir: str | Path, b_dir: str | Path) -> dict:
+    """What changed between two renders of an ad. Frames are compared by their hashes; for every
+    changed frame both ads are composited again (deterministically) and the changed pixels'
+    box is measured and checked against the boxes of the layers whose entries changed: every
+    change must be one the edit predicts. Also reports locked parts, the gameplay sources, the
+    timeline and the sound."""
+    a_dir, b_dir = Path(a_dir), Path(b_dir)
+    for d in (a_dir, b_dir):
+        c = d / "compose.json"
+        if not c.is_file() or not json.loads(c.read_text()).get("rendered"):
+            raise ValueError(f"{d}: no finished render there (no compose.json, or its QA stopped the render)")
+    ca, cb = (json.loads((d / "compose.json").read_text()) for d in (a_dir, b_dir))
+    ada, adb = (json.loads((d / "ad.json").read_text()) for d in (a_dir, b_dir))
+    if not (ca.get("rendered") and cb.get("rendered")):
+        raise ValueError("both folders need a finished render (compose.json with rendered: true)")
+    if ca["draft"] != cb["draft"]:
+        raise ValueError("one render is a draft and the other is not; their frames are not comparable")
+    out = {"frames": (ca["frames"], cb["frames"]), "same_sources": ca["sources"] == cb["sources"],
+           "same_timeline": ca["timeline"] == cb["timeline"], "same_sound": ca["wav_sha256"] == cb["wav_sha256"],
+           "same_mp4": ca["mp4_sha256"] == cb["mp4_sha256"]}
+    la, lb = ada.get("locked", []), adb.get("locked", [])
+    from .ad import _get_path
+    out["locked_changed"] = [p for p in sorted(set(la) | set(lb))
+                             if json.dumps(_get_path(ada, p), sort_keys=True) != json.dumps(_get_path(adb, p), sort_keys=True)]
+    out["unlocked"] = sorted(set(la) - set(lb))
+    out["layers_changed"] = sorted(k for k in set(ca["layers"]) | set(cb["layers"])
+                                   if ca["layers"].get(k) != cb["layers"].get(k) or ada["layers"].get(k) != adb["layers"].get(k))
+    if ca["frames"] != cb["frames"] or not out["same_timeline"]:
+        out["changed_frames"] = None
+        out["note"] = "the timeline changed (a timing or gameplay edit), so frames are not compared one to one"
+        return out
+    changed = [i for i, (x, y) in enumerate(zip(ca["frame_sha256"], cb["frame_sha256"])) if x != y]
+    out["changed_frames"] = _ranges(changed)
+    predicted = [ca["layers"][k]["box"] for k in out["layers_changed"] if k in ca["layers"] and ca["layers"][k]["box"]]
+    predicted += [cb["layers"][k]["box"] for k in out["layers_changed"] if k in cb["layers"] and cb["layers"][k]["box"]]
+    out["predicted_box"] = _union(predicted)
+    measured = None
+    if changed:
+        want = set(changed)
+        pa, pb = Prepared(ada, ca["draft"]), Prepared(adb, cb["draft"])
+        for (ta, fa), (tb, fb) in zip(pa.frames(want), pb.frames(want)):
+            d = np.any(fa != fb, axis=2)
+            ys, xs = np.nonzero(d)
+            if len(xs):
+                box = [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1]
+                measured = box if measured is None else _union([measured, box])
+    out["measured_box"] = measured
+    pb_ = out["predicted_box"]
+    out["contained"] = measured is None or (pb_ is not None and measured[0] >= pb_[0] and measured[1] >= pb_[1]
+                                            and measured[2] <= pb_[2] and measured[3] <= pb_[3])
+    return out
+
+
+def _ranges(idx: list[int]) -> list[list[int]]:
+    out = []
+    for i in idx:
+        if out and i == out[-1][1] + 1:
+            out[-1][1] = i
+        else:
+            out.append([i, i])
+    return out

@@ -42,13 +42,22 @@ BAND = {"y0": 250, "y1": 476, "cx": 540, "cy": 363, "max_w": 820}  # the HUD sta
 STYLES = {"hero": 118, "title_xl": 96, "title_l": 88, "title_m": 66, "title_s": 52, "tag": 54}
 TWO_LINE_SIZE = 80
 END_CARD_S = (3.0, 5.0)  # shortest and preferred longest end card
-REPLAY_MAX_S = 8.0
+END_CARD_MAX_S = 8.0  # longer than this the ad is mostly a card: refused unless asked for
+REPLAY_MAX_S = 5.0  # the replay is a payoff, not filler: the last one or two beats, at most 5 s
+REPLAY_MAX_BEATS = 2
+INTRO_MAX_S = 2.0  # a frozen first frame under the hook, when the ad has time to spare
 END_TITLE = "Color Block Jam"
 
 # Copy guard: statements of odds or IQ are not allowed in ads (UK ASA rulings), dares are.
-FORBIDDEN = [(r"\d\s*%", "a percentage"), (r"\bonly\s+\d", "'only N'"), (r"\bIQ\b", "an IQ claim"),
-             (r"\b\d+\s*(in|out of)\s*\d+\b", "odds")]
-FACT_KEYS = ("clock_left", "colour", "timer", "blocks", "time_used")
+# "Only 1% can", "only 5 people", "your IQ is 140", "1 in 100" are claims about players; a measured
+# fact like "only 00:01 to spare" is not.
+FORBIDDEN = [(r"\d\s*(%|percent\b)", "a percentage"),
+             (r"\bonly\s+\d+\s*(people|players|persons|of\s+(you|us|people|players)|can|could|will|get|solve)\b",
+              "'only N' about players"),
+             (r"\bIQ\b", "an IQ claim"), (r"\b\d+\s*(in|out of)\s*\d+\b", "odds")]
+FACT_KEYS = ("clock_left", "colour", "timer", "blocks", "time_used", "blocks_left", "blocks_left_phrase")
+NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+NBSP = "\u00a0"  # keeps a multi-word fact ("dark green") on one line
 
 
 def sha256(path: Path) -> str:
@@ -155,14 +164,18 @@ class Recording:
         return list(self.events.get(name, []))
 
     def facts(self, beat: int | None = None) -> dict[str, str]:
+        """Facts a text may use, all measured from the recording."""
         r = self.result
         timer = self.play.get("timer_s") or (self.level.timer if self.level else 0)
-        f = {"clock_left": clock_text(r.get("timer_end", 0)), "timer": str(timer),
-             "blocks": str(len(r.get("block_gone_frames", []))),
-             "time_used": f"{max(0.0, timer - r.get('timer_end', 0)):.0f}"}
+        gone = r.get("block_gone_frames", [])
+        left = sum(1 for g in gone if g < 0)
+        word = NUMBER_WORDS.get(left, str(left))
+        f = {"clock_left": clock_text(r.get("timer_end", 0)), "timer": str(timer), "blocks": str(len(gone)),
+             "time_used": f"{max(0.0, timer - r.get('timer_end', 0)):.0f}", "blocks_left": str(left),
+             "blocks_left_phrase": f"{word}{NBSP}block{'' if left == 1 else 's'}"}
         if beat is not None and self.level is not None:
             block = self.play["beats"][beat]["block"]
-            f["colour"] = color_name(self.level.blocks[block].color)
+            f["colour"] = color_name(self.level.blocks[block].color).replace(" ", NBSP)
         return f
 
     def sha(self) -> str:
@@ -252,6 +265,11 @@ def fill(text: str, facts: dict[str, str]) -> str:
     return re.sub(r"\{(\w+)\}", rep, text)
 
 
+def reading_s(text: str) -> float:
+    """Seconds a caption needs on screen: 0.4 s plus 0.3 s a word, at least 0.8 s."""
+    return max(0.8, 0.4 + 0.3 * len(text.replace(NBSP, " ").split()))
+
+
 def copy_problems(text: str) -> list[str]:
     return [f"text {text!r} states {what}; ad rules allow dares, not invented odds"
             for pat, what in FORBIDDEN if re.search(pat, text, re.I)]
@@ -273,13 +291,17 @@ def _text(text, start, end=None, dur=None, style="title_xl", anim="pop", beat=No
 
 HOOKS = {"near_fail": "Can you beat the clock?", "time_out": "Can you beat the clock?",
          "win": "Can you clear it?", "cliffhanger": "Can you clear it?"}
-END_FACTS = {"near_fail": "Cleared with {clock_left} left", "time_out": "Out of time. One block left!",
-             "win": "Cleared in {time_used} seconds", "cliffhanger": "Two blocks left. Your move!"}
+END_FACTS = {"near_fail": "Cleared with {clock_left} left", "time_out": "Out of time with {blocks_left_phrase} left!",
+             "win": "Cleared in {time_used} seconds", "cliffhanger": "Your move: {blocks_left_phrase} to go!"}
 
 
-def build_ad(rec: Recording, length_s: float = 30, src: str = "main") -> dict:
+def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long_card: bool = False) -> dict:
     """The default ad for a recording, from its ending: hook, mistake caption, urgency, replay,
-    the game's own result screen, end card. Sized to exactly length_s."""
+    the game's own result screen, end card. Sized to exactly length_s:
+    - the replay is the last one or two beats in slow motion (at most 5 s);
+    - if time is left, a frozen first frame (up to 2 s) gives the hook room;
+    - the end card takes the rest: at least 3 s, and over 8 s only with allow_long_card (the
+      recording is then too short for the length, and the ad would be mostly a card)."""
     ending = rec.play.get("ending")
     if ending not in HOOKS:
         raise ValueError(f"{rec.path}: unknown ending {ending!r}")
@@ -292,29 +314,38 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main") -> dict:
         raise ValueError(f"{rec.path}: the recording has no {ending} moment to build the ad around")
     p = end_of_play[0]
     seg = {"play": {"kind": "clip", "src": src, "from": 0, "to": p, "speed": 1, "fit": dict(FIT)}}
-    after = []
     if ending != "cliffhanger":
         # The game's own result screen dims the whole screen, so it plays full size (like the replay).
         seg["result"] = {"kind": "clip", "src": src, "from": p, "to": rec.n, "speed": 1, "fit": dict(NATIVE)}
         after = ["result"]
     else:
-        seg["question"] = {"kind": "hold", "src": src, "frame": rec.n - 1, "frames": 45, "fit": dict(FIT)}
+        seg["question"] = {"kind": "hold", "src": src, "frame": rec.n - 1, "frames": 2 * FPS, "fit": dict(FIT)}
         after = ["question"]
     fixed = p + sum(seg_frames(seg[a]) for a in after)
-    # Replay the last beats in slow motion, as many as fit, so the end card lands near 3-5 s.
-    replay_from = None
-    card = total - fixed
-    for k in range(len(bf) - 1, -1, -1):
+    replay_from, card = None, total - fixed
+    for k in range(len(bf) - 1, max(-1, len(bf) - 1 - REPLAY_MAX_BEATS), -1):
         r = 2 * (p - bf[k][0])
         if r > REPLAY_MAX_S * FPS or total - fixed - r < END_CARD_S[0] * FPS:
             break
         replay_from, card = bf[k][0], total - fixed - r
         if card <= END_CARD_S[1] * FPS:
             break
+    intro = 0
+    if card > END_CARD_S[1] * FPS:
+        intro = min(int(INTRO_MAX_S * FPS), card - int(END_CARD_S[1] * FPS))
+        card -= intro
     if card < END_CARD_S[0] * FPS:
         raise ValueError(f"the recording runs {fixed / FPS:.1f} s, too long for a {length_s:g} s ad with a "
                          f"{END_CARD_S[0]:g} s end card; record a shorter scenario or ask for a longer ad")
-    order = ["play"]
+    if card > END_CARD_MAX_S * FPS and not allow_long_card:
+        raise ValueError(f"the recording is too short for a {length_s:g} s ad: the end card would run "
+                         f"{card / FPS:.1f} s (at most {END_CARD_MAX_S:g}); record a longer scenario (a bigger "
+                         f"level, more mistakes), ask for a shorter ad, or allow a long card")
+    order = []
+    if intro:
+        seg["intro"] = {"kind": "hold", "src": src, "frame": 0, "frames": intro, "fit": dict(FIT)}
+        order.append("intro")
+    order.append("play")
     if replay_from is not None:
         seg["replay"] = {"kind": "clip", "src": src, "from": replay_from, "to": p, "speed": 0.5, "fit": dict(NATIVE)}
         order.append("replay")
@@ -327,17 +358,32 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main") -> dict:
 
     layers = {}
     first = next((i for i, b in enumerate(beats) if b["kind"] in ("mistake", "attempt")), None)
-    # The hook stays at least 1.5 s; it gives way to an early mistake caption.
-    hook_end = {"seg": "play", "at": 2.4}
-    if first is not None and 1.6 <= bf[first][0] / FPS < 2.5:
+    # The hook is on screen 1.5-3 s from frame 0; it gives way early to a mistake, never drops it.
+    intro_s = intro / FPS
+    hook_min = max(1.5, reading_s(HOOKS[ending]))
+    hook_play_end = max(1.0 if intro else 2.4, hook_min - intro_s)
+    if first is not None:
+        m = bf[first][0] / FPS
+        if m - 0.1 < hook_play_end:
+            hook_play_end = max(hook_min - intro_s, m - 0.1, 0.0)
+    if first is not None and abs(hook_play_end - (bf[first][0] / FPS - 0.1)) < 1e-9:
         hook_end = {"seg": "play", "event": f"beat.{first}.start", "offset": -0.1}
-    layers["hook"] = _text(HOOKS[ending], {"seg": "play", "at": 0}, end=hook_end, anim="pop_out",
+    else:
+        hook_end = {"seg": "play", "at": round(hook_play_end, 4)}
+    layers["hook"] = _text(HOOKS[ending], {"seg": order[0], "at": 0}, end=hook_end, anim="pop_out",
                            icon="stopwatch.png" if ending in ("near_fail", "time_out") else None)
     if first is not None:
         kind = beats[first]["kind"]
         text = "I can't reach {colour}!" if "in the way" in beats[first]["note"] else "Oops!"
         layers["cap_mistake"] = _text(text, {"seg": "play", "event": f"beat.{first}.start"}, dur=2.0,
                                       style="title_l", beat=first, why=f"the {kind} beat")
+        fix = first + 1
+        drags = rec.result.get("drags", [])
+        if (ending in ("near_fail", "time_out") and fix < len(beats) and beats[fix]["kind"] == "solve"
+                and fix < len(drags) and drags[fix].get("exit_frame", -1) < 0):
+            # The fix after the mistake: a block moved out of the way first.
+            layers["cap_fix"] = _text("Aha! Move {colour} first", {"seg": "play", "event": f"beat.{fix}.start"},
+                                      dur=2.0, style="title_l", beat=fix)
     if ending in ("near_fail", "time_out") and rec.event("clock<=5"):
         last_drag = len(rec.result["drags"]) - 1
         hurry_end = {"seg": "play", "event": f"drag.{last_drag}.start"}
@@ -346,22 +392,26 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main") -> dict:
                              "pulse_on": "clock_second<=5", "start": {"seg": "play", "event": "clock<=5"},
                              "end": {"seg": "play", "at": "end"}}
     if "replay" in seg:
-        layers["replay_tag"] = {"type": "tag", "text": "REPLAY", "style": "tag", "pos": [300, 560],
+        # Over the HUD's Level badge: the one spot of a full-size frame that never hides the play.
+        circle = next((u for u in rec.result.get("ui_rects", []) if u["name"] == "LevelCircle"), None)
+        pos = [round(circle["x"] + circle["w"] / 2), round(circle["y"] + circle["h"] / 2)] if circle else [218, 337]
+        layers["replay_tag"] = {"type": "tag", "text": "REPLAY", "style": "tag", "pos": pos,
                                 "start": {"seg": "replay", "at": 0}, "end": {"seg": "replay", "at": "end"}}
     if ending == "win" and len(bf) >= 3:
         # The closing cascade is the satisfying part of a clean solve.
         layers["cap_cascade"] = _text("So satisfying!", {"seg": "play", "event": f"beat.{len(bf) - 3}.start"},
                                       end={"seg": "play", "at": "end"}, style="title_xl")
+    # Result captions wait 0.3 s for the game to dim the screen (the full-size HUD is in the band).
     if ending == "near_fail":
-        layers["cap_result"] = _text("Phew! {clock_left} left", {"seg": "result", "at": 0},
+        layers["cap_result"] = _text("Phew! {clock_left} left", {"seg": "result", "at": 0.3},
                                      end={"seg": "result", "at": "end"}, style="title_l")
     elif ending == "time_out":
-        layers["cap_result"] = _text("So close!", {"seg": "result", "at": 0}, end={"seg": "result", "at": "end"})
+        layers["cap_result"] = _text("So close!", {"seg": "result", "at": 0.3}, end={"seg": "result", "at": "end"})
     elif ending == "cliffhanger":
         layers["cap_result"] = _text("Can you see the move?", {"seg": "question", "at": 0},
                                      end={"seg": "question", "at": "end"}, style="title_l")
-    notes = _schedule_band(layers, ["hook", "cap_mistake", "cap_hurry", "cap_cascade", "cap_result"], seg, order,
-                           rec, src)
+    notes = _schedule_band(layers, ["hook", "cap_mistake", "cap_fix", "cap_hurry", "cap_cascade", "cap_result"],
+                           seg, order, rec, src)
     layers["cursor"] = {"type": "cursor", "image": None, "size": 96, "segments": ["play", "replay"]}
     cliff = ending == "cliffhanger"
     layers["end_title"] = {"type": "text", "seg": "end", "text": END_TITLE, "style": "hero", "max_h": 150,
@@ -380,7 +430,7 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main") -> dict:
     audio = {"music": None, "events": {
         "taps": {"sound": "click", "event": "drag.*.start", "gain": 0.25},
         "pops": {"sound": "pop", "event": "drag.*.exit", "gain": 0.5, "pitch": "cascade"},
-        "ticks": {"sound": "tick", "event": "clock_second<=10", "gain": 0.3, "pitch": "ticktock"},
+        "ticks": {"sound": "tick", "event": "clock_second<=10", "gain": 0.3, "pitch": "ticktock", "slowmo": False},
         "card": {"sound": "whoosh", "seg": "end", "at": 0, "gain": 0.35}}}
     if ending in ("near_fail", "win"):
         audio["events"]["win"] = {"sound": "chord", "event": "win", "gain": 0.6}
@@ -393,8 +443,11 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main") -> dict:
         b = beats[i]
         at = bf[i][0] + b["pickup_f"] + (len(b["path"]) - 1) * b["frames_per_cell"] + 2
         audio["events"][f"bump.{i}"] = {"sound": "bump", "frame": at, "gain": 0.4}
+    if intro:
+        notes.append(f"a {intro / FPS:.1f} s frozen intro gives the hook room (the recording is short for "
+                     f"{length_s:g} s)")
 
-    return {
+    ad = {
         "version": 1,
         "concept": ending,
         "length_s": length_s,
@@ -407,34 +460,62 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main") -> dict:
         "locked": ["sources", "segments", "layers/cursor"],
         "notes": notes,
     }
+    ad["origin"] = {"locked": locked_digests(ad)}
+    return ad
+
+
+def _get_path(ad: dict, path: str):
+    node = ad
+    for part in path.split("/"):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def locked_digests(ad: dict) -> dict[str, str]:
+    """A hash of each locked part, written when the ad is made; an edit that changes one fails QA."""
+    return {path: hashlib.sha256(json.dumps(_get_path(ad, path), sort_keys=True).encode()).hexdigest()[:32]
+            for path in ad.get("locked", [])}
 
 
 def _schedule_band(layers: dict, priority: list[str], segments: dict, order: list[str], rec: Recording,
                    src: str) -> list[str]:
-    """One text at a time in the band: a caption that overlaps a higher-priority one starts after it,
-    and one left with less than 0.8 s is dropped. Returns what was changed, for ad.json's notes."""
+    """One text at a time in the band. A caption that overlaps a higher-priority one starts after
+    it, keeping its anchor (with a later offset) and its length, cut at the end of its segment;
+    one that can then not be read in time (reading_s) is left out. Returns what was changed."""
     probe = {"order": order, "segments": segments, "layers": layers}
     recs = {src: rec}
+    tl = timeline(probe)
     taken, notes = [], []
     for lid in priority:
         if lid not in layers:
             continue
-        f0, f1 = layer_window(probe, recs, lid)
-        for a, b in taken:
-            if f0 < b and a < f1:
-                f0 = b
-        if f1 - f0 < int(0.8 * FPS):
+        lay = layers[lid]
+        f0_orig, f1 = layer_window(probe, recs, lid)
+        f0 = f0_orig
+        for a, b in sorted(taken):
+            if f0 < b and a < f1 + (f0 - f0_orig):
+                f0 = max(f0, b)
+        seg_id = lay["start"].get("seg", "play")
+        s1 = tl[seg_id][1]
+        if "dur" in lay:
+            f1 = min(f0 + int(round(lay["dur"] * FPS)), s1)
+        text = fill(lay["text"], rec.facts(lay.get("beat")))
+        if (f1 - f0) / FPS < reading_s(text) - 1e-6:
             del layers[lid]
-            notes.append(f"{lid} left out: it would overlap another caption or last under 0.8 s")
+            notes.append(f"{lid} left out: it would overlap another caption or be too short to read")
             continue
-        start0 = layer_window(probe, recs, lid)[0]
-        if f0 != start0:
-            seg_id = layers[lid]["start"].get("seg", "play")
-            s0 = timeline(probe)[seg_id][0]
-            layers[lid]["start"] = {"seg": seg_id, "at": round((f0 - s0) / FPS, 4)}
-            if "dur" in layers[lid]:
-                layers[lid]["dur"] = round((f1 - f0) / FPS, 4)
+        if f0 != f0_orig:
+            st = lay["start"]
+            delta = (f0 - f0_orig) / FPS
+            if "event" in st:
+                st["offset"] = round(st.get("offset", 0) + delta, 4)
+            elif st.get("at") != "end":
+                st["at"] = round(st.get("at", 0) + delta, 4)
             notes.append(f"{lid} starts at {f0 / FPS:.2f} s so it does not overlap another caption")
+        if "dur" in lay:
+            lay["dur"] = round((f1 - f0) / FPS, 4)
         taken.append((f0, f1))
     return notes
 
@@ -462,6 +543,11 @@ def check_ad(ad: dict) -> None:
             raise ValueError(f"segment {sid!r}: needs 0 <= from < to and 0 < speed <= 4")
         if seg["kind"] != "clip" and not int(seg.get("frames", 0)) > 0:
             raise ValueError(f"segment {sid!r}: frames must be positive")
+        if seg["kind"] in ("clip", "hold"):
+            fit = seg.get("fit")
+            if not (isinstance(fit, dict) and all(isinstance(fit.get(k), (int, float)) for k in ("scale", "x", "y"))
+                    and fit["scale"] > 0):
+                raise ValueError(f"segment {sid!r}: needs a fit {{scale, x, y}} (scale above 0)")
     for lid, layer in ad["layers"].items():
         if layer.get("type") not in ("text", "tag", "image", "button", "cursor", "vignette"):
             raise ValueError(f"layer {lid!r}: unknown type {layer.get('type')!r}")

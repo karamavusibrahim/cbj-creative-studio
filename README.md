@@ -31,6 +31,7 @@ uv run cbj scenario data/levels/gen/narrow_center_01.json --ending near_fail   #
 uv run cbj rerun renders/nc01_near_fail -o renders/nc01_again   # record a folder again from its files, and compare
 uv run cbj ad renders/nc01_near_fail                          # a finished 30 s ad from a recording
 uv run cbj compose ads/nc01_near_fail_30s/ad.json -o ads/edited  # render an (edited) ad.json
+uv run cbj ad-diff ads/nc01_near_fail_30s ads/edited             # what the edit changed, and nothing else
 ```
 
 Errors print one line, `cbj: <reason>`, and exit with code 1.
@@ -383,23 +384,36 @@ positions instead of 43,446 on the narrow level.
 others). The defaults depend on the recording's ending:
 - a hook on frame 0, which is also the poster;
 - a caption on the mistake: "I can't reach dark green!", with the colour taken from the block;
+- "Aha! Move red first" on the fix that follows the mistake;
 - "Hurry!" with a red edge pulse on the last five clock seconds;
-- a slow-motion replay of the last beats;
+- a slow-motion replay of the last one or two beats (at most 5 s), with a REPLAY tag over the HUD's
+  level badge, the one spot of a full-size frame that never hides the play;
 - the game's own result screen;
 - an end card: the game's background, a fact from the recording ("Cleared with 00:01 left"),
   the game's art and its green "PLAY NOW" button.
 
 On top of that, a tap ring follows the recorded finger, and synthesized sound effects fall on
-gameplay events: taps, exit pops rising over the last three exits, clock ticks, a bump, a
-success chord or a fail sound, and whooshes.
+gameplay events: taps, exit pops rising over the last three exits, clock ticks (not repeated in
+slow motion), a bump, a success chord or a fail sound, and whooshes.
+
+**Sizing.** The ad is exactly its length. The end card takes what is left: at least 3 s, ideally
+up to 5 s. When the recording is short, a frozen first frame of up to 2 s gives the hook room. An
+end card over 8 s is refused, because the recording is too short for the length; use a longer
+scenario, a shorter ad, or `--allow-long-card`. Captions get their reading time (0.4 s plus 0.3 s
+a word). One that would overlap a more important caption moves later, keeping its gameplay
+anchor; one that cannot be read in the time left is left out, with a note in `ad.json`.
 
 **The ad is data.** `ad.json` holds named segments (clips of recordings at any speed, frozen
 frames, cards) and named layers (text, tags, images, the button, the cursor, the edge pulse).
 Each layer starts and ends either at a time or at a **gameplay event**: `beat.1.start`,
 `clock<=5`, `win`, `fail`, `clock_second`. Texts may only use facts from the recording
-(`{clock_left}`, `{colour}`, `{timer}`, `{blocks}`, `{time_used}`). A copy guard refuses invented
-odds ("only 1%", "IQ 140"), which ad rules forbid. `locked` lists what an edit may not touch. Edit
-the file and run `cbj compose` to render it again.
+(`{clock_left}`, `{colour}`, `{timer}`, `{blocks}`, `{blocks_left}`, `{blocks_left_phrase}`,
+`{time_used}`). A copy guard refuses invented odds ("only 1%", "IQ 140"), which ad rules forbid.
+
+`locked` lists what an edit may not change. It holds the gameplay sources, the segments (timing
+and camera fit) and the cursor. Their digests are written when the ad is made, and an edit that
+changes a locked part fails QA. To change one on purpose, remove it from `locked` first;
+`cbj ad-diff` then reports it as unlocked. Edit the file and run `cbj compose` to render it again.
 
 **Layout.** The whole recorded frame is scaled to 75% and placed on the recording's own background
 gradient (letterboxing; the game camera is untouched). This leaves:
@@ -417,18 +431,36 @@ The replay and the result screens play full size. Texts are fitted to the band.
 - the WAV and MP4 hashes;
 - the QA results.
 
-The encode is bit-exact, so the same `ad.json` gives a byte-identical MP4. A test changes one
-caption and checks that only that caption's frames change, the sound is untouched, and every other
-layer is identical: the basis of controlled editing (case p.7).
+The encode is bit-exact, so the same `ad.json` gives a byte-identical MP4.
+
+**Edits stay local in the delivered video too.** Every segment and layer boundary starts a new
+GOP (an IDR frame), and the encoder runs with a constant quantizer, no look-ahead and no B-frames.
+So a change inside one span cannot alter a decoded pixel anywhere else. With default x264
+settings, rate control and inter-frame prediction spread an edit into neighbouring frames.
+
+`cbj ad-diff ORIGINAL EDITED` is the proof for one edit. It compares the frame hashes, then
+composites both versions of every changed frame again and measures the changed pixels. It
+reports:
+- which layers changed, and which frames;
+- the measured pixel box, against the boxes of the changed layers (every change must be inside
+  them);
+- whether the gameplay sources, timeline, camera fit, sound and locked parts stayed the same.
+
+It exits 1 if a change escaped its layers or a locked part changed. Tests check this on the
+decoded MP4 as well.
 
 **QA, on every render.** Problems found before drawing stop the render at once (nothing is
-encoded, exit 1). The checks:
+encoded, exit 1). A render that fails a later check is saved as `ad.FAILED.mp4`, never as
+`ad.mp4`. The checks:
 - exact length;
 - the hook on frame 0;
-- every text inside the safe area and at least 0.8 s on screen;
+- every text inside the safe area and on screen for its reading time;
+- every layer inside its segment;
 - no two captions at once;
+- the call to action held to the last frame (the frame a feed shows when the ad ends or loops);
 - an end card of at least 3 s (a warning above 6 s);
 - every anchor resolvable;
+- locked parts unchanged;
 - the copy guard;
 - the audio peak and length.
 

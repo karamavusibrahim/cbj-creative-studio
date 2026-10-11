@@ -54,12 +54,31 @@ def sprite(name: str) -> Image.Image:
 
 
 def wrap(text: str, size: int, max_width: int) -> list[str]:
-    """Greedy word wrap; explicit newlines are kept."""
+    """Lines for a text. Explicit newlines are kept; words split on plain spaces only, so a
+    non-breaking space keeps a fact like "dark green" on one line. A paragraph that needs two
+    lines breaks where the two halves are most even, not greedily."""
     f = font(size)
     lines = []
     for para in text.split("\n"):
-        line = ""
-        for word in para.split():
+        words = [w for w in para.split(" ") if w]
+        if not words:
+            lines.append("")
+            continue
+        if f.getlength(" ".join(words)) <= max_width or len(words) == 1:
+            lines.append(" ".join(words))
+            continue
+        # Two lines if any split fits: the one with the shortest longer line.
+        best = None
+        for k in range(1, len(words)):
+            a, b = " ".join(words[:k]), " ".join(words[k:])
+            wa, wb = f.getlength(a), f.getlength(b)
+            if wa <= max_width and wb <= max_width and (best is None or max(wa, wb) < best[0]):
+                best = (max(wa, wb), [a, b])
+        if best:
+            lines += best[1]
+            continue
+        line = ""  # more than two lines: greedy
+        for word in words:
             trial = f"{line} {word}".strip()
             if not line or f.getlength(trial) <= max_width:
                 line = trial

@@ -255,7 +255,7 @@ def _cmd_ad(args) -> int:
     from .ad import Recording, build_ad
     from .compose import render as compose
     rec = Recording.load(args.recording)
-    ad = build_ad(rec, length_s=args.length)
+    ad = build_ad(rec, length_s=args.length, allow_long_card=args.allow_long_card)
     out = Path(args.out or f"ads/{rec.path.name}_{args.length:g}s")
     print(f"{rec.path.name}: {ad['concept']} ad, {args.length:g} s. Composing...")
     return _print_compose(compose(ad, out, draft=args.draft), out)
@@ -270,6 +270,33 @@ def _cmd_compose(args) -> int:
         raise ValueError("write the new render to another folder, so the two can be compared")
     print(f"Composing {args.ad}...")
     return _print_compose(compose(ad, out, draft=args.draft), out)
+
+
+def _cmd_ad_diff(args) -> int:
+    from .compose import diff
+    d = diff(args.a, args.b)
+    yes = lambda v: "same" if v else "CHANGED"
+    print(f"gameplay sources: {yes(d['same_sources'])}; timeline and camera fit: {yes(d['same_timeline'])}; "
+          f"sound: {yes(d['same_sound'])}")
+    if d["locked_changed"]:
+        print(f"locked parts changed: {', '.join(d['locked_changed'])}"
+              + (f" (unlocked on purpose: {', '.join(d['unlocked'])})" if d["unlocked"] else ""))
+    else:
+        print("locked parts: same")
+    print(f"layers changed: {', '.join(d['layers_changed']) or 'none'}")
+    if d["changed_frames"] is None:
+        print(d["note"])
+        return 0
+    ranges = ", ".join(f"{a}-{b}" if a != b else f"{a}" for a, b in d["changed_frames"]) or "none"
+    n = sum(b - a + 1 for a, b in d["changed_frames"])
+    print(f"frames changed: {n} of {d['frames'][0]} ({ranges})")
+    if d["measured_box"]:
+        print(f"pixels changed inside {d['measured_box']}; the changed layers cover {d['predicted_box']}: "
+              + ("every change is inside them" if d["contained"] else "SOME CHANGES ARE OUTSIDE THEM"))
+    print("the MP4 files are " + ("identical" if d["same_mp4"] else
+          "different; with keyframes at every layer boundary, decoded frames outside the changed ones are identical"))
+    ok = d["contained"] and not [p for p in d["locked_changed"] if p not in d["unlocked"]]
+    return 0 if ok else 1
 
 
 def _cmd_rerun(args) -> int:
@@ -445,6 +472,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("recording", help="a `cbj scenario` folder")
     s.add_argument("--length", type=float, default=30, help="ad length in seconds (default 30)")
     s.add_argument("--draft", action="store_true", help="fast, lower-quality encode for checking")
+    s.add_argument("--allow-long-card", action="store_true",
+                   help="accept an end card over 8 s when the recording is short for the length")
     s.add_argument("-o", "--out", help="output folder (default: ads/<recording>_<length>s)")
     s.set_defaults(func=_cmd_ad)
 
@@ -453,6 +482,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("-o", "--out", required=True, help="output folder")
     s.add_argument("--draft", action="store_true")
     s.set_defaults(func=_cmd_compose)
+
+    s = sub.add_parser("ad-diff", help="what changed between two renders of an ad (the edit proof)")
+    s.add_argument("a", help="the original render folder")
+    s.add_argument("b", help="the edited render folder")
+    s.set_defaults(func=_cmd_ad_diff)
 
     s = sub.add_parser("rerun", help="record a finished recording again from its folder, and compare")
     s.add_argument("folder", help="a recording folder (job.json, result.json, level.json)")

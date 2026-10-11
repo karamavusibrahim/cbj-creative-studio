@@ -36,19 +36,26 @@ def read_frames(path: str | Path, size: tuple[int, int], start: int = 0, count: 
     end = "" if count is None else f":end_frame={start + count}"
     vf = f"trim=start_frame={start}{end},setpts=PTS-STARTPTS,{_IN},format=rgb24"
     cmd = [ffmpeg_bin(), "-v", "error", "-i", str(path), "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    log = tempfile.TemporaryFile()
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=log)
     n = w * h * 3
+    finished = False
     try:
         while True:
             buf = proc.stdout.read(n)
             if len(buf) < n:
                 break
             yield np.frombuffer(buf, np.uint8).reshape(h, w, 3)
+        finished = True
     finally:
+        if not finished:  # the caller stopped early (for example after one frame): stop ffmpeg quietly
+            proc.kill()
         proc.stdout.close()
-        err = proc.stderr.read().decode(errors="replace")
-        proc.stderr.close()
-        if proc.wait() != 0:
+        code = proc.wait()
+        log.seek(0)
+        err = log.read().decode(errors="replace")
+        log.close()
+        if finished and code != 0:
             raise ValueError(f"ffmpeg could not read {path}: {err.strip()[-300:]}")
 
 
@@ -64,14 +71,28 @@ class FrameWriter:
     Bit-exact: a fixed thread count and ffmpeg's bitexact flags make the same frames give a
     byte-identical file. draft: fast and smaller, for iterating on an ad."""
 
-    def __init__(self, path: str | Path, size: tuple[int, int], fps: int = 30, crf: int = 16, draft: bool = False):
+    def __init__(self, path: str | Path, size: tuple[int, int], fps: int = 30, crf: int = 16, draft: bool = False,
+                 keyframes: list[int] | None = None):
+        """keyframes: output frames that must start a new GOP. With them, the encoder works without
+        look-ahead, B-frames or scene-cut keyframes, so a change inside one span between keyframes
+        cannot alter a single pixel of the decoded video outside that span (an edit stays local
+        in the delivered MP4, not only in the composited frames)."""
         self.path = Path(path)
         self.size = size
         w, h = size
         preset, crf = ("ultrafast", max(crf, 23)) if draft else ("medium", crf)
+        local = []
+        rate = ["-crf", str(crf)]
+        if keyframes is not None:
+            # A constant quantizer: CRF carries a running complexity estimate from frame to frame,
+            # so an edit would nudge the quality (and pixels) of every later frame.
+            rate = ["-qp", str(crf)]
+            times = ",".join(f"{k / fps:.6f}" for k in sorted(set(keyframes)))
+            local = ["-force_key_frames", times or "0", "-forced-idr", "1",
+                     "-x264-params", "mbtree=0:rc-lookahead=0:bframes=0:scenecut=0:keyint=100000:min-keyint=1"]
         cmd = [ffmpeg_bin(), "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
-               "-r", str(fps), "-i", "-", "-vf", _OUT, "-c:v", "libx264", "-preset", preset, "-crf", str(crf),
-               "-threads", "4", "-flags", "+bitexact", "-fflags", "+bitexact",
+               "-r", str(fps), "-i", "-", "-vf", _OUT, "-c:v", "libx264", "-preset", preset, *rate,
+               *local, "-threads", "4", "-flags", "+bitexact", "-fflags", "+bitexact",
                "-pix_fmt", "yuv420p", *_TAGS, "-movflags", "+faststart", str(self.path)]
         # stderr goes to a file: a pipe read only at the end can fill up and stall the encoder.
         self.log = tempfile.TemporaryFile()
