@@ -86,3 +86,21 @@ def test_editing_an_unknown_creative_fails_cleanly(client):
     j = wait(client, jid)
     assert j["status"] == "failed" and "no creative nope" in j["error"]
     assert client.get("/api/creatives/nope").status_code == 404
+
+
+@pytest.mark.parametrize("cid", ["../outside", "..", "a/b", "/abs", "x" * 101, ""])
+def test_creative_ids_cannot_reach_outside_the_studio(client, tmp_path, cid):
+    victim = tmp_path / "outside" / "v1"
+    victim.mkdir(parents=True)
+    if cid:
+        jid = client.post("/api/make", json={"prompt": "x", "brief": B.default_brief(), "creative_id": cid}).json()["job"]
+        j = wait(client, jid)
+        assert j["status"] == "failed" and "not a creative id" in j["error"]
+    with pytest.raises(ValueError):
+        studio.creative_dir(cid)
+    assert victim.is_dir()  # nothing outside studio/ was touched
+
+
+def test_only_local_host_names_are_served(client):
+    assert client.get("/api/meta", headers={"host": "evil.example"}).status_code == 400
+    assert client.get("/api/meta", headers={"host": "127.0.0.1:8765"}).status_code == 200

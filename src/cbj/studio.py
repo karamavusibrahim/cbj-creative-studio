@@ -327,8 +327,22 @@ def _new_id(prompt: str) -> str:
     return time.strftime("%m%d-%H%M%S") + ("-" + "-".join(words) if words else "")
 
 
+CID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+
+
+def creative_dir(cid: str) -> Path:
+    """The folder of a creative. Ids come from the UI's requests, so they are checked before any
+    file use: letters, digits, '-' and '_' only, and the folder must be inside studio/."""
+    if not isinstance(cid, str) or not CID.fullmatch(cid):
+        raise ValueError(f"not a creative id: {cid!r}")
+    folder = (STUDIO / cid).resolve()
+    if not folder.is_relative_to(STUDIO.resolve()):
+        raise ValueError(f"not a creative id: {cid!r}")
+    return folder
+
+
 def versions(cid: str) -> list[dict]:
-    folder = STUDIO / cid
+    folder = creative_dir(cid)
     out = []
     for v in sorted(folder.glob("v*/version.json"), key=lambda p: int(p.parent.name[1:])):
         out.append(json.loads(v.read_text()))
@@ -411,9 +425,10 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
     creative's latest one (an edit). Returns the version record (also saved as version.json)."""
     log = log or Log(lambda line: print(f"[{line['stage']}] {line['text']}"))
     cid = cid or _new_id(prompt)
-    prev = versions(cid)[-1] if (STUDIO / cid).is_dir() and versions(cid) else None
+    folder = creative_dir(cid)
+    prev = versions(cid)[-1] if folder.is_dir() and versions(cid) else None
     n = (prev["n"] + 1) if prev else 1
-    vdir = STUDIO / cid / f"v{n}"
+    vdir = folder / f"v{n}"
     if vdir.exists():
         shutil.rmtree(vdir)
     vdir.mkdir(parents=True)

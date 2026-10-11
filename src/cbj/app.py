@@ -19,6 +19,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
@@ -27,6 +28,9 @@ from . import planner, studio
 
 STATIC = Path(__file__).parent / "static"
 app = FastAPI(title="CBJ Creative Studio")
+# Local only: requests must name this machine, so a web page cannot reach the API through a
+# hostname it controls (DNS rebinding).
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
 JOBS: dict[str, dict] = {}
 LOCK = threading.Lock()  # one job at a time
 UPLOAD_EXT = {".png", ".jpg", ".jpeg", ".webp"}
@@ -130,7 +134,10 @@ def api_creatives():
 
 @app.get("/api/creatives/{cid}")
 def api_creative(cid: str):
-    vs = studio.versions(cid)
+    try:
+        vs = studio.versions(cid)
+    except ValueError:
+        raise HTTPException(404, "no such creative")
     if not vs:
         raise HTTPException(404, "no such creative")
     return vs
