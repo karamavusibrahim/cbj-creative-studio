@@ -1,4 +1,4 @@
-"""Command line: `cbj show|solve|table|difficulty|check|build-player|render|scenario|rerun|compare`.
+"""Command line: `cbj show|solve|table|difficulty|check|build-player|render|scenario|rerun|compare|ad|compose`.
 
     uv run cbj show  data/levels/Level_03.json
     uv run cbj solve data/levels/Level_03.json [--json out.json]
@@ -228,6 +228,50 @@ def _cmd_render(args) -> int:
     return 0 if not result["problems"] else 1
 
 
+def _print_compose(result: dict, out: Path) -> int:
+    if not result.get("rendered", True):
+        for f in result["qa"]["failures"]:
+            print(f"  QA FAILED: {f}")
+        print("Nothing was rendered; fix the ad.json and compose again.")
+        return 1
+    print(f"Ad: {out / 'ad.mp4'} ({result['frames']} frames, {result['duration_s']:.2f} s"
+          f"{', draft' if result['draft'] else ''})")
+    for sid, seg in result["timeline"].items():
+        a, b = seg["frames"]
+        print(f"  {sid:9s} {a / 30:6.2f}-{b / 30:6.2f} s  {seg['kind']}")
+    for lid, layer in result["layers"].items():
+        if layer["text"]:
+            a, b = layer["frames"]
+            print(f"  {lid:12s} {a / 30:6.2f}-{b / 30:6.2f} s  {layer['text']}")
+    print(f"Proof: {out / 'compose.json'} (frame hashes, layer boxes, source hash); poster: {out / 'poster.png'}")
+    for w in result["qa"]["warnings"]:
+        print(f"  warning: {w}")
+    for f in result["qa"]["failures"]:
+        print(f"  QA FAILED: {f}")
+    return 0 if not result["qa"]["failures"] else 1
+
+
+def _cmd_ad(args) -> int:
+    from .ad import Recording, build_ad
+    from .compose import render as compose
+    rec = Recording.load(args.recording)
+    ad = build_ad(rec, length_s=args.length)
+    out = Path(args.out or f"ads/{rec.path.name}_{args.length:g}s")
+    print(f"{rec.path.name}: {ad['concept']} ad, {args.length:g} s. Composing...")
+    return _print_compose(compose(ad, out, draft=args.draft), out)
+
+
+def _cmd_compose(args) -> int:
+    from .ad import load_ad
+    from .compose import render as compose
+    ad = load_ad(args.ad)
+    out = Path(args.out)
+    if out.resolve() == Path(args.ad).resolve().parent:
+        raise ValueError("write the new render to another folder, so the two can be compared")
+    print(f"Composing {args.ad}...")
+    return _print_compose(compose(ad, out, draft=args.draft), out)
+
+
 def _cmd_rerun(args) -> int:
     from .render import compare_recordings, rerun
     print(f"Recording {args.folder} again into {args.out} from its job.json and level.json...")
@@ -396,6 +440,19 @@ def main(argv: list[str] | None = None) -> int:
                    help="hide another game object (RestartButton is always hidden)")
     s.add_argument("-o", "--out", help="output folder (default: renders/<level>_<ending>)")
     s.set_defaults(func=_cmd_scenario)
+
+    s = sub.add_parser("ad", help="make a finished ad (hook, captions, cursor, replay, sound, end card) from a recording")
+    s.add_argument("recording", help="a `cbj scenario` folder")
+    s.add_argument("--length", type=float, default=30, help="ad length in seconds (default 30)")
+    s.add_argument("--draft", action="store_true", help="fast, lower-quality encode for checking")
+    s.add_argument("-o", "--out", help="output folder (default: ads/<recording>_<length>s)")
+    s.set_defaults(func=_cmd_ad)
+
+    s = sub.add_parser("compose", help="render an ad.json (for example an edited one) into a finished ad")
+    s.add_argument("ad", help="an ad.json")
+    s.add_argument("-o", "--out", required=True, help="output folder")
+    s.add_argument("--draft", action="store_true")
+    s.set_defaults(func=_cmd_compose)
 
     s = sub.add_parser("rerun", help="record a finished recording again from its folder, and compare")
     s.add_argument("folder", help="a recording folder (job.json, result.json, level.json)")

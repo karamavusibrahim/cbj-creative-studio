@@ -12,3 +12,4 @@ wheels/
 # Tools
 .pytest_cache/
 renders/
+ads/

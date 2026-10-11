@@ -29,6 +29,8 @@ uv run cbj render data/levels/Level_03.json data/solutions/Level_03.moves.json  
 uv run cbj compare renders/Level_03 renders/Level_03_b       # how close two recordings are
 uv run cbj scenario data/levels/gen/narrow_center_01.json --ending near_fail   # human play toward an ending
 uv run cbj rerun renders/nc01_near_fail -o renders/nc01_again   # record a folder again from its files, and compare
+uv run cbj ad renders/nc01_near_fail                          # a finished 30 s ad from a recording
+uv run cbj compose ads/nc01_near_fail_30s/ad.json -o ads/edited  # render an (edited) ad.json
 ```
 
 Errors print one line, `cbj: <reason>`, and exit with code 1.
@@ -375,6 +377,71 @@ blocks left), which gives the same minimum as `solve` (tests compare them on eve
 365 random boards, 121 of them solvable, against the full unpruned search) while searching 589
 positions instead of 43,446 on the narrow level.
 
+## Finished ads: the compositor
+
+`cbj ad RECORDING` turns a `cbj scenario` recording into a finished 30 s ad (`--length` for
+others). The defaults depend on the recording's ending:
+- a hook on frame 0, which is also the poster;
+- a caption on the mistake: "I can't reach dark green!", with the colour taken from the block;
+- "Hurry!" with a red edge pulse on the last five clock seconds;
+- a slow-motion replay of the last beats;
+- the game's own result screen;
+- an end card: the game's background, a fact from the recording ("Cleared with 00:01 left"),
+  the game's art and its green "PLAY NOW" button.
+
+On top of that, a tap ring follows the recorded finger, and synthesized sound effects fall on
+gameplay events: taps, exit pops rising over the last three exits, clock ticks, a bump, a
+success chord or a fail sound, and whooshes.
+
+**The ad is data.** `ad.json` holds named segments (clips of recordings at any speed, frozen
+frames, cards) and named layers (text, tags, images, the button, the cursor, the edge pulse).
+Each layer starts and ends either at a time or at a **gameplay event**: `beat.1.start`,
+`clock<=5`, `win`, `fail`, `clock_second`. Texts may only use facts from the recording
+(`{clock_left}`, `{colour}`, `{timer}`, `{blocks}`, `{time_used}`). A copy guard refuses invented
+odds ("only 1%", "IQ 140"), which ad rules forbid. `locked` lists what an edit may not touch. Edit
+the file and run `cbj compose` to render it again.
+
+**Layout.** The whole recorded frame is scaled to 75% and placed on the recording's own background
+gradient (letterboxing; the game camera is untouched). This leaves:
+- one text band above the HUD (y 250-476), with one caption at a time;
+- a bottom that stays clear for the platform's buttons (the "social" safe area keeps 250 px top,
+  420 px bottom and 130 px right free).
+
+The replay and the result screens play full size. Texts are fitted to the band.
+
+**The proof of what changed.** Every render writes `compose.json`:
+- the tool versions;
+- the gameplay file's SHA-256 and each segment's fit;
+- every layer's resolved frames and pixel box;
+- a SHA-256 of every composited frame;
+- the WAV and MP4 hashes;
+- the QA results.
+
+The encode is bit-exact, so the same `ad.json` gives a byte-identical MP4. A test changes one
+caption and checks that only that caption's frames change, the sound is untouched, and every other
+layer is identical: the basis of controlled editing (case p.7).
+
+**QA, on every render.** Problems found before drawing stop the render at once (nothing is
+encoded, exit 1). The checks:
+- exact length;
+- the hook on frame 0;
+- every text inside the safe area and at least 0.8 s on screen;
+- no two captions at once;
+- an end card of at least 3 s (a warning above 6 s);
+- every anchor resolvable;
+- the copy guard;
+- the audio peak and length.
+
+**Assets.** The game's font (Tobi) and UI sprites are read from the Unity project at run time
+(`../CBJ`, or set `CBJ_PROJECT`) and never copied into this repo; the font is "all rights reserved"
+and licensed to Rollic. Without the project, an open fallback font is used. The sound effects are
+synthesized in code, because the project ships no audio; they stand in for the game's own sound
+bank.
+
+**Colour.** Frames are decoded and re-encoded with BT.709, TV range and swscale's accurate
+rounding. ffmpeg's default darkened a decode and re-encode by about 2 levels; now the drift is
+about 0.
+
 ## Layout
 
 ```
@@ -385,6 +452,11 @@ src/cbj/describe.py  ASCII boards, plain-English steps, move-script JSON
 src/cbj/difficulty.py difficulty numbers and the simulated naive player
 src/cbj/render.py    render jobs, camera, running the Unity player, checking and comparing recordings
 src/cbj/play.py      scenario scripts: mistakes, hesitations, pacing, endings, pause-only fitting
+src/cbj/ad.py        the ad as data: recordings, gameplay events, ad.json, the default ad per ending
+src/cbj/compose.py   renders ad.json: layout, layers, cursor, sound, QA, compose.json
+src/cbj/draw.py      text in the game's style, sprites, easing, exact alpha blending
+src/cbj/sound.py     synthesized sound effects and the mix
+src/cbj/video.py     frame-exact decode and bit-exact encode with matched colour
 src/cbj/cli.py       command line
 unity/CreativeRunner Unity scripts copied into the project copy by build-player
 unity/game-patch     the game fix: Rollic's originals, the patched files, game.patch
