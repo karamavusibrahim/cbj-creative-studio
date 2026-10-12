@@ -24,6 +24,7 @@ import json
 import math
 import random
 from dataclasses import asdict, dataclass, field, replace
+from functools import lru_cache
 from pathlib import Path
 
 from .describe import block_labels, color_name
@@ -32,7 +33,7 @@ from .level import Level
 from .render import DragPacing, Pacing, make_job, run_player
 from .rules import State, initial_state, is_position_valid, occupancy
 from .events import SOLVER_ACTIONS, Event, advance, best_finish, trailing_exits, try_solve_events
-from .solver import Drag, _with_full_path, apply_drag, drag_outcomes, replay, solve_fast as solve
+from .solver import Drag, _with_full_path, apply_drag, drag_outcomes, replay, solve_fast
 
 FPS = 30
 ENDINGS = ("win", "near_fail", "cliffhanger", "time_out")
@@ -268,6 +269,19 @@ def bumps(level: Level, state: State) -> list[tuple[Drag, int, tuple[int, int] |
             if blocker is not None:
                 out.append((Drag(bid, (pivot,), False), blocker, (dx, dy)))
     return out
+
+
+@lru_cache(maxsize=50_000)
+def _solved(level: Level, start: State):
+    return solve_fast(level, start=start)
+
+
+def solve(level: Level, start: State | None = None):
+    """solve_fast, remembered per (level, position): a plan solves many positions, and plans for
+    other seeds (an edit looking for the play closest to the original) meet the same ones again.
+    The drags come back as a fresh list, since plan() consumes them."""
+    sol = _solved(level, initial_state(level) if start is None else start)
+    return None if sol is None else replace(sol, drags=list(sol.drags))
 
 
 def mistake_options(level: Level, state: State, allow_fidget: bool = True) -> list[Mistake]:

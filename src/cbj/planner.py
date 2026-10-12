@@ -48,7 +48,7 @@ level (control "level"; difficulty belongs to control "difficulty_pacing"):
 gameplay (control "gameplay"):
 - ending: "win" (a clean, satisfying solve), "near_fail" (a mistake, a stuck moment, then solved with 00:01 left on the clock), "cliffhanger" (the video stops with two blocks left in each other's way and asks "Can you see the move?"), "time_out" (the clock runs out one move short: ONLY when the request explicitly asks for a fail or losing ending). If the request says nothing about gameplay, use "near_fail".
 - mistakes: believable wrong moves, 0-3 (null = the ending's default). mistake_kinds: any of "blocked" (drags a block toward its gate and another block stops it), "wrong_way" (moves a block somewhere unhelpful), "fidget" (a pointless nudge); [] = the tool chooses. hesitations: picking a block up and putting it back, 0-3 (null = default).
-- timer_s: seconds on the clock at the start, only if the request gives it. seed: null unless the request asks for a different take of the same ad (then any new integer).
+- timer_s: seconds on the clock at the start, only if the request gives it. seed: null unless the request asks for a different take of the same ad (then any new integer). "Harder" or "easier" is about the level (level.difficulty), never a new take: the tool edits the board itself.
 - events: the ORDER of interactions the request asks for, as steps in order (other moves may come between them). [] unless the request says what particular blocks do or in what order. Each step: block {colour: a game colour or null, which: "any" | "biggest" | "smallest" | "longest", all: true for "all the <colour> blocks"}, action: "leaves" (exits through its gate) | "moves" (moved out of the way) | "stuck" (dragged toward its gate and stopped by another block: a mistake) | "hesitates" (picked up and put back), when: "first" (the very first move of the video; only the first step) | "next" | "last" (the last block to leave; only the final "leaves" step). Examples: "first move the yellow block out of the way, then the blue one escapes" -> [{yellow, moves, first}, {blue, leaves, next}]; "clear it colour by colour: blue, then red" -> [{blue, all, leaves}, {red, all, leaves}] (with no colours named, pick three and put them in level.colours too); "the biggest block leaves last" -> [{null, biggest, leaves, last}]; "the red block gets stuck first" -> [{red, stuck, first}] (a stuck step is one of the mistakes). "then the rest" or "then everything else" needs no step: the board is cleared at the end anyway.
 - finish: "streak" for a satisfying solve: one key move, then every block leaves one after another ("one move frees everything", "they all fly out", a chain, a cascade); else "auto".
 - clock_left_s: for a near_fail only, the seconds on the clock when the last block leaves, 1-3, only if the request gives it ("with 2 seconds left" -> 2); else null.
@@ -77,7 +77,7 @@ concept (control "concept"): angle = the idea in one line. Texts: hook (first fr
 
 sequence (control "sequence"): style "standard" (hook over the gameplay, then replay, result, end card) or "result_first" (the result for 1.5 s at the very start, then how it happened); replay (a slow-motion replay of the last moves); result_screen (the game's own "Level Completed" / "Out of Time!" screen); end_card (always true: the end card holds the button).
 
-assets (control "assets"): an uploaded file may ONLY be used if the request refers to it (by name, or as "our logo", "this image", "the attached ..."). Otherwise leave it out and say so in the assets row's plan. The game's own sprites can also be used: CoinPile.png, stopwatch.png. role: "logo" (small, in a top corner for the whole ad), "mascot" or "sticker" (a picture beside the hook, or on the end card), "cursor" (replaces the tap ring), "end_art" (the picture on the end card), "end_background" (the end card's background). when: "whole", "hook", "end_card". where: "auto", "top_left", "top_right", "beside_hook", "end_card". Never invent a file name.
+assets (control "assets"): an uploaded file may ONLY be used if the request refers to it (by name, or as "our logo", "this image", "this asset", "the attached ..."). Otherwise leave it out and say so in the assets row's plan. The game's own sprites can also be used: CoinPile.png, stopwatch.png. role: "logo" (small, in a top corner for the whole ad), "mascot" or "sticker" (a picture beside the hook, or on the end card), "cursor" (replaces the tap ring), "end_art" (the picture on the end card), "end_background" (the end card's background), "button" (replaces the PLAY NOW button's image; its text stays). when: "whole", "hook", "end_card". where: "auto", "top_left", "top_right", "beside_hook", "end_card". To REMOVE a picture (the logo, the icon beside the hook, the end-card picture), give it file "builtin:none" in its role. Never invent a file name. In an EDIT, the request may point at something in the ad ("this object", "the coin pile", "the clock icon", "the button"): the list THINGS IN THIS AD NOW says what each picture is; replace exactly that slot (its role and when), keep every other asset as it is, and if the request does not say which thing, pick the most likely one and write the assumption with the alternative.
 
 audio (control "assets"): sfx false only if the request asks for no sound. There is no music or voice-over.
 
@@ -233,8 +233,70 @@ def _translate_defaults(brief: dict, client) -> None:
                                    f"in English.")
 
 
+# Where an attached picture goes when an edit asks to use it but the model placed it nowhere,
+# by the words of the prompt (first match), else the end-card picture.
+PLACE_WORDS = (("button", ("button", "cta")), ("cursor", ("cursor", "hand", "finger", "pointer")),
+               ("logo", ("logo", "brand", "watermark")),
+               ("hook_icon", ("icon", "stopwatch", "clock icon", "sticker", "beside the hook", "next to the hook")),
+               ("end_background", ("background",)))
+# An attachment is placed only when the prompt talks about using a picture.
+USE_WORDS = ("asset", "attached", "attachment", "upload", "uploaded", "image", "picture", "photo", "object", "file",
+             "this one", "this asset", "this image", "this picture", "this object", "mascot", "character", "artwork")
+
+
+def _place_unplaced(brief: dict, prompt: str, attached: list[str], current: dict | None) -> None:
+    """An edit that attaches a picture and asks to use it, which the model placed nowhere, puts it
+    in the slot the prompt names, else in the end-card picture, and says which (case p.4: "replace
+    this object with the attached asset")."""
+    from . import edits
+    text = prompt.lower()
+    used = {a["file"] for a in brief["assets"]}
+    todo = [f for f in attached if f not in used]
+    if current is None or len(todo) != 1 or not B._has_word(text, USE_WORDS):
+        return
+    f = todo[0]
+    slot = next((s for s, words in PLACE_WORDS if B._has_word(text, words)), None)
+    guessed = slot is None
+    if guessed:
+        slot = "end_art" if brief["gameplay"]["ending"] != "cliffhanger" else "hook_icon"
+    placed, _ = edits.replace_picture(brief, slot, f)
+    brief["assets"] = placed["assets"]
+    if "assets" not in brief["changed"]:
+        brief["changed"].append("assets")
+    name = edits.PICTURES[slot]["name"]
+    row = B.control(brief, "assets")
+    row["asked"] = row["asked"] or prompt.strip()
+    row["plan"] = f"{f} replaces {name}; every other picture stays."
+    if row["status"] == "default":
+        row["status"] = "applied"
+    if guessed:
+        brief["assumptions"].append(f"'{f}' read as a replacement for {name}; it could also be the icon beside the "
+                                    f"hook or the logo (say which, and it moves there).")
+
+
+def _relative_difficulty(brief: dict, prompt: str, current: dict) -> None:
+    """"Make it harder" edits the level the user is looking at (the closest board that rates
+    harder), even when its brief already says hard; never a new take of the same level."""
+    d = B.relative_difficulty(prompt)
+    if d is None:
+        return
+    brief["level"]["edit"] = {"dir": d, "of": None}  # `of` is set to the version it is made from
+    if "level.difficulty" not in brief["changed"]:
+        brief["changed"].append("level.difficulty")
+    order = ["easy", "medium", "hard"]
+    old, new = current["level"]["difficulty"], brief["level"]["difficulty"]
+    if new in order and old in order and (order.index(new) - order.index(old)) * (1 if d == "harder" else -1) < 0:
+        brief["level"]["difficulty"] = old  # the model moved the other way
+    row = B.control(brief, "difficulty_pacing")
+    row["asked"] = row["asked"] or prompt.strip()
+    row["plan"] = (f"the same board, changed as little as possible until it rates {d} than now"
+                   + (f" (aiming for {brief['level']['difficulty']})" if brief["level"]["difficulty"] != old else ""))
+    if row["status"] == "default":
+        row["status"] = "applied"
+
+
 def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprites: set[str] | None = None,
-         current: dict | None = None, available: dict[str, Path] | None = None) -> dict:
+         current: dict | None = None, available: dict[str, Path] | None = None, inventory: str | None = None) -> dict:
     """A checked brief for a prompt. With `current`, the prompt edits that brief: only what the
     prompt asks to change may change. uploads: the files attached to this prompt (offered to
     the model); available: every uploaded file (an edit keeps the ones its version uses).
@@ -248,14 +310,22 @@ def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprit
         # the fields only: the previous version's reasons and notes would leak into the edit
         shown = {k: v for k, v in current.items() if k not in ("planner", "controls", "assumptions", "summary")}
         user = EDIT + json.dumps(shown, indent=1) + "\n\nEDIT " + user
+        if inventory:
+            user += ("\n\nTHINGS IN THIS AD NOW (what the request may point at; if it asks to change or remove "
+                     "something the ad does not have, say so in that control's row):\n" + inventory)
     t0 = time.time()
     raw = _ask(client, system, user)
     _only_mentioned_uploads(raw, prompt, available, current)
     # Only what the prompt asks to change is taken; everything else keeps its default (a new ad)
     # or its current value (an edit). The model may not fill unasked fields, such as copy.
     base = current if current is not None else B.check(B.default_brief())
-    brief, restored = B.merge(base, B.check(raw, available, sprites), prompt)
+    brief, restored = B.merge(base, B.check(raw, available, sprites), prompt, attached=files)
+    changed = brief["changed"]
     brief = B.check(brief, available, sprites)
+    brief["changed"] = changed
+    _place_unplaced(brief, prompt, files, current)
+    if current is not None:
+        _relative_difficulty(brief, prompt, current)
     if brief["language"] != "en":
         _translate_defaults(brief, client)
     else:

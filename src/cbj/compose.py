@@ -187,7 +187,12 @@ def layer_image(layer: dict, text: str, band: dict | None = None) -> Image.Image
         pill.alpha_composite(label, ((w - label.width) // 2, (h - label.height) // 2))
         return pill
     if kind == "button":
-        btn = scaled(sprite(layer.get("image", "ContinueButtonEmpty.png")), layer.get("scale", 0.9)).copy()
+        im = sprite(layer.get("image", "ContinueButtonEmpty.png"))
+        if layer.get("box"):  # a replacement button, fitted in the game button's box
+            bw, bh = layer["box"]
+            btn = scaled(im, min(bw / im.width, bh / im.height)).copy()
+        else:
+            btn = scaled(im, layer.get("scale", 0.9)).copy()
         label = text_image(text, int(84 * layer.get("scale", 0.9) / 0.9), shadow=False)
         btn.alpha_composite(label, ((btn.width - label.width) // 2, max(0, (btn.height - label.height) // 2 - 10)))
         return btn
@@ -204,7 +209,7 @@ def layer_image(layer: dict, text: str, band: dict | None = None) -> Image.Image
         # Placed texts (the end card) fit the safe width too, in one or two lines.
         img = fit_text(text, size, int(BAND["max_w"] / 1.05), layer.get("max_h", 260), **style)
     if icon:
-        ic = scaled(sprite(icon), 110 / sprite(icon).width)
+        ic = scaled(sprite(icon), 110 / max(sprite(icon).width, sprite(icon).height))  # inside 110x110
         out = Image.new("RGBA", (ic.width + 16 + img.width, max(ic.height, img.height)), (0, 0, 0, 0))
         out.alpha_composite(ic, (0, (out.height - ic.height) // 2))
         out.alpha_composite(img, (ic.width + 16, (out.height - img.height) // 2))
@@ -636,7 +641,7 @@ def _qa(ad, prep, track, hashes):
 
 # ---------- comparing two renders (the edit proof) ----------
 
-def diff(a_dir: str | Path, b_dir: str | Path, decode: bool = False) -> dict:
+def diff(a_dir: str | Path, b_dir: str | Path, decode: bool = False, boxes: bool = True) -> dict:
     """What changed between two renders of an ad. Frames are compared by their hashes; for every
     changed frame both ads are composited again (deterministically) and the changed pixels' box
     is measured and checked against the boxes of the layers whose entries changed: every change
@@ -681,7 +686,7 @@ def diff(a_dir: str | Path, b_dir: str | Path, decode: bool = False) -> dict:
     predicted += [cb["layers"][k]["box"] for k in out["layers_changed"] if k in cb["layers"] and cb["layers"][k]["box"]]
     out["predicted_box"] = _union(predicted)
     measured = None
-    if changed:
+    if changed and boxes:  # boxes=False: frames only (an edit that re-filmed the gameplay)
         want = set(changed)
         pa, pb = Prepared(ada, ca["draft"]), Prepared(adb, cb["draft"])
         for (ta, fa), (tb, fb) in zip(pa.frames(want), pb.frames(want)):

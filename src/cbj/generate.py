@@ -465,11 +465,11 @@ def candidate(spec: Spec, rng: random.Random) -> dict:
 
 # ---------- local search ----------
 
-def _mutate(board: Board, spec: Spec, rng: random.Random) -> Board | None:
+def _mutate(board: Board, spec: Spec, rng: random.Random, ops=("move", "gate", "swap", "piece")) -> Board | None:
     """A copy with one change: a block moved, a gate moved, two colours swapped, or a piece changed."""
     b = Board(board.w, board.h, board.holes, list(board.blocks), list(board.gates))
     active = {(x, y) for x in range(b.w) for y in range(b.h)} - b.holes
-    op = rng.choice(("move", "gate", "swap", "piece"))
+    op = rng.choice(ops)
     n = len(b.blocks)
     if op in ("move", "piece"):
         i = rng.randrange(n)
@@ -508,6 +508,129 @@ def _mutate(board: Board, spec: Spec, rng: random.Random) -> Board | None:
         return None
     b.gates[k] = (colour, s2, rng.choice(wins))
     return b
+
+
+# ---------- editing a level: the closest board that is harder or easier ----------
+
+INV_DIR = {v: k for k, v in DIR.items()}
+PIECE_OF = {tuple(sorted(offs)): name for name, offs in PIECES.items()}
+EDIT_OPS = ("move", "gate", "swap")  # a piece's shape stays: the blocks the viewer saw stay those blocks
+
+
+def board_from_dict(d: dict) -> Board | None:
+    """The Board of a level file, or None if a block's shape is not one the generator knows (a
+    hand-made piece)."""
+    blocks = []
+    for b in d["GridBlockDatas"]:
+        name = PIECE_OF.get(tuple(sorted((o["x"], o["y"]) for o in b["shapeOffsets"])))
+        if name is None:
+            return None
+        blocks.append((name, (b["gridPosition"]["x"], b["gridPosition"]["y"]), b["blockColor"]))
+    gates = []
+    for e in d["ExitDatas"]:
+        x0, y0 = e["gridPosition"]["x"], e["gridPosition"]["y"]
+        gates.append((e["requiredColor"], INV_DIR[e["direction"]], [(x0 + o["x"], y0 + o["y"]) for o in e["shapeOffsets"]]))
+    holes = {(c["x"], c["y"]) for c in d.get("inactiveCells", [])}
+    return Board(d["gridWidth"], d["gridHeight"], holes, blocks, gates)
+
+
+def board_changes(a: Board, b: Board) -> dict:
+    """What differs between a board and an edit of it (blocks keep their index under EDIT_OPS)."""
+    moved = [i for i, (x, y) in enumerate(zip(a.blocks, b.blocks)) if x[1] != y[1]]
+    recoloured = [i for i, (x, y) in enumerate(zip(a.blocks, b.blocks)) if x[2] != y[2]]
+    gates = [k for k, (x, y) in enumerate(zip(a.gates, b.gates)) if x != y]
+    return {"blocks_moved": moved, "blocks_recoloured": recoloured, "gates_moved": gates,
+            "count": len(moved) + len(gates) + (len(recoloured) + 1) // 2}
+
+
+def hardness(r: Difficulty) -> float:
+    """One number that orders boards by difficulty: repositioning drags first, then the naive
+    player's struggle, then blocks that can leave at once (fewer is harder)."""
+    return 2.0 * r.extra_drags + 0.6 * min(r.naive_ratio, 4.0) + 0.1 * r.min_drags - 0.4 * r.exits_at_start
+
+
+def describe_changes(c: dict, n_blocks: int) -> str:
+    parts = []
+    if c["blocks_moved"]:
+        parts.append(f"{len(c['blocks_moved'])} block{'s' if len(c['blocks_moved']) > 1 else ''} moved")
+    if c["gates_moved"]:
+        parts.append(f"{len(c['gates_moved'])} gate{'s' if len(c['gates_moved']) > 1 else ''} moved")
+    if c["blocks_recoloured"]:
+        parts.append(f"{len(c['blocks_recoloured'])} blocks' colours swapped")
+    kept = n_blocks - len(set(c["blocks_moved"]) | set(c["blocks_recoloured"]))
+    return f"the same board with {' and '.join(parts) or 'no change'} ({kept} of {n_blocks} blocks as they were)"
+
+
+def edit_board(parent: dict, spec: Spec, direction: str, target: str | None = None, budget_s: float = 90.0,
+               max_changes: int = 3, log=None, max_tries: int = 120) -> tuple[dict, Difficulty, dict] | None:
+    """The level closest to `parent` that is `direction` ("harder" or "easier") than it: a search
+    over small changes (move a block, move a gate, swap two blocks' colours), keeping the shape,
+    size, pieces and number of blocks. Fewest changes first, then reaching the `target` band,
+    then the biggest step in the asked direction. The result must stay fair and solvable on the
+    full 200-run rating. None if no such board turns up in the budget (the caller generates a
+    new level instead, and says so)."""
+    base = board_from_dict(parent)
+    if base is None or "symmetric" in spec.style:
+        return None
+    # Its own seed (not the play's): the same edit of the same board searches the same way.
+    rng = random.Random(f"{direction}:{target}")
+    # A gate moved across the board is what makes a block cross the others: try those most.
+    ops = ("gate", "gate", "move", "swap") if direction == "harder" else EDIT_OPS
+    t0 = time.time()
+    cap = MAX_STATES_HARD
+    base_r = rate(level_from_dict(parent, name="generated"))
+    h0 = hardness(base_r)
+    sign = 1 if direction == "harder" else -1
+    rank = {"easy": 0, "medium": 1, "between": 1, "hard": 2}
+
+    def better(r: Difficulty, band: str) -> bool:
+        if sign * (hardness(r) - h0) < 0.5:
+            return False
+        return sign * (rank[band] - rank[band_of(base_r)]) >= 0 and (band != "between" or r.naive_capped == 0)
+
+    frontier, found, tried, draws = [base], [], 0, 0
+    seen = {json.dumps(base.to_dict(), sort_keys=True)}
+    # Bounded by boards tried, not by time, so the same edit finds the same board on any machine
+    # (the time budget is only a safety net).
+    while tried < max_tries and draws < 40 * max_tries and time.time() - t0 < budget_s:
+        draws += 1
+        src = frontier[min(len(frontier) - 1, int(rng.random() ** 2 * len(frontier)))]
+        child = _mutate(src, spec, rng, ops=ops)
+        if child is None:
+            continue
+        ch = board_changes(base, child)
+        d = child.to_dict()
+        key = json.dumps(d, sort_keys=True)
+        if ch["count"] > max_changes or key in seen:
+            continue
+        seen.add(key)
+        tried += 1
+        got = _evaluate(replace(spec, difficulty=target or spec.difficulty), d, cap)
+        if got is None:
+            continue
+        _, r, band, _, _ = got
+        if sign * (hardness(r) - h0) > 0:
+            frontier.append(child)  # a step the right way: search on from it
+        if better(r, band):
+            # fewest changes, then the asked band, then the smallest step that is enough ("a bit
+            # easier" should not become trivial)
+            found.append((ch["count"], -(band == target), sign * (hardness(r) - h0), tried, child, ch))
+            found.sort(key=lambda t: t[:4])
+            if found[0][0] == 1 and (target is None or found[0][1] == -1) and tried >= max_tries // 3:
+                break  # one change reaches it: nothing closer exists
+    for count, _, _, _, child, ch in found[:6]:
+        d = child.to_dict()
+        full = rate(level_from_dict(d, name="generated"))
+        if (sign * (hardness(full) - h0) >= 0.5 and full.naive_capped <= FAIR_CAPPED * full.runs
+                and sign * (rank[band_of(full)] - rank[band_of(base_r)]) >= 0):
+            stats = {"seconds": round(time.time() - t0, 1), "tried": tried, "band": band_of(full),
+                     "edit": {**ch, "direction": direction, "from": asdict(base_r) | {"band": band_of(base_r)}}}
+            if log:
+                log(f"  {describe_changes(ch, len(base.blocks))}: {base_r.min_drags} -> {full.min_drags} drags, "
+                    f"{base_r.extra_drags} -> {full.extra_drags} repositioning, naive {base_r.naive_ratio:.2f}x -> "
+                    f"{full.naive_ratio:.2f}x ({tried} boards tried)")
+            return d, full, stats
+    return None
 
 
 # ---------- scoring ----------

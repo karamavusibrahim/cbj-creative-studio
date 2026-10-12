@@ -364,10 +364,10 @@ def _print_brief(b: dict) -> None:
 
 def _cmd_plan(args) -> int:
     from . import planner, studio
-    current = studio.versions(args.edit)[-1]["brief"] if args.edit else None
+    current, inv = _edit_context(args)
     ups = {n: p for n, p in studio.uploads().items() if n in (args.upload or [])}
     b = planner.plan(args.prompt, uploads=ups, sprites=studio.sprite_names(), current=current,
-                     available=studio.uploads())
+                     available=studio.uploads(), inventory=inv)
     _print_brief(b)
     if args.json:
         Path(args.json).write_text(json.dumps(b, indent=1))
@@ -377,20 +377,58 @@ def _cmd_plan(args) -> int:
 
 def _cmd_make(args) -> int:
     from . import planner, studio
-    current = studio.versions(args.edit)[-1]["brief"] if args.edit else None
+    current, inv = _edit_context(args)
     ups = {n: p for n, p in studio.uploads().items() if n in (args.upload or [])}
     if args.brief:
         b = json.loads(Path(args.brief).read_text())
     else:
         b = planner.plan(args.prompt, uploads=ups, sprites=studio.sprite_names(), current=current,
-                     available=studio.uploads())
+                         available=studio.uploads(), inventory=inv)
     _print_brief(b)
-    v = studio.make(args.prompt, b, args.edit, draft=args.draft)
+    v = studio.make(args.prompt, b, args.edit, draft=args.draft, base=args.base)
     print(f"Version: studio/{v['id']}/v{v['n']} ({v['length_s']:.2f} s, made in {v['seconds']:.0f} s)")
     print(f"Video: studio/{v['video']}")
     if v.get("proof"):
-        for k, x in v["proof"].items():
-            print(f"  {k}: {x}")
+        _print_report(v["proof"])
+    return 0
+
+
+def _edit_context(args):
+    """The brief and the inventory of the version an edit starts from (none for a new ad)."""
+    from . import studio
+    if not args.edit:
+        return None, None
+    v = studio.parent(args.edit, args.base)
+    if v is None:
+        raise ValueError(f"no creative {args.edit}")
+    return v["brief"], studio.planner_context(args.edit, v["n"])
+
+
+def _print_report(r: dict) -> None:
+    from .editreport import STATUS_WORDS
+    print(r["verdict"])
+    for row in r["rows"]:
+        print(f"  {row['title']:17} {STATUS_WORDS[row['status']]}: {row['detail']}")
+        for n in row.get("reasons", []):
+            print(f"  {'':17}   engine: {n}")
+    px = r.get("pixels") or {}
+    if "frames_changed" in px:
+        print(f"  frames changed: {px['frames_changed']} of {px['frames']} {px.get('ranges', '')}"
+              + ("" if px.get("contained") is not False else " (SOME PIXELS OUTSIDE THE CHANGED LAYERS)"))
+    elif px.get("note"):
+        print(f"  frames: {px['note']}")
+
+
+def _cmd_edit_report(args) -> int:
+    from . import brief as B
+    from . import studio
+    from .editreport import report
+    va, vb = studio.parent(args.creative, args.a), studio.parent(args.creative, args.b)
+    if va is None or vb is None:
+        raise ValueError(f"no creative {args.creative}")
+    direct = vb.get("from") == va["n"]
+    _print_report(report(va, vb, studio.STUDIO, vb["brief"].get("changed", []) if direct
+                         else B.changed_groups(va["brief"], vb["brief"]), compare=not direct))
     return 0
 
 
@@ -631,6 +669,7 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("plan", help="read a prompt into a creative brief (the LLM planner), and print it")
     s.add_argument("prompt")
     s.add_argument("--edit", metavar="CREATIVE", help="plan an edit of this creative's latest version")
+    s.add_argument("--base", type=int, metavar="N", help="edit version N instead of the latest")
     s.add_argument("--upload", action="append", metavar="NAME", help="an uploaded file (studio/uploads) to offer")
     s.add_argument("--json", help="also write the brief to this file")
     s.set_defaults(func=_cmd_plan)
@@ -638,10 +677,17 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("make", help="plan a prompt and make the creative (or edit one with --edit)")
     s.add_argument("prompt")
     s.add_argument("--edit", metavar="CREATIVE", help="make a new version of this creative")
+    s.add_argument("--base", type=int, metavar="N", help="edit version N instead of the latest")
     s.add_argument("--upload", action="append", metavar="NAME")
     s.add_argument("--brief", help="use this brief.json instead of planning (no LLM call)")
     s.add_argument("--draft", action="store_true")
     s.set_defaults(func=_cmd_make)
+
+    s = sub.add_parser("edit-report", help="what changed between two versions of a creative, item by item")
+    s.add_argument("creative")
+    s.add_argument("a", type=int, help="the earlier version (number)")
+    s.add_argument("b", type=int, help="the later version")
+    s.set_defaults(func=_cmd_edit_report)
 
     s = sub.add_parser("ui", help="the test UI: prompts in, creatives out (http://127.0.0.1:8765)")
     s.add_argument("--port", type=int, default=8765)

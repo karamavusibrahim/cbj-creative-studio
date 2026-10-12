@@ -89,6 +89,25 @@
          background: #faf9fc; border: 1px solid var(--line); border-radius: 6px; padding: 8px; white-space: pre-wrap; }
   .err { color: var(--bad); font-weight: 600; margin-top: 8px; white-space: pre-wrap; }
   .proof dl { margin: 0; display: grid; grid-template-columns: 130px 1fr; gap: 4px 10px; font-size: 13px; }
+  .st.kept { background: var(--def-soft); color: var(--def); }
+  .st.asked { background: var(--ok-soft); color: var(--ok); }
+  .st.side_effect { background: var(--warn-soft); color: var(--warn); }
+  .st.not_asked { background: var(--bad-soft); color: var(--bad); }
+  .st.changed { background: var(--accent-soft); color: var(--accent); }
+  .verdict { font-weight: 650; margin: 0 0 8px; }
+  .verdict.bad { color: var(--bad); }
+  .rep .r { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .rep .h { display: flex; gap: 8px; align-items: center; }
+  .rep .d { margin-top: 2px; color: var(--ink); }
+  .rep .r.kept .d { color: var(--muted); }
+  .things .t { display: grid; grid-template-columns: 54px 1fr auto; gap: 8px; align-items: center; padding: 6px 0;
+               border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .things .th { width: 54px; height: 54px; border-radius: 6px; background: #2a1650; display: flex; align-items: center;
+                justify-content: center; overflow: hidden; color: #fff; font-size: 10px; text-align: center; }
+  .things .th img { max-width: 100%; max-height: 100%; }
+  .things .acts { display: flex; gap: 4px; }
+  .things button { padding: 3px 8px; font-size: 12px; }
+  .things .txt { font-style: italic; }
   .proof dt { color: var(--muted); }
   .proof dd { margin: 0; }
   .gp { display: grid; grid-template-columns: minmax(180px, 300px) 1fr; gap: 14px; align-items: start; }
@@ -166,8 +185,17 @@
       <div class="links" id="links"></div>
     </div>
     <div class="card proof hidden" id="proofCard">
-      <h2>What this edit changed</h2>
-      <dl id="proof"></dl>
+      <h2 id="proofTitle">What this edit changed</h2>
+      <div id="proof"></div>
+      <div class="row" id="compareRow" style="margin-top:10px; font-size:12.5px">Compare
+        <select id="cmpA"></select> with <select id="cmpB"></select>
+        <button class="ghost" onclick="compareVersions()" style="padding:3px 10px">Compare</button></div>
+    </div>
+    <div class="card things hidden" id="thingsCard">
+      <h2>Things in this ad</h2>
+      <div class="muted" style="margin-bottom:6px">Replace, remove or rewrite one thing; everything else stays exactly as it is. No prompt needed.</div>
+      <div id="things"></div>
+      <input type="file" id="thingFile" accept="image/png,image/jpeg,image/webp" class="hidden">
     </div>
     <div class="card">
       <h2>Progress</h2>
@@ -199,7 +227,10 @@ const NEW_EXAMPLES = [
   "Start slow and speed up until the end.",
 ];
 const EDIT_EXAMPLES = [
+  "I like this creative. Keep everything exactly the same, but replace this asset with the attached image.",
+  "Keep everything, but replace the coin pile on the end card with the attached picture.",
   "Keep everything exactly the same, but make the hook say 'Beat this in 20 seconds'.",
+  "Same ad, but add a second mistake before the solve.",
   "Same ad, but remove the 'Hurry!' caption.",
   "Keep everything, but put our logo (attached) in the top left corner.",
   "Same ad without the slow-motion replay.",
@@ -217,10 +248,13 @@ async function api(path, body) {
   return r.json();
 }
 
+function base() { return S.cid && S.shown ? S.shown.n : null; }
+
 function setMode() {
-  const v = S.versions.length ? S.versions[S.versions.length - 1] : null;
+  const last = S.versions.length ? S.versions[S.versions.length - 1] : null;
+  const b = base();
   $("mode").innerHTML = S.cid
-    ? `<b>Editing</b> ${esc(S.cid)} (latest: v${v ? v.n : "?"}). Describe the change; everything you do not mention stays as it is.`
+    ? `<b>Editing v${b ?? "?"}</b> of ${esc(S.cid)}${last && b !== last.n ? ` (an earlier version: the new version starts from v${b}, not from v${last.n})` : ""}. Describe the change; everything you do not mention stays as it is.`
     : `<b>New creative</b>: describe the ad you want.`;
   const ex = S.cid ? EDIT_EXAMPLES : NEW_EXAMPLES;
   $("examples").innerHTML = ex.map(e => `<button class="chip" title="${esc(e)}">${esc(e.length > 60 ? e.slice(0, 58) + "…" : e)}</button>`).join("");
@@ -317,10 +351,10 @@ async function levelOnly() {
   busy(true);
   try {
     if (!S.brief || S.briefPrompt !== prompt) {
-      const {job} = await api("/api/plan", {prompt, creative_id: S.cid, uploads: S.files});
+      const {job} = await api("/api/plan", {prompt, creative_id: S.cid, base: base(), uploads: S.files});
       S.brief = await poll(job); S.briefPrompt = prompt;
     }
-    const {job} = await api("/api/preview", {prompt, brief: S.brief, creative_id: S.cid});
+    const {job} = await api("/api/preview", {prompt, brief: S.brief, creative_id: S.cid, base: base()});
     const d = await poll(job);
     S.brief.controls = d.controls;
     renderBrief(S.brief, "Planned (not made yet)");
@@ -332,8 +366,8 @@ async function levelOnly() {
 
 function renderVersion(v) {
   S.shown = v;
-  $("tabs").innerHTML = S.versions.map(x => `<span class="tab ${x.n === v.n ? "active" : ""}" data-n="${x.n}">v${x.n}${x.edit ? " (edit)" : ""}</span>`).join("");
-  [...$("tabs").children].forEach(t => t.onclick = () => renderVersion(S.versions.find(x => x.n == t.dataset.n)));
+  $("tabs").innerHTML = S.versions.map(x => `<span class="tab ${x.n === v.n ? "active" : ""}" data-n="${x.n}" title="${x.edit ? `an edit of v${x.from ?? x.n - 1}` : "the first version"}">v${x.n}${x.edit ? ` ← v${x.from ?? x.n - 1}` : ""}</span>`).join("");
+  [...$("tabs").children].forEach(t => t.onclick = () => { renderVersion(S.versions.find(x => x.n == t.dataset.n)); setMode(); });
   const vid = $("video");
   vid.src = `/studio/${v.video}?t=${Date.now()}`; vid.poster = `/studio/${v.poster}`;
   vid.classList.remove("hidden"); $("noVideo").classList.add("hidden");
@@ -350,14 +384,109 @@ function renderVersion(v) {
                     notes: play ? play.notes : [], frames: play?.measured?.beat_frames},
                    `v${v.n}: recorded in the game. Checks read from the recording and the level file.`);
   }).catch(() => {});
-  if (v.proof) {
-    const pr = v.proof;
+  renderCompare(v);
+  if (v.proof) renderProof(v.proof, `What v${v.n} changed from v${v.from ?? v.n - 1}`);
+  else if (S.versions.length > 1) { $("proof").innerHTML = '<div class="muted">The first version. Pick two versions to compare.</div>'; $("proofTitle").textContent = "Versions"; }
+  $("proofCard").classList.toggle("hidden", !v.proof && S.versions.length < 2);
+  loadThings(v);
+}
+
+const STATUS = {kept: "kept", asked: "changed, as asked", side_effect: "changed, because of it", not_asked: "NOT ASKED", changed: "differs"};
+
+function renderProof(pr, title) {
+  $("proofTitle").textContent = title;
+  if (!pr.rows) {  // a version made before the edit report existed
     const items = [["Asked to change", (pr.changed_controls || []).join(", ") || "nothing"], ["Gameplay", pr.gameplay],
-                   ["Frames", pr.frames], ["Pixels", pr.pixels], ["Layers changed", (pr.layers_changed || []).join(", ")],
-                   ["Sound", pr.sound], ["Check", pr.ok === false ? "FAILED" : pr.ok ? "passed" : ""]];
-    $("proof").innerHTML = items.filter(([, x]) => x).map(([k, x]) => `<dt>${esc(k)}</dt><dd>${esc(x)}</dd>`).join("");
-    $("proofCard").classList.remove("hidden");
-  } else $("proofCard").classList.add("hidden");
+                   ["Frames", pr.frames], ["Pixels", pr.pixels]];
+    $("proof").innerHTML = `<dl>${items.filter(([, x]) => x).map(([k, x]) => `<dt>${esc(k)}</dt><dd>${esc(x)}</dd>`).join("")}</dl>`;
+    return;
+  }
+  const px = pr.pixels || {};
+  const pixels = px.frames_changed !== undefined
+    ? `${px.frames_changed} of ${px.frames} frames changed${px.ranges && px.ranges.length ? ` (${px.ranges.map(r => r[0] === r[1] ? r[0] : r[0] + "-" + r[1]).join(", ")})` : ""}` +
+      (px.contained === true ? "; every changed pixel is inside the changed layers' boxes" : px.contained === false ? "; SOME CHANGED PIXELS ARE OUTSIDE THE CHANGED LAYERS" : "") +
+      (px.note ? `; ${px.note}` : "")
+    : (px.note || "");
+  $("proof").innerHTML = `<p class="verdict ${pr.ok ? "" : "bad"}">${esc(pr.verdict)}</p>
+    <div class="rep">${pr.rows.map(r => `<div class="r ${r.status}"><div class="h"><b>${esc(r.title)}</b> <span class="st ${r.status}">${STATUS[r.status]}</span></div>
+      <div class="d">${esc(r.detail)}${(r.reasons || []).map(n => `<div class="muted">engine: ${esc(n)}</div>`).join("")}</div></div>`).join("")}</div>
+    ${pixels ? `<div class="muted" style="margin-top:6px">Frames: ${esc(pixels)}</div>` : ""}
+    <div class="muted" style="margin-top:4px">Asked to change: ${esc((pr.asked_names || pr.asked || []).join(", ") || "nothing")}</div>`;
+}
+
+function renderCompare(v) {
+  const opts = S.versions.map(x => `<option value="${x.n}">v${x.n}</option>`).join("");
+  $("cmpA").innerHTML = opts; $("cmpB").innerHTML = opts;
+  $("cmpA").value = v.from ?? S.versions[0].n; $("cmpB").value = v.n;
+  $("compareRow").classList.toggle("hidden", S.versions.length < 2);
+}
+
+async function compareVersions() {
+  const a = +$("cmpA").value, b = +$("cmpB").value;
+  try { renderProof(await api(`/api/compare/${S.cid}?a=${a}&b=${b}`), `v${a} compared with v${b}`); }
+  catch (e) { showError(e); }
+}
+
+function thumb(t) {
+  const f = t.file || "";
+  if (!f || t.kind !== "picture") return `<div class="th">${esc(t.kind === "sound" ? "♪" : "")}</div>`;
+  if (f.startsWith("gradient")) { const c = f.split(" ").filter(x => x.startsWith("#")); return `<div class="th" style="background:linear-gradient(${c[0]},${c[1] || c[0]})"></div>`; }
+  if (f === "tap ring") return `<div class="th">ring</div>`;
+  if (f === "builtin:hand") return `<div class="th">hand</div>`;
+  const name = f.split("/").pop();
+  const src = f.includes("/uploads/") ? `/studio/uploads/${encodeURIComponent(name)}` : `/api/sprite/${encodeURIComponent(name)}`;
+  return `<div class="th"><img src="${src}" alt=""></div>`;
+}
+
+async function loadThings(v) {
+  if (!S.cid) { $("thingsCard").classList.add("hidden"); return; }
+  let inv = [];
+  try { inv = await api(`/api/inventory/${S.cid}?base=${v.n}`); } catch (e) { return; }
+  if (S.shown !== v) return;
+  const when = t => t.when ? ` <span class="muted">${t.when[0]}-${t.when[1]} s</span>` : "";
+  $("things").innerHTML = inv.map((t, i) => `<div class="t">${thumb(t)}
+      <div><b>${esc(t.name)}</b>${when(t)}<div>${t.kind === "caption" ? `<span class="txt">“${esc(t.text)}”</span>` : t.empty ? '<span class="muted">none</span>' : esc(t.shows)}</div></div>
+      <div class="acts">${t.kind === "picture" ? `<button class="ghost" data-i="${i}" data-a="replace">${t.empty ? "Add" : "Replace"}</button>` : ""}
+        ${t.kind === "caption" ? `<button class="ghost" data-i="${i}" data-a="text">Edit</button>` : ""}
+        ${t.kind === "sound" ? `<button class="ghost" data-i="${i}" data-a="sound">${t.shows === "on" ? "Turn off" : "Turn on"}</button>` : ""}
+        ${t.can_remove && t.kind !== "sound" ? `<button class="ghost" data-i="${i}" data-a="remove">Remove</button>` : ""}</div></div>`).join("");
+  [...$("things").querySelectorAll("button[data-a]")].forEach(b => b.onclick = () => thingAction(inv[+b.dataset.i], b.dataset.a));
+  $("thingsCard").classList.remove("hidden");
+}
+
+async function direct(op) {
+  if (S.busy) return;
+  busy(true); $("err").classList.add("hidden");
+  try {
+    const {job} = await api("/api/direct", {creative_id: S.cid, base: base(), op, draft: $("draft").checked});
+    const v = await poll(job);
+    await loadCreative(v.id, v.n);
+  } catch (e) { showError(e); }
+  finally { busy(false); }
+}
+
+function thingAction(t, a) {
+  if (a === "replace") {
+    const input = $("thingFile");
+    input.value = "";
+    input.onchange = async () => {
+      if (!input.files.length) return;
+      const fd = new FormData(); fd.append("files", input.files[0]);
+      const r = await fetch("/api/upload", {method: "POST", body: fd});
+      const j = await r.json();
+      if (!r.ok) { alert(j.detail || "upload failed"); return; }
+      S.meta.uploads = [...new Set([...(S.meta.uploads || []), ...j.uploaded])]; renderEarlier();
+      direct({picture: t.id, file: j.uploaded[0]});
+    };
+    input.click();
+  } else if (a === "remove") {
+    if (t.kind === "caption") direct({caption: t.id, text: ""}); else direct({picture: t.id, file: null});
+  } else if (a === "text") {
+    const text = window.prompt(`New text for ${t.name}:`, t.text || "");
+    if (text !== null && text !== t.text) direct({caption: t.id, text});
+  } else if (a === "sound") {
+    direct({sound: t.shows !== "on"});
+  }
 }
 
 async function loadCreative(cid, n) {
@@ -378,7 +507,7 @@ async function refreshHistory() {
 function newCreative() {
   S.cid = null; S.versions = []; S.brief = null; S.shown = null;
   $("prompt").value = ""; $("tabs").innerHTML = ""; $("video").classList.add("hidden"); $("noVideo").classList.remove("hidden");
-  $("vprompt").textContent = ""; $("links").innerHTML = ""; $("proofCard").classList.add("hidden");
+  $("vprompt").textContent = ""; $("links").innerHTML = ""; $("proofCard").classList.add("hidden"); $("thingsCard").classList.add("hidden");
   $("btnMake").classList.add("hidden"); renderBrief(null); renderGameplay(null); setMode(); refreshHistory();
 }
 
@@ -388,7 +517,7 @@ async function plan(thenMake) {
   $("err").classList.add("hidden");
   busy(true); $("btnMake").classList.add("hidden");
   try {
-    const {job} = await api("/api/plan", {prompt, creative_id: S.cid, uploads: S.files});
+    const {job} = await api("/api/plan", {prompt, creative_id: S.cid, base: base(), uploads: S.files});
     S.brief = await poll(job); S.briefPrompt = prompt;
     renderBrief(S.brief, S.cid ? "Planned edit (not made yet)" : "Planned (not made yet)");
     if (thenMake) await make(); else $("btnMake").classList.remove("hidden");
@@ -404,7 +533,7 @@ async function make() {
   if (!S.brief) return;
   busy(true); $("btnMake").classList.add("hidden");
   try {
-    const {job} = await api("/api/make", {prompt: S.briefPrompt, brief: S.brief, creative_id: S.cid, draft: $("draft").checked});
+    const {job} = await api("/api/make", {prompt: S.briefPrompt, brief: S.brief, creative_id: S.cid, base: base(), draft: $("draft").checked});
     const v = await poll(job);
     S.brief = null; S.files = []; renderFiles(); $("prompt").value = "";
     await loadCreative(v.id, v.n);

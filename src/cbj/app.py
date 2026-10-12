@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from . import brief as B
 from . import planner, studio
+from .edits import direct_edit
 
 STATIC = Path(__file__).parent / "static"
 app = FastAPI(title="CBJ Creative Studio")
@@ -39,6 +40,7 @@ UPLOAD_EXT = {".png", ".jpg", ".jpeg", ".webp"}
 class PlanRequest(BaseModel):
     prompt: str
     creative_id: str | None = None
+    base: int | None = None  # the version to edit (default: the latest)
     uploads: list[str] = []
 
 
@@ -46,6 +48,14 @@ class MakeRequest(BaseModel):
     prompt: str
     brief: dict
     creative_id: str | None = None
+    base: int | None = None
+    draft: bool = False
+
+
+class DirectRequest(BaseModel):
+    creative_id: str
+    base: int | None = None
+    op: dict  # {"picture": slot, "file": name | None} | {"caption": layer, "text": str} | {"sound": bool}
     draft: bool = False
 
 
@@ -75,19 +85,20 @@ def _job(kind: str, fn, *args) -> str:
 
 
 def _plan(log: studio.Log, req: PlanRequest) -> dict:
-    current = None
+    current, inventory = None, None
     if req.creative_id:
-        vs = studio.versions(req.creative_id)
-        if not vs:
+        v = studio.parent(req.creative_id, req.base)
+        if v is None:
             raise ValueError(f"no creative {req.creative_id}")
-        current = vs[-1]["brief"]
-        current = {k: v for k, v in current.items() if k != "planner"}
+        current = {k: x for k, x in v["brief"].items() if k != "planner"}
+        inventory = studio.planner_context(req.creative_id, v["n"])
     all_ups = studio.uploads()
     ups = {n: all_ups[n] for n in req.uploads if n in all_ups}
     log.begin("plan", "reading the prompt" + (" as an edit of the current version" if current else "") + "...")
     # the files attached to this prompt are offered to the planner; every upload stays valid, so
     # an edit keeps the images its version already uses
-    brief = planner.plan(req.prompt, uploads=ups, sprites=studio.sprite_names(), current=current, available=all_ups)
+    brief = planner.plan(req.prompt, uploads=ups, sprites=studio.sprite_names(), current=current, available=all_ups,
+                         inventory=inventory)
     log(f"planned by {brief['planner']['model']} in {brief['planner']['seconds']} s")
     return brief
 
@@ -95,12 +106,26 @@ def _plan(log: studio.Log, req: PlanRequest) -> dict:
 def _make(log: studio.Log, req: MakeRequest) -> dict:
     brief = B.check(req.brief, studio.uploads(), studio.sprite_names())
     brief["planner"] = req.brief.get("planner", {})
-    return studio.make(req.prompt, brief, req.creative_id, log, draft=req.draft)
+    brief["changed"] = req.brief.get("changed", [])
+    return studio.make(req.prompt, brief, req.creative_id, log, draft=req.draft, base=req.base)
 
 
 def _preview(log: studio.Log, req: MakeRequest) -> dict:
     brief = B.check(req.brief, studio.uploads(), studio.sprite_names())
-    return studio.preview(brief, req.creative_id, log)
+    return studio.preview(brief, req.creative_id, log, base=req.base)
+
+
+def _direct(log: studio.Log, req: DirectRequest) -> dict:
+    """An exact edit (a picture, a caption, the sound): the brief is changed in code, no planner."""
+    v = studio.parent(req.creative_id, req.base)
+    if v is None:
+        raise ValueError(f"no creative {req.creative_id}")
+    log.begin("plan", "an exact edit: the brief is changed in code (no planner)...")
+    brief, words = direct_edit({k: x for k, x in v["brief"].items() if k != "planner"}, req.op, studio.uploads(),
+                               studio.sprite_names())
+    brief["planner"] = {"model": None, "seconds": 0, "prompt": words, "edit": True, "restored": [], "direct": req.op}
+    log(words)
+    return studio.make(words, brief, req.creative_id, log, draft=req.draft, base=v["n"])
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -123,6 +148,47 @@ def api_make(req: MakeRequest):
 @app.post("/api/preview")
 def api_preview(req: MakeRequest):
     return {"job": _job("preview", _preview, req)}
+
+
+@app.post("/api/direct")
+def api_direct(req: DirectRequest):
+    return {"job": _job("make", _direct, req)}
+
+
+@app.get("/api/inventory/{cid}")
+def api_inventory(cid: str, base: int | None = None):
+    try:
+        if studio.parent(cid, base) is None:
+            raise ValueError(f"no creative {cid}")
+        return studio.inventory(cid, base)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.get("/api/compare/{cid}")
+def api_compare(cid: str, a: int, b: int):
+    """The edit report between any two versions of a creative."""
+    from .editreport import report
+    try:
+        va, vb = studio.parent(cid, a), studio.parent(cid, b)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    if va is None or vb is None:
+        raise HTTPException(404, "no such creative")
+    groups = B.changed_groups(va["brief"], vb["brief"])
+    # Any two versions: one may not be an edit of the other, so the rows say kept or differs
+    # (asked / not asked belongs to an edit and its parent).
+    direct = vb.get("from") == va["n"]
+    return report(va, vb, studio.STUDIO, vb["brief"].get("changed", []) if direct else groups, compare=not direct)
+
+
+@app.get("/api/sprite/{name}")
+def api_sprite(name: str):
+    """A game sprite, for the thumbnails of "Things in this ad"."""
+    if name not in studio.sprite_names():
+        raise HTTPException(404, "not a game sprite")
+    from .draw import PROJECT, SPRITES
+    return FileResponse(PROJECT / SPRITES / name)
 
 
 @app.get("/api/jobs/{jid}")

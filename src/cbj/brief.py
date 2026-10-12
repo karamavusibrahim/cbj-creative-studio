@@ -58,7 +58,7 @@ CLOCK_LEFT_RANGE = (1, 3)
 MAX_EVENTS = 6
 THEMES = ("game", "candy", "pastel", "neon", "dark", "custom")
 SEQUENCES = ("standard", "result_first")
-ASSET_ROLES = ("logo", "mascot", "sticker", "cursor", "end_art", "end_background")
+ASSET_ROLES = ("logo", "mascot", "sticker", "cursor", "end_art", "end_background", "button")
 ASSET_WHEN = ("whole", "hook", "end_card")
 ASSET_WHERE = ("auto", "top_left", "top_right", "beside_hook", "end_card")
 KEEP = ("level", "gameplay", "timing", "camera", "visuals", "copy", "sequence", "assets", "sound")
@@ -172,7 +172,7 @@ def default_brief() -> dict:
         "format": "9:16",
         "level": {"source": "auto", "shipped": None, "shape": "any", "width": None, "height": None,
                   "blocks": None, "colours": [], "difficulty": "any", "label": None, "pieces": "mixed",
-                  "style": []},
+                  "style": [], "edit": None},
         "gameplay": {"ending": "near_fail", "mistakes": None, "mistake_kinds": [], "hesitations": None,
                      "timer_s": None, "seed": None, "events": [], "finish": "auto", "clock_left_s": None},
         "pacing": {"length_s": 30.0, "tempo": "normal", "curve": "even"},
@@ -312,6 +312,9 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
             adjust(b, "level", f"{k} {v} is outside what the board supports ({lo}-{hi}); {lv[k]} is used.")
     if lv["colours"]:
         lv["colours"] = list(dict.fromkeys(c for c in lv["colours"] if c in COLOURS))
+    e = lv.get("edit")
+    if e is not None and not (isinstance(e, dict) and e.get("dir") in ("harder", "easier")):
+        lv["edit"] = None
     if lv["label"] is not None and not 1 <= lv["label"] <= 9999:
         lv["label"] = None
         adjust(b, "level", "the HUD level number must be 1-9999.")
@@ -441,6 +444,8 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
                              f"these keep the game's own colour: {', '.join(reverted)}.")
     if vs["cursor"] == "hand" and not any(a["role"] == "cursor" for a in b["assets"]):
         b["assets"].append({"file": "builtin:hand", "role": "cursor", "when": "whole", "where": "auto"})
+    elif vs["cursor"] != "hand":
+        b["assets"] = [a for a in b["assets"] if a["file"] != "builtin:hand"]  # a ring or no cursor now
     # ---- concept: every text through the copy guard and the facts ----
     for k in CONCEPT_TEXTS:
         t = cc[k]
@@ -485,7 +490,7 @@ GROUPS = {
     "level.blocks": ("level", [("level", "blocks")]),
     "level.colours": ("level", [("level", "colours")]),
     "level.label": ("level", [("level", "label")]),
-    "level.difficulty": ("difficulty_pacing", [("level", "difficulty")]),
+    "level.difficulty": ("difficulty_pacing", [("level", "difficulty"), ("level", "edit")]),
     "level.pieces": ("level", [("level", "pieces")]),
     "level.style": ("level", [("level", "style")]),
     "gameplay.ending": ("gameplay", [("gameplay", "ending")]),
@@ -517,7 +522,7 @@ GROUPS = {
 # Groups a model tends to fill without being asked (copy, board sizes, colours, a level number,
 # assets): accepted only when declared AND the prompt's words show it asked for them.
 PRONE = {"level.size", "level.blocks", "level.colours", "level.label", "assets", "level.pieces", "level.style", "level.shape",
-         "level.difficulty",
+         "level.difficulty", "gameplay.retake",
          "gameplay.events", "gameplay.finish", "gameplay.clock_left", "pacing.curve", "pacing.length",
          *(f"concept.{k}" for k in CONCEPT_TEXTS)}
 COLOUR_WORDS_ANY = ("red", "blue", "green", "yellow", "orange", "purple", "pink", "teal", "mint", "lemon", "lilac",
@@ -559,6 +564,38 @@ CURVE_WORDS = ("tension", "tense", "build", "builds", "building", "rise", "risin
                "speeds up", "speed up", "faster and faster", "gets faster", "getting faster", "accelerate", "accelerates", "accelerating",
                "slows down", "slow down", "slower and slower", "gets slower", "build up", "builds up", "ramp",
                "start slow", "starts slow", "slow start", "start fast", "starts fast", "picks up pace", "pick up pace")
+RETAKE_WORDS = ("take", "retake", "re-take", "reshoot", "re-shoot", "different moves", "other moves", "new moves",
+                "another version", "variation", "variant", "shuffle", "different play", "play it differently",
+                "different way", "another way", "differently", "again", "seed", "random")
+HARDER_WORDS = ("harder", "more difficult", "tougher", "trickier", "more challenging", "more of a challenge",
+                "less easy", "make it hard", "make it difficult")
+EASIER_WORDS = ("easier", "simpler", "less difficult", "less hard", "less tricky", "not so hard", "too hard",
+                "make it easy", "more relaxed")
+
+
+# Words that make a "harder"/"easier" clause about the ad's copy or pictures, not the level.
+NOT_LEVEL_WORDS = ("hook", "caption", "captions", "text", "texts", "read", "title", "button", "cta", "logo", "picture",
+                   "image", "font", "word", "words", "say", "says", "copy", "ignore", "spot", "see", "notice",
+                   "message", "line", "tagline", "slogan", "headline", "end card", "background", "colours", "colors",
+                   "eyes", "look", "looks")
+
+
+def clauses(text: str) -> list[str]:
+    """A prompt cut into clauses: at punctuation and at "but", "and", "except", "then", "while"."""
+    return [c for c in re.split(r"[.,;:!?\n]|\b(?:but|and|except|then|while|however|also)\b", text.lower()) if c.strip()]
+
+
+def relative_difficulty(prompt: str) -> str | None:
+    """'harder' or 'easier' when an edit asks to change the level's difficulty relative to what it
+    has. A clause about copy or pictures ("make the hook harder to ignore") does not count."""
+    h = e = False
+    for cl in clauses(prompt):
+        if _has_word(cl, NOT_LEVEL_WORDS):
+            continue
+        h, e = h or _has_word(cl, HARDER_WORDS), e or _has_word(cl, EASIER_WORDS)
+    return "harder" if h and not e else "easier" if e and not h else None
+
+
 COPY_WORDS = ("hook", "caption", "text", "copy", "say", "says", "tone", "angle", "line", "title", "button", "cta",
               "message", "slogan", "tagline", "ask", "question", "headline", "word", "write", "end card")
 
@@ -584,7 +621,8 @@ QUOTED = re.compile(r"[\"“«]([^\"”»]{2,})[\"”»]|(?<![a-z])['‘]([^'’
 
 def _evidence(group: str, prompt: str, new: dict) -> str | None:
     """None if the prompt's words support changing this group, else the reason it is not used."""
-    text = prompt.lower()
+    # The game's name is not a request: "Color Block Jam" says nothing about a "jam"-packed board.
+    text = re.sub(r"\bcolou?r[\s-]*block[\s-]*jam\b", " ", prompt.lower())
     # numbers that are lengths, clocks or counts of other things are not board sizes
     sized = re.sub(r"\d+(\.\d+)?\s*-?\s*(s|sec|secs|second|seconds|min|minute|minutes|%|percent)\b", " ", text)
     sized = re.sub(r"\b(level|lvl)\s*\d+", " ", sized)
@@ -606,6 +644,8 @@ def _evidence(group: str, prompt: str, new: dict) -> str | None:
         return None if label is None or str(label) in text else "the prompt gives no level number"
     if group == "level.difficulty":
         return None if _has_word(text, DIFFICULTY_WORDS) else "the prompt asks for no difficulty"
+    if group == "gameplay.retake":
+        return None if _has_word(text, RETAKE_WORDS) else "the prompt asks for no new take of the play"
     if group == "pacing.length":
         clock = r"(?!\s*(left|remaining|on the clock|to spare|to go))"  # "2 seconds left" is the clock, not the ad
         if re.search(rf"\d+\s*-?\s*(s|sec|secs|second|seconds|min|minute|minutes)\b{clock}", text) or \
@@ -639,7 +679,71 @@ def _evidence(group: str, prompt: str, new: dict) -> str | None:
     return None
 
 
-def merge(base: dict, new: dict, prompt: str) -> tuple[dict, list[str]]:
+def asset_slot(a: dict) -> str:
+    """The picture slot an asset fills: logo, hook_icon, end_art, button, end_background, cursor."""
+    role, when = a.get("role"), a.get("when")
+    if role == "end_art" or (role in ("mascot", "sticker") and when == "end_card"):
+        return "end_art"
+    if role in ("mascot", "sticker"):
+        return "hook_icon"
+    return str(role)
+
+
+REMOVE_WORDS = ("remove", "removed", "delete", "drop", "get rid", "hide", "take out", "take away", "lose")
+SLOT_WORDS = {"logo": ("logo", "brand", "watermark"),
+              "hook_icon": ("icon", "stopwatch", "clock icon", "sticker", "hook icon", "next to the hook",
+                            "beside the hook"),
+              "end_art": ("coin", "coins", "coin pile", "end card picture", "end-card picture", "picture", "art",
+                          "artwork", "image", "mascot", "character", "object", "end card"),
+              "button": ("button", "cta"), "end_background": ("background",),
+              "cursor": ("cursor", "hand", "finger", "pointer")}
+
+
+def asks_removal(text: str, slot: str) -> bool:
+    """Whether the prompt asks to remove a picture slot ("remove the logo", "no logo", "without
+    the stopwatch")."""
+    words = SLOT_WORDS.get(slot, ())
+    alt = "|".join(re.escape(w) for w in words)
+    # Clauses end at punctuation and "but"/"except", not at "and" ("remove the caption and the logo").
+    parts = [c for c in re.split(r"[.,;:!?\n]|\b(?:but|except|however|while)\b", text) if c.strip()]
+    for cl in parts:  # the remove word and the slot word in one clause, and no "keep" there
+        if not _has_word(cl, words) or _has_word(cl, ("keep", "same", "preserve", "leave", "stay", "stays")):
+            continue
+        if (_has_word(cl, REMOVE_WORDS) or re.search(rf"\b(no|without)\s+(the\s+|a\s+|our\s+|any\s+)?({alt})\b", cl)
+                or re.search(r"\btake\b.*\bout\b|\b(don't|do not|no longer) (want|need)\b", cl)):
+            return True
+    return False
+
+
+def _merge_assets(base: list, new: list, prompt: str, declared: bool, attached) -> tuple[list, list[str], list[str]]:
+    """Assets merge slot by slot, so replacing one picture never drops another. A slot the planner
+    left out keeps its picture unless the prompt asks to remove it (file "builtin:none" removes
+    one on purpose). A changed slot is taken when the change was declared, or uses a file
+    attached to this prompt. Returns (assets, slots taken, reasons for slots not taken)."""
+    text = prompt.lower()
+    bs = {asset_slot(a): a for a in base}
+    ns = {asset_slot(a): a for a in new}
+    out, took, why = dict(bs), [], []
+    for slot in dict.fromkeys([*bs, *ns]):
+        b, n = bs.get(slot), ns.get(slot)
+        if b == n:
+            continue
+        if n is None:  # left out: removed only if the prompt says so
+            if asks_removal(text, slot):
+                del out[slot]
+                took.append(slot)
+            else:
+                why.append(f"assets.{slot}: left out by the planner, but the prompt does not ask to remove it; kept")
+            continue
+        if declared or n.get("file") in attached or (n.get("file") == "builtin:none" and asks_removal(text, slot)):
+            out[slot] = copy.deepcopy(n)
+            took.append(slot)
+        else:
+            why.append(f"assets.{slot}: not among the changes the prompt asked for")
+    return list(out.values()), took, why
+
+
+def merge(base: dict, new: dict, prompt: str, attached=()) -> tuple[dict, list[str]]:
     """The planner's brief, keeping only what the prompt asked to change: every other field keeps
     its value in `base` (the defaults for a new ad, the current version for an edit). The case:
     "only the requested element should change" (p.7). Returns the brief and what was not taken,
@@ -658,6 +762,13 @@ def merge(base: dict, new: dict, prompt: str) -> tuple[dict, list[str]]:
     for group, (ctl, paths) in GROUPS.items():
         if all(_get(new, p) == _get(base, p) for p in paths):
             continue
+        if group == "assets":
+            merged["assets"], took, why = _merge_assets(base["assets"], new["assets"], prompt, group in declared,
+                                                        set(attached))
+            if took:
+                taken.append(group)
+            dropped += why
+            continue
         if group in PRONE:
             ok = group in declared or (group.startswith("concept.") and lang_changed)
             why = _evidence(group, prompt, new) if ok else "not among the changes the prompt asked for"
@@ -674,6 +785,11 @@ def merge(base: dict, new: dict, prompt: str) -> tuple[dict, list[str]]:
             dropped.append(f"{group}: {why}")
     merged["changed"] = taken
     return merged, dropped
+
+
+def changed_groups(old: dict, new: dict) -> list[str]:
+    """The field groups whose fields differ between two briefs."""
+    return [g for g, (_, paths) in GROUPS.items() if any(_get(old, p) != _get(new, p) for p in paths)]
 
 
 def changed_controls(old: dict, new: dict) -> list[str]:

@@ -391,8 +391,13 @@ def test_keep_conflict_is_reported():
     old = B.check(B.default_brief())
     new = copy.deepcopy(old)
     new["level"]["difficulty"], new["keep"] = "hard", ["level"]
-    _keep_conflicts(old, new)
+    _keep_conflicts(old, new, "Keep the level, but make it harder")
     assert any("asked to keep the level" in n for n in B.control(new, "unchanged")["engine"])
+    # "keep everything, but X" names nothing to keep: no conflict to report
+    quiet = copy.deepcopy(old)
+    quiet["level"]["difficulty"], quiet["keep"] = "hard", ["level"]
+    _keep_conflicts(old, quiet, "Keep everything exactly the same, but make it harder")
+    assert not B.control(quiet, "unchanged").get("engine")
 
 
 @pytest.mark.parametrize("group,prompt,ok", [

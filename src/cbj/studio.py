@@ -324,32 +324,41 @@ def ad_options(brief: dict, ups: dict[str, Path]) -> dict:
     translated = brief["visuals"].get("names") or {}
     o["colour_names"] = {SLOT_ENUM[s]: v["name"] for s, v in shown.items() if v["repainted"] or s in translated}
     for a in brief["assets"]:
-        path = _asset_path(a["file"], ups)
-        role = a["role"]
-        if role == "logo":
+        none = a["file"] == "builtin:none"  # a picture removed on purpose
+        path = "" if none else _asset_path(a["file"], ups)
+        slot = B.asset_slot(a)
+        if slot == "logo" and not none:
             o["logo"] = {"file": path, "where": "top_right" if a["where"] == "top_right" else "top_left"}
-        elif role == "cursor" and a["file"] != "builtin:hand":
+        elif slot == "cursor" and not none and a["file"] != "builtin:hand":
             o["cursor_image"] = path
-        elif role == "end_art" or (role in ("mascot", "sticker") and a["when"] == "end_card"):
+        elif slot == "end_art":
             o["end_art"] = path
-        elif role in ("mascot", "sticker"):
+        elif slot == "hook_icon":
             o["hook_icon"] = path
-        elif role == "end_background":
+        elif slot == "end_background" and not none:
             o["end_background"] = path
+        elif slot == "button" and not none:
+            o["button_image"] = path
     bg = B.background(brief)
     if bg and not o.get("end_background"):
         o["end_gradient"] = [bg[0], bg[-1]]
     return o
 
 
-def build_and_render(brief: dict, rec_dir: Path, out: Path, log: Log, draft: bool = False) -> dict:
+def build_and_render(brief: dict, rec_dir: Path, out: Path, log: Log, draft: bool = False,
+                     pin: dict | None = None) -> dict:
+    """Build the ad for a recording and render it. pin: the parent version's structure, for an
+    edit that keeps the recording's frames (its intro, replay and length stay; see build_ad)."""
     from .compose import render
     rec = Recording.load(rec_dir)
     ups = uploads()
     options = ad_options(brief, ups)
     L = brief["pacing"]["length_s"]
     ad, err = None, None
-    for d in [0] + [s * k for k in range(1, 31) for s in (1, -1)]:
+    if pin is not None:
+        ad = build_ad(rec, pin["length_s"], options=options, pin=pin)
+        log(f"the edit keeps the gameplay frames: v{pin['n']}'s timing is kept (intro, replay, length)")
+    for d in ([] if pin is not None else [0] + [s * k for k in range(1, 31) for s in (1, -1)]):
         length = L + d
         if not B.LENGTH_RANGE_S[0] <= length <= B.LENGTH_RANGE_S[1]:
             continue
@@ -362,7 +371,7 @@ def build_and_render(brief: dict, rec_dir: Path, out: Path, log: Log, draft: boo
                 log(f"a {L:g} s ad does not fit this gameplay: {e}")
     if ad is None:
         raise ValueError(f"no ad length fits this recording: {err}")
-    if ad["length_s"] != L:
+    if pin is None and ad["length_s"] != L:
         B.engine_note(brief, "difficulty_pacing", f"this gameplay fills {rec.n / FPS:.1f} s, so the ad is "
                                              f"{ad['length_s']:g} s instead of {L:g} s "
                                              f"({'a bigger level or more mistakes would fill more' if ad['length_s'] < L else 'it cannot be shorter with a readable end card'}).")
@@ -404,13 +413,13 @@ def gameplay_and_level_checks(brief: dict, rec_dir: Path, level_path: Path, log:
     return out
 
 
-def preview(brief: dict, cid: str | None, log: Log) -> dict:
+def preview(brief: dict, cid: str | None, log: Log, base: int | None = None) -> dict:
     """The level and the planned moves for a brief, without recording (seconds, not minutes): the
     board picture, the move list, and what the plan had to change."""
     from .level import load_level
     for row in brief["controls"]:
         row["engine"] = []
-    prev = versions(cid)[-1] if cid and creative_dir(cid).is_dir() and versions(cid) else None
+    prev = parent(cid, base)
     log.begin("level", "choosing the level...")
     if prev is not None and prev["brief"]["level"] == brief["level"]:
         level_path, why = STUDIO / prev["level"]["file"], prev["level"]["why"]
@@ -428,6 +437,150 @@ def preview(brief: dict, cid: str | None, log: Log) -> dict:
     return {"level_why": why, "board": str(out.resolve().relative_to(STUDIO.resolve())),
             "beats": script.to_dict(level)["beats"], "notes": script.notes, "checks": level_checks(brief, level_path),
             "controls": brief["controls"]}
+
+
+# ---------- edits: keep what was not asked about ----------
+
+REPLAN = ("ending", "mistakes", "mistake_kinds", "hesitations", "events", "finish")
+BAND_ORDER = ("easy", "medium", "hard")
+
+
+def _difficulty_only(old: dict, new: dict) -> bool:
+    """Whether a level edit is only about difficulty (then the board is edited, not replaced)."""
+    keys = set(old) | set(new)
+    return any(old.get(k) != new.get(k) for k in ("difficulty", "edit")) and \
+        all(old.get(k) == new.get(k) for k in keys - {"difficulty", "edit"})
+
+
+def edit_level(brief: dict, prev: dict, log: Log) -> tuple[Path, str, dict | None]:
+    """"Harder" or "easier": the closest board to the version's own that rates so (a few blocks or
+    gates moved, colours swapped), not a new level. If no such board turns up, a new level is
+    generated for an absolute difficulty; for "harder than now" on the hardest band, the level
+    is kept and the brief says so."""
+    from dataclasses import asdict
+    from .generate import SHAPES, Spec, describe_changes, edit_board
+    lv, gp = brief["level"], brief["gameplay"]
+    old_d, new_d = prev["brief"]["level"]["difficulty"], lv["difficulty"]
+    rel = (lv.get("edit") or {}).get("dir")
+    if rel is None:
+        if old_d in BAND_ORDER and new_d in BAND_ORDER:
+            rel = "harder" if BAND_ORDER.index(new_d) > BAND_ORDER.index(old_d) else "easier"
+        else:
+            return (*resolve_level(brief, log), None)
+    target = new_d if new_d in BAND_ORDER and new_d != old_d else None
+    parent_path = STUDIO / prev["level"]["file"]
+    parent = json.loads(parent_path.read_text())
+    spec = Spec(shape=lv["shape"] if lv["shape"] in SHAPES else "open", width=parent["gridWidth"],
+                height=parent["gridHeight"], blocks=len(parent["GridBlockDatas"]), colours=[],
+                difficulty=target or ("hard" if rel == "harder" else "easy"), seed=gp["seed"] or 0, budget_s=20.0,
+                pieces=lv["pieces"], style=list(lv["style"]), events=list(gp["events"]), finish=gp["finish"])
+    key = _sha(json.dumps({"parent": prev["level"]["sha"], "dir": rel, "target": target, "spec": asdict(spec)},
+                          sort_keys=True))[:12]
+    folder = STUDIO / "levels"
+    folder.mkdir(parents=True, exist_ok=True)
+    path, meta_path = folder / f"edit_{key}.json", folder / f"edit_{key}.meta.json"
+    if path.is_file() and meta_path.is_file():
+        meta = json.loads(meta_path.read_text())
+        log(f"the same level edit as before: level edit_{key} reused")
+    else:
+        log(f"editing v{prev['n']}'s board: the closest one that rates {rel}" + (f" (aiming for {target})" if target else "")
+            + "...")
+        got = edit_board(parent, spec, rel, target=target, log=log)
+        if got is None:
+            if target is None:
+                B.engine_note(brief, "difficulty_pacing", f"no board within 3 small changes of this one rates {rel} and "
+                                                          f"stays fair, so the level is kept")
+                return parent_path, prev["level"]["why"], None
+            B.engine_note(brief, "difficulty_pacing", f"no board within 3 small changes of this one rates {rel}; a new "
+                                                      f"{target} level was generated instead")
+            return (*resolve_level(brief, log), None)
+        d, full, stats = got
+        path.write_text(json.dumps(d, indent=2))
+        meta = {"rating": asdict(full) | {"naive_ratio": round(full.naive_ratio, 3)}, "stats": stats}
+        meta_path.write_text(json.dumps(meta, indent=1))
+    rt, ed = meta["rating"], meta["stats"]["edit"]
+    before = ed["from"]
+    what = describe_changes(ed, rt["blocks"])
+    if target and meta["stats"]["band"] != target:
+        B.engine_note(brief, "difficulty_pacing", f"{what} rates {rel}, but not {target} ({meta['stats']['band']}); a "
+                                                  f"new {target} board would change everything", status="adjusted")
+    why = (f"v{prev['n']}'s level, made {rel}: {what}; {before['min_drags']} -> {rt['min_drags']} drags, "
+           f"{before['extra_drags']} -> {rt['extra_drags']} repositioning, naive player "
+           f"{before['naive_mean'] / max(1, before['min_drags']):.2f}x -> {rt['naive_ratio']:.2f}x")
+    edit = {"from_version": prev["n"], "direction": rel, "what": what, "blocks_moved": ed["blocks_moved"],
+            "gates_moved": ed["gates_moved"], "blocks_recoloured": ed["blocks_recoloured"],
+            "before": {k: before[k] for k in ("min_drags", "extra_drags", "exits_at_start")} | {"band": before["band"]},
+            "after": {k: rt[k] for k in ("min_drags", "extra_drags", "exits_at_start")} | {"band": meta["stats"]["band"]}}
+    return path, why, edit
+
+
+def _replans(old: dict, new: dict) -> bool:
+    """Whether an edit changes what the moves are (not only their pauses), on purpose or not, and
+    did not ask for a new take."""
+    o, n = old["gameplay"], new["gameplay"]
+    return any(o[k] != n[k] for k in REPLAN) and o["seed"] == n["seed"]
+
+
+def closest_seed(brief: dict, level_path: Path, prev_rec: Path, prev_n: int, log: Log,
+                 seeds: int = 24, budget_s: float = 20.0) -> None:
+    """A gameplay edit on a kept level re-plans the moves. Of the plays the planner can make for
+    the new brief (one per seed), keep the one closest to the version being edited: the longest
+    run of identical moves from the start, then the most moves in common, in order. The seed goes
+    into the brief, so the recording can be made again."""
+    from .editreport import beat_key as _beat_key, common_moves
+    from .level import load_level
+    level = load_level(level_path)
+    target = [_beat_key(b) for b in json.loads((prev_rec / "play.json").read_text())["beats"]]
+    cur = brief["gameplay"]["seed"] or 0
+    t0, best, tried = time.time(), None, 0
+    for s in [cur] + [x for x in range(seeds) if x != cur]:
+        if best is not None and time.time() - t0 > budget_s:
+            break
+        try:
+            script = _plan(brief, level, s)
+        except ValueError:
+            continue
+        tried += 1
+        mine = [_beat_key(b) for b in script.to_dict(level)["beats"]]
+        k, lcs = common_moves(target, mine)
+        score = (k, lcs, s == cur)
+        if best is None or score > best[0]:
+            best = (score, s, len(mine))
+    if best is None:
+        return
+    (k, lcs, _), s, m = best
+    if s != cur:
+        brief["gameplay"]["seed"] = s
+    B.engine_note(brief, "gameplay", f"of {tried} plays tried, the one closest to v{prev_n} is used: the first {k} "
+                                     f"of {m} moves are the same, {lcs} of {m} in common", status=None)
+    log(f"closest play to v{prev_n}: seed {s}, the first {k} of {m} moves the same, {lcs} in common ({tried} tried)")
+
+
+def same_frames(a: Path, b: Path) -> bool:
+    """Whether two recordings show the same play on the same frames (the same recording, or the
+    stored job filmed again with a new look)."""
+    if a.resolve() == b.resolve():
+        return True
+    try:
+        ra, rb = (json.loads((d / "result.json").read_text()) for d in (a, b))
+    except (OSError, ValueError):
+        return False
+    keys = ("block", "cells", "result", "start_frame", "exit_frame", "end_frame")
+    drags = lambda r: [{k: d.get(k) for k in keys} for d in r["drags"]]
+    return (ra.get("frames") == rb.get("frames") and ra.get("status") == rb.get("status")
+            and ra.get("win_frame") == rb.get("win_frame") and drags(ra) == drags(rb))
+
+
+def pin_of(prev: dict, brief: dict | None = None) -> dict:
+    """The structure of a version's ad that an edit keeping its frames keeps: length, intro, replay.
+    add_replay: the edit turns the replay on (only then may a replay the user never saw appear)."""
+    from .ad import seg_frames
+    ad = json.loads((STUDIO / prev["ad_dir"] / "ad.json").read_text())
+    seg = ad["segments"]
+    return {"n": prev["n"], "length_s": ad["length_s"],
+            "intro": seg_frames(seg["intro"]) if "intro" in ad["order"] else 0,
+            "replay_from": seg["replay"]["from"] if "replay" in ad["order"] else None,
+            "add_replay": bool(brief and brief["sequence"]["replay"] and not prev["brief"]["sequence"]["replay"])}
 
 
 # ---------- versions ----------
@@ -461,6 +614,45 @@ def versions(cid: str) -> list[dict]:
     return out
 
 
+def parent(cid: str | None, base: int | None = None) -> dict | None:
+    """The version an edit follows: version `base`, or the latest; None for a new creative."""
+    if not cid or not creative_dir(cid).is_dir():
+        return None
+    vs = versions(cid)
+    if not vs:
+        return None
+    if base is None:
+        return vs[-1]
+    v = next((x for x in vs if x["n"] == base), None)
+    if v is None:
+        raise ValueError(f"{cid} has no version {base}")
+    return v
+
+
+def planner_context(cid: str, base: int | None = None) -> str:
+    """What the planner is told about the version an edit starts from: its parts and the things
+    in it (pictures, captions, sound)."""
+    from .edits import describe_for_planner, outline
+    v = parent(cid, base)
+    if v is None:
+        return ""
+    d = STUDIO / v["ad_dir"]
+    j = lambda f: json.loads((d / f).read_text()) if (d / f).is_file() else {}
+    return outline(j("ad.json"), j("compose.json")) + "\n" + describe_for_planner(inventory(cid, v["n"]))
+
+
+def inventory(cid: str, base: int | None = None) -> list[dict]:
+    """The pictures, captions and sound of a version (the latest by default), for the planner and
+    the UI's "Things in this ad"."""
+    from .edits import inventory as inv
+    v = parent(cid, base)
+    if v is None:
+        return []
+    d = STUDIO / v["ad_dir"]
+    j = lambda f: json.loads((d / f).read_text()) if (d / f).is_file() else {}
+    return inv(j("ad.json"), j("compose.json"))
+
+
 def creatives() -> list[dict]:
     out = []
     if not STUDIO.is_dir():
@@ -473,47 +665,32 @@ def creatives() -> list[dict]:
     return out
 
 
-def _proof(prev: dict, cur: dict) -> dict:
-    """What changed between two versions, with the strongest proof each case allows."""
+def _proof(prev: dict, cur: dict, groups: list[str], notes: list[str], asked_notes: list[str] | None = None) -> dict:
+    """What an edit kept and changed, item by item (editreport), with the frame-level diff of the
+    two renders when their timelines match."""
     from .compose import diff
-    changed = B.changed_controls(prev["brief"], cur["brief"])
-    if prev["level"]["sha"] != cur["level"]["sha"] and "level" not in changed:
-        changed = ["level", *changed]  # a new level, even if only its difficulty was asked for
-    proof = {"changed_controls": [B.CONTROL_TITLES[c] for c in changed]}
-    if prev["recording"]["dir"] == cur["recording"]["dir"]:
-        proof["gameplay"] = "identical: the same recording was reused (not re-recorded)"
-        try:
-            d = diff(STUDIO / prev["ad_dir"], STUDIO / cur["ad_dir"])
-        except ValueError as e:
-            proof["frames"] = f"not compared: {e}"
-            return proof
-        rs = d.get("changed_frames")
-        if rs is None:
-            proof["frames"] = "the timeline changed (a length or sequence edit), so frames are not compared one to one"
-        else:
-            n = sum(b - a + 1 for a, b in rs)
-            proof["frames"] = (f"{n} of {d['frames'][0]} frames changed"
-                               + (f" ({', '.join(f'{a}-{b}' for a, b in rs[:6])})" if rs else ""))
-            if d.get("measured_box"):
-                proof["pixels"] = ("every changed pixel is inside the changed layers' boxes" if d["contained"]
-                                   else "SOME CHANGED PIXELS ARE OUTSIDE THE CHANGED LAYERS")
-        proof["layers_changed"] = d["layers_changed"]
-        proof["sound"] = "same" if d["same_sound"] else "changed"
-        proof["ok"] = d["ok"]
+    from .editreport import report
+    pixels = None
+    try:
+        # a re-filmed recording differs everywhere by design: no pixel boxes to measure
+        d = diff(STUDIO / prev["ad_dir"], STUDIO / cur["ad_dir"], boxes=prev["recording"]["dir"] == cur["recording"]["dir"])
+    except ValueError as e:
+        d = {"error": str(e)}
+    if d.get("error"):
+        pixels = {"note": f"not compared: {d['error']}"}
+    elif d.get("changed_frames") is None:
+        pixels = {"note": "the timeline changed, so frames are not compared one to one"}
     else:
-        from .render import compare_recordings
-        a, b = STUDIO / prev["recording"]["dir"], STUDIO / cur["recording"]["dir"]
-        c = compare_recordings(a, b)
-        moves = lambda d: [(x["block"], x["cells"]) for x in json.loads((d / "result.json").read_text())["drags"]]
-        same_level = prev["level"]["sha"] == cur["level"]["sha"]
-        if c.get("state_equal"):
-            proof["gameplay"] = "re-recorded with identical game state on every frame (the same moves and timing)"
-        elif same_level and moves(a) == moves(b):
-            proof["gameplay"] = "re-recorded: the same moves, with different pauses"
+        rs = d["changed_frames"]
+        n = sum(b - a + 1 for a, b in rs)
+        pixels = {"frames_changed": n, "frames": d["frames"][0], "ranges": rs[:8], "layers": d["layers_changed"],
+                  "same_sound": d["same_sound"]}
+        if d["same_sources"]:
+            pixels["contained"] = d["contained"]
+            pixels["box"] = d.get("measured_box")
         else:
-            proof["gameplay"] = ("new gameplay on the same level" if same_level else "new gameplay on a new level")
-        proof["ok"] = True
-    return proof
+            pixels["note"] = "the gameplay was filmed again with the new look, so its frames differ by design"
+    return report(prev, cur, STUDIO, groups, pixels=pixels, notes=notes, asked_notes=asked_notes)
 
 
 KEEP_GROUPS = {"level": ("level.",), "gameplay": ("gameplay.",), "timing": ("pacing.",), "camera": ("visuals.zoom",),
@@ -521,10 +698,25 @@ KEEP_GROUPS = {"level": ("level.",), "gameplay": ("gameplay.",), "timing": ("pac
                "assets": ("assets",), "sound": ("audio",)}
 
 
-def _keep_conflicts(old: dict, new: dict) -> None:
+KEEP_NAMES = {"level": ("level", "board"), "gameplay": ("gameplay", "moves", "play"),
+              "timing": ("timing", "pace", "pacing", "length"), "camera": ("camera", "zoom", "framing"),
+              "visuals": ("visuals", "look", "colours", "colors", "style"),
+              "copy": ("copy", "text", "texts", "captions", "caption", "hook", "wording"),
+              "sequence": ("sequence", "order", "structure"), "assets": ("assets", "logo", "pictures", "images"),
+              "sound": ("sound", "audio")}
+
+
+def _keep_conflicts(old: dict, new: dict, prompt: str = "") -> None:
     """A prompt can ask to keep something and change it in the same breath ("keep the level but
-    make it harder": a harder level is a new level). The change wins; the brief says so."""
+    make it harder": a harder level is a new level). The change wins; the brief says so. Only
+    for what the prompt names ("keep the level"): "keep everything, but change X" is no conflict."""
+    text = prompt.lower()
     for k in new.get("keep", []):
+        names = "|".join(KEEP_NAMES.get(k, (k,)))
+        clauses = re.split(r"[.,;!?]|\b(?:but|except|however|and then|then)\b", text)
+        if not any(re.search(rf"\b(keep|same|preserve|unchanged|don't change|do not change)\b.*\b({names})\b", cl)
+                   for cl in clauses):
+            continue
         hit = [g for g, (_, paths) in B.GROUPS.items() if g.startswith(KEEP_GROUPS.get(k, ("-",)))
                and any(B._get(old, p) != B._get(new, p) for p in paths)]
         if hit:
@@ -532,14 +724,16 @@ def _keep_conflicts(old: dict, new: dict) -> None:
                                             f"({', '.join(hit)}); the change wins")
 
 
-def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = None, draft: bool = False) -> dict:
+def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = None, draft: bool = False,
+         base: int | None = None) -> dict:
     """Make a version of a creative from a checked brief. With cid, the new version follows that
-    creative's latest one (an edit). Returns the version record (also saved as version.json)."""
+    creative's version `base` (default: the latest): an edit. Returns the version record (also
+    saved as version.json)."""
     log = log or Log(lambda line: print(f"[{line['stage']}] {line['text']}"))
     cid = cid or _new_id(prompt)
     folder = creative_dir(cid)
-    prev = versions(cid)[-1] if folder.is_dir() and versions(cid) else None
-    n = (prev["n"] + 1) if prev else 1
+    prev = parent(cid, base)
+    n = (versions(cid)[-1]["n"] + 1) if prev else 1
     vdir = folder / f"v{n}"
     if vdir.exists():
         shutil.rmtree(vdir)
@@ -556,31 +750,51 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
     for row in brief["controls"]:  # engine notes belong to the version that made them
         row["engine"] = []
     if prev is not None:
-        _keep_conflicts(prev["brief"], brief)
+        _keep_conflicts(prev["brief"], brief, prompt)
     log.begin("level", "choosing the level...")
+    level_edit = None
+    lv = brief["level"]
+    if prev is not None and lv.get("edit") and lv["edit"].get("of") is None:
+        lv["edit"] = {**lv["edit"], "of": prev["n"]}  # relative to the version it is made from
     if prev is not None and prev["brief"]["level"] == brief["level"]:
         # An edit that does not ask about the level keeps the previous version's level exactly.
         level_path = STUDIO / prev["level"]["file"]
         level_why = prev["level"]["why"]
         stages.append({"stage": "level", "seconds": 0.0})
         log(f"the edit does not touch the level: v{prev['n']}'s level is kept")
+    elif prev is not None and _difficulty_only(prev["brief"]["level"], brief["level"]):
+        level_path, level_why, level_edit = stage("level", edit_level, brief, prev, log)
     else:
         level_path, level_why = stage("level", resolve_level, brief, log)
+    if prev is not None and brief["level"]["label"] is None and prev["level"]["sha"] != _sha(level_path.read_bytes()):
+        # The HUD's "Level N" is part of the look: a harder board keeps the number the user saw.
+        job = STUDIO / prev["recording"]["dir"] / "job.json"
+        if job.is_file() and json.loads(job.read_text()).get("level_label"):
+            brief["level"]["label"] = json.loads(job.read_text())["level_label"]
     shutil.copy(level_path, vdir / "level.json")
     log(f"level: {level_why}")
     board_picture(brief, level_path, vdir / "board.png")
     log.begin("recording", "gameplay...")
+    if prev is not None and (level_edit is not None or (prev["level"]["sha"] == _sha(level_path.read_bytes())
+                                                         and _replans(prev["brief"], brief))):
+        stage("closest play", closest_seed, brief, level_path, STUDIO / prev["recording"]["dir"], prev["n"], log)
     rec_dir, reused = stage("recording", ensure_recording, brief, level_path, log)
     checks = gameplay_and_level_checks(brief, rec_dir, level_path, log)
     log.begin("compose", "the ad...")
     ad_dir = vdir / "ad"
-    result = stage("compose", build_and_render, brief, rec_dir, ad_dir, log, draft)
+    pin = None
+    if (prev is not None and "pacing.length" not in brief.get("changed", [])
+            and same_frames(STUDIO / prev["recording"]["dir"], rec_dir)):
+        pin = pin_of(prev, brief)
+    result = stage("compose", build_and_render, brief, rec_dir, ad_dir, log, draft, pin)
     rel = lambda p: str(Path(p).resolve().relative_to(STUDIO.resolve()))
     record = {
-        "n": n, "id": cid, "prompt": prompt, "edit": prev is not None, "brief": brief,
+        "n": n, "id": cid, "prompt": prompt, "edit": prev is not None, "from": prev["n"] if prev else None,
+        "brief": brief,
         "level": {"file": rel(vdir / "level.json"), "source": str(level_path.resolve().relative_to(REPO.resolve()))
                   if level_path.resolve().is_relative_to(REPO.resolve()) else str(level_path),
-                  "why": level_why, "sha": _sha(level_path.read_bytes())},
+                  "why": level_why, "sha": _sha(level_path.read_bytes()),
+                  **({"edit": level_edit} if level_edit else {})},
         "recording": {"dir": rel(rec_dir), "reused": reused},
         "board": rel(vdir / "board.png"), "checks": checks,
         "ad_dir": rel(ad_dir), "video": rel(ad_dir / "ad.mp4"), "poster": rel(ad_dir / "poster.png"),
@@ -590,9 +804,18 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
     if prev is not None:
         log.begin("proof", "comparing with the previous version...")
         s0 = time.time()
-        record["proof"] = _proof(prev, record)
+        notes = [x for row in brief["controls"] for x in row.get("engine", [])]
+        asked_ctl = {B.GROUPS[g][0] for g in brief.get("changed", []) if g in B.GROUPS}
+        asked_notes = [x for row in brief["controls"] if row["control"] in asked_ctl for x in row.get("engine", [])]
+        try:
+            record["proof"] = _proof(prev, record, brief.get("changed", []), notes, asked_notes)
+        except Exception as e:  # the version is made; a broken proof must not lose it
+            record["proof"] = {"verdict": f"The edit report could not be made: {e}", "rows": [], "ok": False,
+                               "asked": brief.get("changed", [])}
         stages.append({"stage": "proof", "seconds": round(time.time() - s0, 1)})
-        log(f"proof: {record['proof'].get('gameplay')}; {record['proof'].get('frames', '')}")
+        for row in record["proof"]["rows"]:
+            log(f"  {row['title']}: {row['status'].replace('_', ' ')}")
+        log(f"proof: {record['proof']['verdict']}")
     record["seconds"] = round(time.time() - t0, 1)
     (vdir / "brief.json").write_text(json.dumps(brief, indent=1))
     (vdir / "version.json").write_text(json.dumps(record, indent=1))

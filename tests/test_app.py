@@ -58,7 +58,7 @@ def test_studio_files_cannot_escape_the_folder(client):
 
 
 def test_plan_job_reports_the_brief(client, monkeypatch):
-    def fake_plan(prompt, uploads=None, sprites=None, current=None, available=None):
+    def fake_plan(prompt, uploads=None, sprites=None, current=None, available=None, **kw):
         b = B.check(B.default_brief())
         b["planner"] = {"model": "fake", "seconds": 0.0, "prompt": prompt, "edit": current is not None,
                         "restored": []}
@@ -72,7 +72,7 @@ def test_plan_job_reports_the_brief(client, monkeypatch):
 
 
 def test_a_failed_make_shows_the_engine_message(client, monkeypatch):
-    def boom(prompt, brief, cid, log, draft=False):
+    def boom(prompt, brief, cid, log, draft=False, **kw):
         log("trying...")
         raise ValueError("no ad length fits this recording")
     monkeypatch.setattr(A.studio, "make", boom)
@@ -109,7 +109,7 @@ def test_only_local_host_names_are_served(client):
 def test_level_only_preview_runs_without_recording(client, monkeypatch):
     seen = {}
 
-    def fake_preview(brief, cid, log):
+    def fake_preview(brief, cid, log, **kw):
         seen["brief"] = brief
         log("planned 9 moves")
         return {"level_why": "x", "board": "previews/a.png", "beats": [], "notes": [], "checks": [],

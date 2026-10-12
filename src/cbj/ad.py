@@ -318,7 +318,8 @@ TEASER_S = 1.5
 # Options a brief can set on the default ad (see build_ad).
 AD_OPTIONS = {"replay": True, "result_screen": True, "teaser": False, "texts": {}, "fill": None, "stroke": None,
               "colour_names": {}, "logo": None, "hook_icon": None, "end_art": None, "end_background": None,
-              "end_gradient": None, "cursor": "ring", "cursor_image": None, "sfx": True, "clock_visible": True}
+              "end_gradient": None, "cursor": "ring", "cursor_image": None, "sfx": True, "clock_visible": True,
+              "button_image": None}  # hook_icon / end_art "": removed
 # With the HUD's clock hidden, the default copy may not quote it (the viewer never saw it).
 NO_CLOCK = {"hook": "Can you clear it?", "result": {"near_fail": "Phew! Just in time!"},
             "end_fact": {"near_fail": "Cleared just in time!", "win": "Cleared!"}}
@@ -331,7 +332,7 @@ END_FACTS = {"near_fail": "Cleared with {clock_left} left", "time_out": "Out of 
 
 
 def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long_card: bool = False,
-             options: dict | None = None) -> dict:
+             options: dict | None = None, pin: dict | None = None) -> dict:
     """The default ad for a recording, from its ending: hook, mistake caption, urgency, replay,
     the game's own result screen, end card. Sized to exactly length_s:
     - the replay is the last one or two beats in slow motion (at most 5 s);
@@ -341,7 +342,13 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     options (AD_OPTIONS) come from a brief: replay, result screen, a result-first teaser, texts
     ("" removes a caption), caption colours, colour names for repainted blocks, a logo, a picture
     beside the hook, end-card art and background, the cursor, and sound on or off. What an
-    option could not do is written into the ad's notes."""
+    option could not do is written into the ad's notes.
+
+    pin: for an edit that keeps the recording's frames, the parent ad's structure: {"length_s",
+    "intro" (frames), "replay_from" (frame or None)}. Its intro and replay stay as they were (case
+    p.7: timing preserved); a part the edit removes or adds gives its time to, or takes it from,
+    the end card. Past the end card's limits the ad's end moves, never its gameplay, and a note
+    says so."""
     o = {**AD_OPTIONS, **(options or {})}
     ending = rec.play.get("ending")
     brief_notes: list[dict] = []  # what the ad could not do, or did as asked, per control of the brief
@@ -382,24 +389,38 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
             seg["teaser"] = {"kind": "clip", "src": src, "from": t0, "to": t0 + teaser, "speed": 1, "fit": dict(FIT)}
     fixed = p + sum(seg_frames(seg[a]) for a in after) + teaser
     replay_from, card = None, total - fixed
-    for k in range(len(bf) - 1, max(-1, len(bf) - 1 - REPLAY_MAX_BEATS) if o["replay"] else len(bf) - 1, -1):
-        r = 2 * (p - bf[k][0])
-        if r > REPLAY_MAX_S * FPS or total - fixed - r < END_CARD_S[0] * FPS:
-            break
-        replay_from, card = bf[k][0], total - fixed - r
-        if card <= END_CARD_S[1] * FPS:
-            break
+    starts = [b[0] for b in bf]
+    if pin is not None and o["replay"] and pin.get("replay_from") in starts:
+        replay_from = pin["replay_from"]  # the replay the user saw, beat for beat
+        card = total - fixed - 2 * (p - replay_from)
+    elif pin is not None and not pin.get("add_replay"):
+        pass  # the user saw no replay and did not ask for one: freed time never becomes a replay
+    else:
+        for k in range(len(bf) - 1, max(-1, len(bf) - 1 - REPLAY_MAX_BEATS) if o["replay"] else len(bf) - 1, -1):
+            r = 2 * (p - bf[k][0])
+            if r > REPLAY_MAX_S * FPS or total - fixed - r < END_CARD_S[0] * FPS:
+                break
+            replay_from, card = bf[k][0], total - fixed - r
+            if card <= END_CARD_S[1] * FPS:
+                break
+    if o["replay"] and replay_from is None and (pin is None or pin.get("add_replay")):
+        note("sequence", "no slow-motion replay: the gameplay leaves no room for one (the end card needs at least "
+                         f"{END_CARD_S[0]:g} s)", "adjusted" if pin is not None else None)
     intro = 0
-    if card > END_CARD_S[1] * FPS and not teaser:
-        intro = min(int(INTRO_MAX_S * FPS), card - int(END_CARD_S[1] * FPS))
-        card -= intro
-    if card < END_CARD_S[0] * FPS:
-        raise ValueError(f"the recording runs {fixed / FPS:.1f} s, too long for a {length_s:g} s ad with a "
-                         f"{END_CARD_S[0]:g} s end card; record a shorter scenario or ask for a longer ad")
-    if card > END_CARD_MAX_S * FPS and not allow_long_card:
-        raise ValueError(f"the recording is too short for a {length_s:g} s ad: the end card would run "
-                         f"{card / FPS:.1f} s (at most {END_CARD_MAX_S:g}); record a longer scenario (a bigger "
-                         f"level, more mistakes), ask for a shorter ad, or allow a long card")
+    if pin is not None:
+        card, intro, total = _pinned_card(card, 0 if teaser else int(pin.get("intro", 0)), total, note)
+    else:
+        if card > END_CARD_S[1] * FPS and not teaser:
+            intro = min(int(INTRO_MAX_S * FPS), card - int(END_CARD_S[1] * FPS))
+            card -= intro
+        if card < END_CARD_S[0] * FPS:
+            raise ValueError(f"the recording runs {fixed / FPS:.1f} s, too long for a {length_s:g} s ad with a "
+                             f"{END_CARD_S[0]:g} s end card; record a shorter scenario or ask for a longer ad")
+        if card > END_CARD_MAX_S * FPS and not allow_long_card:
+            raise ValueError(f"the recording is too short for a {length_s:g} s ad: the end card would run "
+                             f"{card / FPS:.1f} s (at most {END_CARD_MAX_S:g}); record a longer scenario (a bigger "
+                             f"level, more mistakes), ask for a shorter ad, or allow a long card")
+    length_s = total / FPS
     order = ["teaser"] if teaser else []
     if intro:
         seg["intro"] = {"kind": "hold", "src": src, "frame": 0, "frames": intro, "fit": dict(FIT)}
@@ -441,7 +462,7 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         hook_end = {"seg": "play", "at": round(max(0.3, hook_min - TEASER_S + 0.2), 4)}
     layers["hook"] = _text(hook_text, {"seg": order[0], "at": 0}, end=hook_end, anim="pop_out",
                            icon="stopwatch.png" if ending in ("near_fail", "time_out") and not teaser
-                           and o["clock_visible"] else None)
+                           and o["clock_visible"] and o["hook_icon"] != "" else None)
     if first is not None:
         kind = beats[first]["kind"]
         text = "I can't reach {colour}!" if "in the way" in beats[first]["note"] else "Oops!"
@@ -503,6 +524,8 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
             layers[lid]["text"] = text
     if o["hook_icon"] and "hook" in layers:
         layers["hook"]["icon"] = o["hook_icon"]
+    elif o["hook_icon"] == "":
+        note("assets", "the icon beside the hook is removed, as asked", None)
     names = o["colour_names"]
     for n in _schedule_band(layers, ["hook", "cap_mistake", "cap_fix", "cap_hurry", "cap_cascade", "cap_result"],
                             seg, order, rec, src, names):
@@ -517,12 +540,18 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     end_fact = END_FACTS[ending] if o["clock_visible"] else NO_CLOCK["end_fact"].get(ending, END_FACTS[ending])
     layers["end_fact"] = {"type": "text", "seg": "end", "text": end_fact, "style": "title_m",
                           "max_h": 120, "pos": [540, 560 if cliff else 700], "anim": "pop"}
+    art_box = None
     if not cliff:
         art = "CoinPile.png" if ending == "win" else "stopwatch.png"
         layers["end_art"] = {"type": "image", "seg": "end", "image": art, "scale": 340 / 512 if art == "stopwatch.png"
                              else 420 / 669, "pos": [540, 1000], "anim": "pop"}
+        art_box = drawn_box(art, layers["end_art"]["scale"])
     layers["end_cta"] = {"type": "button", "seg": "end", "image": "ContinueButtonEmpty.png", "text": "PLAY NOW",
                          "pos": [540, 1360 if cliff else 1250], "scale": 0.8 if cliff else 0.9, "pulse": True}
+    if o["button_image"]:
+        # A new button keeps the game button's place and size; its text stays on top.
+        layers["end_cta"]["image"] = o["button_image"]
+        layers["end_cta"]["box"] = drawn_box("ContinueButtonEmpty.png", layers["end_cta"]["scale"])
     layers["end_footer"] = {"type": "text", "seg": "end", "text": "Contains in-app purchases", "style": "title_s",
                             "pos": [540, 1460], "enabled": False}
     for key in ("end_title", "end_fact", "cta"):
@@ -533,11 +562,15 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
             note("concept", f"the {key.replace('_', ' ')} is removed, as asked", None)
         elif text:
             layers[lid]["text"] = text
-    if o["end_art"]:
+    if o["end_art"] == "" and "end_art" in layers:
+        del layers["end_art"]
+        note("assets", "the end-card picture is removed, as asked", None)
+    elif o["end_art"]:
         if cliff:
             note("assets", "end-card picture not used: the cliffhanger's end card shows the unsolved board there")
         else:
-            layers["end_art"] = {"type": "image", "seg": "end", "image": o["end_art"], "box": [460, 420],
+            # Drawn inside the box of the picture it replaces: the end card's layout stays.
+            layers["end_art"] = {"type": "image", "seg": "end", "image": o["end_art"], "box": list(art_box),
                                  "pos": [540, 1000], "anim": "pop"}
     if o["end_background"]:
         seg["end"]["background"] = o["end_background"]
@@ -609,6 +642,42 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     }
     ad["origin"] = {"locked": locked_digests(ad)}
     return ad
+
+
+# The game sprites the default ad draws (Rollic's files; their sizes do not change).
+SPRITE_SIZES = {"CoinPile.png": (669, 561), "stopwatch.png": (512, 512), "ContinueButtonEmpty.png": (739, 258)}
+PINNED_CARD_MAX_S = 10.0  # an edit may leave a long end card rather than move the gameplay
+
+
+def drawn_box(sprite_name: str, scale: float) -> list[int]:
+    """The size a default sprite is drawn at: the box a replacement is fitted into."""
+    w, h = SPRITE_SIZES[sprite_name]
+    return [round(w * scale), round(h * scale)]
+
+
+def _pinned_card(card: int, intro: int, total: int, note) -> tuple[int, int, int]:
+    """End card, intro and total frames for an edit that keeps the parent's structure: the end card
+    takes what the edit freed or needs; past its limits, the intro gives way first, then the ad's
+    end moves. The gameplay never does."""
+    card -= intro
+    lo, pref, hi = int(END_CARD_S[0] * FPS), int(END_CARD_S[1] * FPS), int(PINNED_CARD_MAX_S * FPS)
+    if card < lo and intro:
+        cut = min(intro, lo - card)
+        intro, card = intro - cut, card + cut
+        note("sequence", f"the frozen intro is {cut / FPS:.1f} s shorter to make room for the change")
+    if card < lo:
+        grow = lo - card
+        total, card = total + grow, card + grow
+        note("difficulty_pacing", f"the ad is {total / FPS:.1f} s ({grow / FPS:.1f} s longer): the change needs the room, "
+                                  f"and the end card cannot be shorter than {END_CARD_S[0]:g} s")
+    elif card > hi:
+        cut = card - pref
+        total, card = total - cut, card - cut
+        note("difficulty_pacing", f"the ad is {total / FPS:.1f} s ({cut / FPS:.1f} s shorter): the freed time would make "
+                                  f"the end card longer than {PINNED_CARD_MAX_S:g} s; the gameplay is unchanged")
+    elif card > END_CARD_MAX_S * FPS:
+        note("sequence", f"the end card runs {card / FPS:.1f} s, so the ad keeps its length and its gameplay timing")
+    return card, intro, total
 
 
 def _get_path(ad: dict, path: str):

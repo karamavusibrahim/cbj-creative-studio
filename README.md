@@ -592,6 +592,61 @@ numbers, block count, block shapes, board shape and looks.
 **Level only.** The UI's *Level only* button plans the prompt, builds the level and plans the
 moves without recording (seconds instead of minutes), with the board picture and the move list.
 
+## Controlled editing (core requirement 5)
+
+The case: "If a user likes an existing creative and asks for one specific change, the system
+should avoid unnecessarily changing everything else ... preserve gameplay, timing, camera,
+composition, sequence, visual structure and other assets." An edit here is a change to the
+stored creative, not a new generation:
+
+1. **Only the asked fields change.** The planner reads the edit against the version being edited
+   and declares the field groups it changes; `brief.merge` takes only those (and, for groups a
+   model tends to over-fill, only with words in the prompt that ask for them). Pictures merge
+   slot by slot, so replacing one never drops another.
+2. **Each stage re-runs only if its inputs changed.** The level is kept unless the edit is about
+   the level; the recording is reused (an overlay edit) or the stored job is filmed again with
+   the new look (a colour edit: the same moves on the same frames); only a gameplay edit records
+   new play, and on a kept level it picks the play closest to the original (of up to 24 plans, the
+   one with the most moves in common; the report says how many).
+3. **"Harder" or "easier" edits the board, not replaces it.** The closest board that rates so: at
+   most three small changes (a block moved, a gate moved, two colours swapped), the shape, size and
+   pieces kept, fair and solvable on the full rating; the HUD's level number stays. "Make the hook
+   harder to ignore" is about the hook, not the level (difficulty words count only in a clause
+   without copy words).
+4. **The ad keeps its timing.** An edit that keeps the gameplay frames pins the original's intro,
+   replay and length (`build_ad(pin=...)`): removing the replay gives its time to the end card
+   instead of shifting the gameplay; freed time never becomes a replay the user did not see;
+   past 10 s of end card the ad ends earlier, with a note.
+5. **Replacements keep the composition.** A new picture is drawn inside the box of the one it
+   replaces (the end-card picture, the icon beside the hook, the button), in the same place (a
+   logo stays in its corner).
+6. **The edit report proves it, item by item** (`editreport.py`): gameplay, timing, camera,
+   composition, sequence, visual structure, other assets (the case's seven), captions and sound.
+   Each difference is classified on its own: *asked*; *explained*, only when a check on the
+   measured difference proves the reason (a caption "names the colours as shown" only if its
+   template is the same and only its filled-in facts changed; a caption "waits for the longer
+   hook" only if the hook was asked and got longer); or unexplained, which makes the row
+   *CHANGED WITHOUT BEING ASKED* and fails the edit. Exact facts first (level hash, every move,
+   frame windows, file hashes), then the frame diff: which frames changed and whether every
+   changed pixel is inside the edited layers' boxes.
+
+**"Replace this asset."** Every version has an inventory (`edits.py`): the logo, the icon beside
+the hook, the end-card picture, the button, the end card's background, the cursor, the sound and
+every caption, with plain names and screen times. The planner gets it with an edit prompt, so
+"the coin pile" or "this object" resolves to a slot. An attached picture the model does not place
+goes to the slot the prompt names, else to the end-card picture, written as an assumption.
+
+**Exact edits without a prompt.** The UI's *Things in this ad* card replaces, removes or
+rewrites one thing (a picture, a caption, the sound) by changing the brief in code: no planner,
+the same proofs. **Any version can be edited** (the new version records which one it came from),
+and any two versions can be compared (`cbj edit-report <id> A B`, or *Compare* in the UI).
+
+```
+uv run cbj make "Same ad without the slow-motion replay." --edit <id>          # edit the latest version
+uv run cbj make "Keep everything, but the button says 'SOLVE IT'" --edit <id> --base 2  # edit v2
+uv run cbj edit-report <id> 1 3                                               # what v3 changed from v1
+```
+
 ## Layout
 
 ```
@@ -613,7 +668,9 @@ src/cbj/generate.py  the level generator: shape, size, blocks, pieces, looks, co
 src/cbj/events.py    gameplay events (an order of interactions), their solver and check; the satisfying finish
 src/cbj/checks.py    what was asked, checked on the recording and the level file
 src/cbj/preview.py   a picture of a level, drawn from its file
-src/cbj/studio.py    brief -> level -> recording -> ad, versions, cached stages, edit proofs
+src/cbj/studio.py    brief -> level -> recording -> ad, versions, cached stages, edits (pin, closest play)
+src/cbj/edits.py     what an edit can point at (the inventory) and exact edits without the planner
+src/cbj/editreport.py the edit report: the case's seven preserve items, captions and sound, one by one
 src/cbj/app.py       the test UI (FastAPI); the page is src/cbj/static/index.html
 src/cbj/cli.py       command line
 unity/CreativeRunner Unity scripts copied into the project copy by build-player
