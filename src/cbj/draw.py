@@ -50,7 +50,10 @@ def sprite(name: str) -> Image.Image:
         p = PROJECT / SPRITES / name
     if not p.is_file():
         raise ValueError(f"image {name!r} not found (looked for a file and in {PROJECT / SPRITES})")
-    return Image.open(p).convert("RGBA")
+    try:
+        return Image.open(p).convert("RGBA")
+    except (OSError, Image.UnidentifiedImageError) as e:
+        raise ValueError(f"{p.name} is not a readable image (upload a PNG, JPG or WebP again)") from e
 
 
 def wrap(text: str, size: int, max_width: int) -> list[str]:

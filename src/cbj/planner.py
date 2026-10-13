@@ -53,7 +53,7 @@ gameplay (control "gameplay"):
 - finish: "streak" for a satisfying solve: one key move, then every block leaves one after another ("one move frees everything", "they all fly out", a chain, a cascade); else "auto".
 - clock_left_s: for a near_fail only, the seconds on the clock when the last block leaves, 1-3, only if the request gives it ("with 2 seconds left" -> 2); else null.
 
-pacing (control "difficulty_pacing"): length_s 15-60 (default 30); tempo "calm", "normal" or "fast" (the pauses between moves); curve "even" (default), "speeds_up" (starts slow and careful, ends fast: tension building), "slows_down".
+pacing (control "difficulty_pacing"): length_s 30-60 (default 30; the ads are 30-60 s, shorter requests are raised to 30); tempo "calm", "normal" or "fast" (the pauses between moves); curve "even" (default), "speeds_up" (starts slow and careful, ends fast: tension building), "slows_down".
 
 CONCEPT TO GAMEPLAY. When the request names a mood or concept but not the settings, use these, and say in assumptions which words you read that way:
 - relaxing, calm, ASMR, oddly satisfying: ending win, difficulty easy, finish streak, tempo calm.
@@ -73,13 +73,21 @@ visuals (control "visuals"):
 - camera_zoom: 1.0-1.12 to frame the board a little closer (more crops the side gates), or null. cursor: "ring" (a tap ring, default), "hand" (a pointing hand), "none".
 - hud_timer, hud_level: false to hide the HUD's clock or level badge (default true).
 
-concept (control "concept"): angle = the idea in one line. Texts: hook (first frame), mistake (caption on the mistake), fix (on the move that fixes it), hurry (the last 5 seconds), cascade (the fast finish of a win), result (on the result screen), end_title, end_fact, cta (the button). LEAVE EVERY TEXT null UNLESS the request asks for specific copy, a tone, an angle or a language: the defaults are written for each ending and use measured facts. "" removes that caption (not the cta). Keep captions under 6 words. Texts may use facts measured from the recording, in braces: {clock_left} (e.g. 00:01), {time_used} (seconds used), {colour} (the colour of the block in the mistake or the fix), {blocks_left_phrase} (e.g. "two blocks"), {blocks_left}, {timer}, {blocks}. Any number about the play must be one of these facts. NEVER write statistics, odds, percentages, rankings or IQ claims ("only 1% can solve this" is forbidden by ad rules); dares are fine ("Can you beat it?"). If the request asks for such a claim, write the closest honest dare and set the concept row to "adjusted" with the reason.
+concept (control "concept"): angle = the idea in one line. Texts: hook (first frame), mistake (caption on the mistake), fix (on the move that fixes it), hurry (the last 5 seconds), cascade (the fast finish of a win), result (on the result screen), end_title, end_fact, cta (the button). LEAVE EVERY TEXT null UNLESS the request asks for specific copy, a tone, an angle or a language: the defaults are written for each ending and use measured facts. "" removes that caption (not the cta). Keep captions under 6 words. Texts may use facts measured from the recording, in braces: {clock_left} (e.g. 00:01), {time_used} (seconds used), {time_used_phrase} (e.g. "12 seconds"), {colour} (the colour of the block in the mistake or the fix), {blocks_left_phrase} (e.g. "two blocks"), {blocks_left}, {timer}, {blocks}. Any number about the play must be one of these facts. NEVER write statistics, odds, percentages, rankings or IQ claims ("only 1% can solve this" is forbidden by ad rules); dares are fine ("Can you beat it?"). If the request asks for such a claim, write the closest honest dare and set the concept row to "adjusted" with the reason.
 
 sequence (control "sequence"): style "standard" (hook over the gameplay, then replay, result, end card) or "result_first" (the result for 1.5 s at the very start, then how it happened); replay (a slow-motion replay of the last moves); result_screen (the game's own "Level Completed" / "Out of Time!" screen); end_card (always true: the end card holds the button).
 
 assets (control "assets"): an uploaded file may ONLY be used if the request refers to it (by name, or as "our logo", "this image", "this asset", "the attached ..."). Otherwise leave it out and say so in the assets row's plan. The game's own sprites can also be used: CoinPile.png, stopwatch.png. role: "logo" (small, in a top corner for the whole ad), "mascot" or "sticker" (a picture beside the hook, or on the end card), "cursor" (replaces the tap ring), "end_art" (the picture on the end card), "end_background" (the end card's background), "button" (replaces the PLAY NOW button's image; its text stays). when: "whole", "hook", "end_card". where: "auto", "top_left", "top_right", "beside_hook", "end_card". To REMOVE a picture (the logo, the icon beside the hook, the end-card picture), give it file "builtin:none" in its role. Never invent a file name. In an EDIT, the request may point at something in the ad ("this object", "the coin pile", "the clock icon", "the button"): the list THINGS IN THIS AD NOW says what each picture is; replace exactly that slot (its role and when), keep every other asset as it is, and if the request does not say which thing, pick the most likely one and write the assumption with the alternative.
 
 audio (control "assets"): sfx false only if the request asks for no sound. There is no music or voice-over.
+
+WHAT THE GAME DOES NOT HAVE. Color Block Jam has no obstacles, enemies, power-ups, boosters, characters or items on the board: only blocks, gates, walls and holes. A request about "the obstacle", "the enemy", "the character" can only mean the board's holes or walls (level.shape "holes") or, in an edit, one of the pictures listed under THINGS IN THIS AD NOW. Say in assumptions what you took it to mean, and when the game has nothing of the kind, say so plainly ("the game has no obstacles; the object goes beside the hook instead").
+
+A NEW ad has no earlier version. If the request refers to "the last one", "the previous ad" or "like before" and this is not an EDIT, say in assumptions that nothing earlier is available and plan from the request alone. Never claim a previous configuration exists.
+
+REFERENCE FILES. When the message lists REFERENCE FILES, they were analysed before you: a measured palette and a multimodal model's notes. Use them: for "inspired by", "match", "same style", set visuals.theme "custom" and fill visuals.blocks (the game's slots repainted with the reference's colours, named) and visuals.background from the measured palette; take the mood, hook and idea into concept; for a video, take its structure (ending, pacing, mistakes, captions' tone) into gameplay and pacing. A reference video is NEVER an asset. A reference image is placed in the ad only when the request says to put, insert or replace with it. Name the file in the rows it influenced. If a file COULD NOT BE ANALYSED, do not guess what it shows: say so in assumptions and in the visuals row (status "adjusted").
+
+WRITE FOR A MARKETING PERSON. plan, why, summary and assumptions are read by someone who does not know this tool: plain words only. Never write field names, roles, enum values, hex codes, file paths or JSON ("end_art", "near_fail", "level.shape", "#FF69B4"). Say "the picture on the end card", "the icon beside the hook", "the logo", "the caption on the mistake", "the clock", "the board", "a near-fail", "pink".
 
 keep (control "unchanged"): what must stay exactly as it is: level, gameplay, timing, camera, visuals, copy, sequence, assets, sound.
 
@@ -296,15 +304,29 @@ def _relative_difficulty(brief: dict, prompt: str, current: dict) -> None:
 
 
 def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprites: set[str] | None = None,
-         current: dict | None = None, available: dict[str, Path] | None = None, inventory: str | None = None) -> dict:
+         current: dict | None = None, available: dict[str, Path] | None = None, inventory: str | None = None,
+         references: dict[str, Path] | None = None, analyser=None, log=None) -> dict:
     """A checked brief for a prompt. With `current`, the prompt edits that brief: only what the
-    prompt asks to change may change. uploads: the files attached to this prompt (offered to
-    the model); available: every uploaded file (an edit keeps the ones its version uses).
-    Returns the brief, with `planner` notes."""
+    prompt asks to change may change. uploads: the image files attached to this prompt (offered
+    to the model as assets); available: every uploaded image (an edit keeps the ones its version
+    uses); references: attached files to analyse first (reference images and videos, case p.6),
+    with `analyser` (reference.analyse) reading each one. Returns the brief, with `planner` notes."""
+    from . import reference
     client = client or NvidiaClient()
     files = sorted(uploads or {})
     available = {**(available or {}), **(uploads or {})}
     user = f"REQUEST:\n{prompt.strip()}\n\nUPLOADED FILES: {', '.join(files) if files else 'none'}"
+    analyses = []
+    for name, path in sorted((references or {}).items()):
+        if log:
+            log(f"reading the reference {name}...")
+        a = (analyser or reference.analyse)(Path(path))
+        analyses.append(a)
+        if log:
+            log("  " + reference.summary(a))
+    if analyses:
+        user += ("\n\nREFERENCE FILES (analysed before you; use them as the instructions say, a video is never an "
+                 "asset):\n" + "\n".join(reference.notes_text(a) for a in analyses))
     system = SYSTEM
     if current is not None:
         # the fields only: the previous version's reasons and notes would leak into the edit
@@ -323,6 +345,14 @@ def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprit
     changed = brief["changed"]
     brief = B.check(brief, available, sprites)
     brief["changed"] = changed
+    # A change the model read from the request but the merge did not take is shown as such, not
+    # as "applied": the user must not see a promise the engine will not keep.
+    declared = set(raw.get("changed") or [])
+    for r in restored:
+        g, _, why = r.partition(": ")
+        if g in declared and g in B.GROUPS and not g.startswith("assets"):
+            B.adjust(brief, B.GROUPS[g][0], f"{B.GROUP_NAMES.get(g, g)}: read from the request, but not applied ({why}).")
+    _reference_files(brief, prompt, analyses, current)
     _place_unplaced(brief, prompt, files, current)
     if current is not None:
         _relative_difficulty(brief, prompt, current)
@@ -331,5 +361,37 @@ def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprit
     else:
         brief["visuals"]["names"], brief["visuals"]["names_src"] = {}, {}
     brief["planner"] = {"model": getattr(client, "last_model", None), "seconds": round(time.time() - t0, 1),
-                        "prompt": prompt.strip(), "edit": current is not None, "restored": restored}
+                        "prompt": prompt.strip(), "edit": current is not None, "restored": restored,
+                        "references": analyses}
     return brief
+
+
+def _reference_files(brief: dict, prompt: str, analyses: list[dict], current: dict | None) -> None:
+    """A reference file is read, not placed: an analysed image stays out of the ad's pictures unless
+    the request asks to put it somewhere; a video never goes in; a file that could not be read is
+    not guessed about."""
+    from . import reference
+    if not analyses:
+        return
+    place = reference.asks_placement(prompt)
+    used_before = {a["file"] for a in (current or {}).get("assets", [])}
+    for a in analyses:
+        name = a["file"]
+        if a.get("error"):
+            brief["assets"] = [x for x in brief["assets"] if x["file"] != name or name in used_before]
+            note = f"{name} could not be read ({a['error'][:100]}), so nothing was taken from it."
+            if note not in brief["assumptions"]:
+                brief["assumptions"].append(note)
+            B.adjust(brief, "visuals", note)
+            continue
+        if a.get("kind") == "video" or not place:
+            if any(x["file"] == name for x in brief["assets"]) and name not in used_before:
+                brief["assets"] = [x for x in brief["assets"] if x["file"] != name]
+                B.adjust(brief, "assets", f"{name} is a reference (its {'structure and' if a.get('kind') == 'video' else ''} "
+                                          f"colours and mood were read), not a picture placed in the ad; say "
+                                          f"'put it on the end card' or 'use it as the logo' to place it.", status="applied")
+        row = B.control(brief, "visuals")
+        if row["status"] == "default" and a.get("kind") == "image":
+            row["status"] = "applied"
+        if not any(name in (x or "") for x in brief["assumptions"]):
+            brief["assumptions"].append("Read from " + reference.summary(a) + ".")

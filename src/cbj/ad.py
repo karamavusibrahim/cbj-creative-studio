@@ -46,6 +46,15 @@ END_CARD_MAX_S = 8.0  # longer than this the ad is mostly a card: refused unless
 REPLAY_MAX_S = 5.0  # the replay is a payoff, not filler: the last one or two beats, at most 5 s
 REPLAY_MAX_BEATS = 2
 INTRO_MAX_S = 2.0  # a frozen first frame under the hook, when the ad has time to spare
+# When the play is short for the asked length (the case asks for 30-60 s), the ad is filled in
+# this order before the end card may grow past END_CARD_MAX_S: a longer replay (more beats), a
+# longer intro hold, the result (or the cliffhanger's question) held longer.
+REPLAY_FILL_S = 8.0
+REPLAY_FILL_BEATS = 4
+INTRO_FILL_S = 3.0
+RESULT_HOLD_S = 4.0
+END_CARD_FILL_MAX_S = 10.0  # after filling, the card may run this long rather than the ad going under its length
+INTRO_FRAME = 9  # the frozen intro shows this frame: after the clock's first tick flash (frames 0-7 are red)
 END_TITLE = "Color Block Jam"
 
 # Copy guard: statements of odds or IQ are not allowed in ads (UK ASA rulings), dares are.
@@ -61,7 +70,8 @@ FORBIDDEN = [(r"\d\s*(%|percent\b)", "a percentage"),
 # time ("Level 3 in 12 seconds", "1 in 10 moves"), a counter ("Level 10/12"), "2 in 1".
 ODDS = re.compile(r"\b(\d+|one)\s*(?:\bin\b|\bout\s+of\b|/)\s*(?:a\s+)?(\d+|hundred|thousand|million)\b", re.I)
 _AMOUNT = {"one": 1, "hundred": 100, "thousand": 1000, "million": 1000000}
-FACT_KEYS = ("clock_left", "colour", "timer", "blocks", "time_used", "blocks_left", "blocks_left_phrase")
+FACT_KEYS = ("clock_left", "colour", "timer", "blocks", "time_used", "time_used_phrase", "blocks_left",
+             "blocks_left_phrase")
 NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
 NBSP = "\u00a0"  # keeps a multi-word fact ("dark green") on one line
 
@@ -180,6 +190,8 @@ class Recording:
         f = {"clock_left": clock_text(r.get("timer_end", 0)), "timer": str(timer), "blocks": str(len(gone)),
              "time_used": f"{max(0.0, timer - r.get('timer_end', 0)):.0f}", "blocks_left": str(left),
              "blocks_left_phrase": f"{word}{NBSP}block{'' if left == 1 else 's'}"}
+        used = int(round(max(0.0, timer - r.get("timer_end", 0))))
+        f["time_used_phrase"] = f"{used}{NBSP}second{'' if used == 1 else 's'}"
         if beat is not None and self.level is not None:
             block = self.play["beats"][beat]["block"]
             slot = self.level.blocks[block].color
@@ -328,7 +340,7 @@ TEXT_LAYERS = {"hook": "hook", "mistake": "cap_mistake", "fix": "cap_fix", "hurr
                "cta": "end_cta"}
 LOGO_BOX = 150  # px; a logo in a top corner, inside the safe area, beside a narrowed caption band
 END_FACTS = {"near_fail": "Cleared with {clock_left} left", "time_out": "Out of time with {blocks_left_phrase} left!",
-             "win": "Cleared in {time_used} seconds", "cliffhanger": "Your move: {blocks_left_phrase} to go!"}
+             "win": "Cleared in {time_used_phrase}", "cliffhanger": "Your move: {blocks_left_phrase} to go!"}
 
 
 def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long_card: bool = False,
@@ -406,9 +418,10 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     if o["replay"] and replay_from is None and (pin is None or pin.get("add_replay")):
         note("sequence", "no slow-motion replay: the gameplay leaves no room for one (the end card needs at least "
                          f"{END_CARD_S[0]:g} s)", "adjusted" if pin is not None else None)
-    intro = 0
+    intro, hold = 0, 0
     if pin is not None:
-        card, intro, total = _pinned_card(card, 0 if teaser else int(pin.get("intro", 0)), total, note)
+        card, intro, hold, total = _pinned_card(card, 0 if teaser else int(pin.get("intro", 0)), int(pin.get("hold", 0)),
+                                                total, note, has_result=bool(after))
     else:
         if card > END_CARD_S[1] * FPS and not teaser:
             intro = min(int(INTRO_MAX_S * FPS), card - int(END_CARD_S[1] * FPS))
@@ -416,6 +429,44 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         if card < END_CARD_S[0] * FPS:
             raise ValueError(f"the recording runs {fixed / FPS:.1f} s, too long for a {length_s:g} s ad with a "
                              f"{END_CARD_S[0]:g} s end card; record a shorter scenario or ask for a longer ad")
+        if card > END_CARD_MAX_S * FPS and not allow_long_card and not teaser:
+            # The play is short for the asked length: fill it with a longer replay, a longer intro
+            # hold and a held result before the end card may grow (the case asks for 30-60 s).
+            limit = int(END_CARD_MAX_S * FPS)
+            filled = []
+            if o["replay"]:
+                base = total - fixed  # no replay, no intro
+                best = replay_from
+                for k in range(len(bf) - 1, max(-1, len(bf) - 1 - REPLAY_FILL_BEATS), -1):
+                    r = 2 * (p - bf[k][0])
+                    if r > REPLAY_FILL_S * FPS or base - r < END_CARD_S[0] * FPS:
+                        break
+                    best = bf[k][0]
+                    if base - r <= limit:
+                        break
+                if best is not None and best != replay_from:
+                    card += (2 * (p - replay_from) if replay_from is not None else 0) + intro
+                    replay_from, intro = best, 0
+                    card -= 2 * (p - replay_from)
+                    intro = min(int(INTRO_MAX_S * FPS), max(0, card - int(END_CARD_S[1] * FPS)))
+                    card -= intro
+                    filled.append(f"a longer replay ({2 * (p - replay_from) / FPS:.1f} s)")
+            if card > limit:
+                more = min(int(INTRO_FILL_S * FPS) - intro, card - limit)
+                if more > 0:
+                    intro, card = intro + more, card - more
+                    filled.append(f"a {intro / FPS:.1f} s hold on the first frame")
+            if card > limit and after:
+                hold = min(int(RESULT_HOLD_S * FPS), card - limit)
+                card -= hold
+                filled.append(f"the {'question' if ending == 'cliffhanger' else 'result'} held {hold / FPS:.1f} s longer")
+            if filled:
+                note("difficulty_pacing", f"the play is short for {length_s:g} s, so it is filled with "
+                                          f"{', '.join(filled)}", None)
+            if limit < card <= END_CARD_FILL_MAX_S * FPS:
+                note("sequence", f"the end card runs {card / FPS:.1f} s (the play is short for {length_s:g} s; a "
+                                 f"bigger level or more mistakes would fill more)")
+                allow_long_card = True
         if card > END_CARD_MAX_S * FPS and not allow_long_card:
             raise ValueError(f"the recording is too short for a {length_s:g} s ad: the end card would run "
                              f"{card / FPS:.1f} s (at most {END_CARD_MAX_S:g}); record a longer scenario (a bigger "
@@ -423,13 +474,21 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     length_s = total / FPS
     order = ["teaser"] if teaser else []
     if intro:
-        seg["intro"] = {"kind": "hold", "src": src, "frame": 0, "frames": intro, "fit": dict(FIT)}
+        intro_frame = min(INTRO_FRAME, max(0, int(rec.result.get("first_touch_frame", INTRO_FRAME + 1)) - 1), p - 1)
+        seg["intro"] = {"kind": "hold", "src": src, "frame": intro_frame, "frames": intro, "fit": dict(FIT)}
         order.append("intro")
     order.append("play")
     if replay_from is not None:
         seg["replay"] = {"kind": "clip", "src": src, "from": replay_from, "to": p, "speed": 0.5, "fit": dict(NATIVE)}
         order.append("replay")
-    order += after + ["end"]
+    order += after
+    if hold:
+        if ending == "cliffhanger":
+            seg["question"]["frames"] += hold
+        else:
+            seg["result_hold"] = {"kind": "hold", "src": src, "frame": rec.n - 1, "frames": hold, "fit": dict(NATIVE)}
+            order.append("result_hold")
+    order.append("end")
     seg["end"] = {"kind": "card", "frames": card, "background": "StartBACKGROUND.png"}
     if ending == "cliffhanger":
         # The unsolved board stays on the end card: the viewer is left with the puzzle.
@@ -452,6 +511,9 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         m = bf[first][0] / FPS
         if m - 0.1 < hook_play_end:
             hook_play_end = max(hook_min - intro_s, m - 0.1, 0.0)
+    if pin is not None and pin.get("hook_at") is not None and first is None:
+        # an edit keeps the hook on screen as long as the user saw it, unless the new text needs more
+        hook_play_end = max(hook_play_end, float(pin["hook_at"]))
     if first is not None and abs(hook_play_end - (bf[first][0] / FPS - 0.1)) < 1e-9:
         hook_end = {"seg": "play", "event": f"beat.{first}.start", "offset": -0.1}
     else:
@@ -655,12 +717,20 @@ def drawn_box(sprite_name: str, scale: float) -> list[int]:
     return [round(w * scale), round(h * scale)]
 
 
-def _pinned_card(card: int, intro: int, total: int, note) -> tuple[int, int, int]:
-    """End card, intro and total frames for an edit that keeps the parent's structure: the end card
-    takes what the edit freed or needs; past its limits, the intro gives way first, then the ad's
-    end moves. The gameplay never does."""
-    card -= intro
+MIN_AD_S = 30.0  # the case's shortest creative (brief.LENGTH_RANGE_S[0]); an edit never goes under it
+
+
+def _pinned_card(card: int, intro: int, hold: int, total: int, note, has_result: bool = True) -> tuple[int, int, int, int]:
+    """End card, intro, held result and total frames for an edit that keeps the parent's structure:
+    the end card takes what the edit freed or needs; past its limits the held result and the
+    intro give way first (or grow first), and only then does the ad's end move, never under
+    MIN_AD_S. The gameplay never moves."""
+    card -= intro + hold
     lo, pref, hi = int(END_CARD_S[0] * FPS), int(END_CARD_S[1] * FPS), int(PINNED_CARD_MAX_S * FPS)
+    if card < lo and hold:
+        cut = min(hold, lo - card)
+        hold, card = hold - cut, card + cut
+        note("sequence", f"the held result is {cut / FPS:.1f} s shorter to make room for the change")
     if card < lo and intro:
         cut = min(intro, lo - card)
         intro, card = intro - cut, card + cut
@@ -671,13 +741,28 @@ def _pinned_card(card: int, intro: int, total: int, note) -> tuple[int, int, int
         note("difficulty_pacing", f"the ad is {total / FPS:.1f} s ({grow / FPS:.1f} s longer): the change needs the room, "
                                   f"and the end card cannot be shorter than {END_CARD_S[0]:g} s")
     elif card > hi:
-        cut = card - pref
-        total, card = total - cut, card - cut
-        note("difficulty_pacing", f"the ad is {total / FPS:.1f} s ({cut / FPS:.1f} s shorter): the freed time would make "
-                                  f"the end card longer than {PINNED_CARD_MAX_S:g} s; the gameplay is unchanged")
+        # freed time: the held result takes it first (a part after the play: the gameplay frames
+        # never move, so the intro may not grow here)
+        if has_result:
+            more = min(card - pref, int(RESULT_HOLD_S * FPS) - hold)
+            if more > 0:
+                hold, card = hold + more, card - more
+                note("sequence", f"the time the change freed is filled with the result held {more / FPS:.1f} s longer, "
+                                 f"so the ad keeps its length")
+        if card > hi:
+            cut = card - pref
+            floor = int(MIN_AD_S * FPS) if total >= MIN_AD_S * FPS else 0  # a case-length ad stays one
+            if total - cut < floor:
+                cut = max(0, total - floor)
+            total, card = total - cut, card - cut
+            if cut:
+                note("difficulty_pacing", f"the ad is {total / FPS:.1f} s ({cut / FPS:.1f} s shorter): the freed time would "
+                                          f"make the end card longer than {PINNED_CARD_MAX_S:g} s; the gameplay is unchanged")
+            if card > hi:
+                note("sequence", f"the end card runs {card / FPS:.1f} s: the ad is not shortened under {MIN_AD_S:g} s")
     elif card > END_CARD_MAX_S * FPS:
         note("sequence", f"the end card runs {card / FPS:.1f} s, so the ad keeps its length and its gameplay timing")
-    return card, intro, total
+    return card, intro, hold, total
 
 
 def _get_path(ad: dict, path: str):

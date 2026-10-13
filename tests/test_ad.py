@@ -360,10 +360,15 @@ def test_an_early_mistake_keeps_its_caption(tmp_path):
     assert layer_window(ad, recs, "hook")[1] / 30 >= 1.9  # the hook stays long enough to read
 
 
-def test_a_short_recording_is_not_padded_with_a_huge_end_card(rec):
-    with pytest.raises(ValueError, match="too short for a 20 s ad"):
-        build_ad(rec, length_s=20)
-    ad = build_ad(rec, length_s=20, allow_long_card=True)
+def test_a_short_recording_is_filled_not_padded_with_a_huge_end_card(rec):
+    """A 20 s ad from 6.3 s of play: a longer replay and a held first frame fill it (the end card
+    stays under 8 s). A 60 s ad cannot be filled: refused unless a long card is allowed."""
+    ad = build_ad(rec, length_s=20)
+    assert ad["length_s"] == 20
+    assert timeline(ad)["end"][1] - timeline(ad)["end"][0] <= 8 * 30
+    with pytest.raises(ValueError, match="too short for a 60 s ad"):
+        build_ad(rec, length_s=60)
+    ad = build_ad(rec, length_s=60, allow_long_card=True)
     assert timeline(ad)["end"][1] - timeline(ad)["end"][0] > 8 * 30
 
 

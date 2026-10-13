@@ -186,7 +186,7 @@ def level_checks(brief: dict, level_path: Path, meta: dict | None = None) -> lis
     r = rate(level, runs=100)
     band = band_of(r)
     detail = (f"{r.min_drags} drags minimum, {r.extra_drags} repositioning, {r.exits_at_start} block(s) can leave at "
-              f"once, naive player {r.naive_ratio:.2f}x the minimum -> {BAND_WORDS[band]}")
+              f"once, a casual player needs about {r.naive_ratio:.1f}x the minimum -> {BAND_WORDS[band]}")
     if lv["difficulty"] != "any":
         ok = band == lv["difficulty"]
         out.append({"check": "Difficulty", "status": "pass" if ok else "adjusted",

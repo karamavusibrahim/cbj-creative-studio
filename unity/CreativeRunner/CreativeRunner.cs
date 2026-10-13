@@ -746,13 +746,21 @@ public class CreativeRunner : MonoBehaviour
         }
 
         if (UIManager.Instance != null) UIManager.Instance.UpdateLevel(job.level_label);
-        foreach (string name in job.hide)
+        foreach (string entry in job.hide)
         {
+            // "Name" hides the object and its children; "Name:image" hides only the object's own
+            // graphic (its children stay), e.g. the HUD bar's panel without the Level badge on it.
+            bool graphicOnly = entry.EndsWith(":image");
+            string name = graphicOnly ? entry.Substring(0, entry.Length - 6) : entry;
             bool found = false;
             foreach (var t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (t.name != name) continue;
-                t.gameObject.SetActive(false);
+                if (graphicOnly)
+                {
+                    foreach (var g in t.GetComponents<UnityEngine.UI.Graphic>()) g.enabled = false;
+                }
+                else t.gameObject.SetActive(false);
                 found = true;
             }
             if (!found) return $"hide: no object named '{name}'";

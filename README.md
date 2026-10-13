@@ -683,3 +683,32 @@ tests/               rule, level, solver, replay, failure-mode and render tests
 build/, renders/     player build and recordings (not in git)
 studio/              the UI's creatives, recordings, levels and uploads (not in git)
 ```
+
+## Reference images and videos (case p.6)
+
+The planner is a text model and sees only file names, so a reference file is analysed first
+(`reference.py`): an image gets a measured palette (PIL, no model) and a multimodal model's
+description; a video is shrunk with ffmpeg (360p, 8 fps, first 24 s) and described by the
+multimodal model (structure, hook, ending, pacing, look). The notes go to the planner, are
+written into the brief (`planner.references`) and shown on the page ("Read from the attached
+image ..."). A video is never placed in the ad; an image is placed only when the prompt asks
+to put it somewhere. A file that could not be read is said so, never guessed about. Uploads are
+checked by content (PNG, JPG, WebP; MP4, MOV, WebM up to 80 MB).
+
+## Length (case p.2: 30-60 s)
+
+Ads are 30-60 s; a shorter request is raised to 30 with a reason. When a level plays too few
+drags for the length, the showcase or the game's own level is swapped for a generated one of
+the same difficulty, sized to the length (unless the prompt named a level number). When the
+recording is still short, the ad is filled before the end card may grow: a longer replay (up
+to 8 s), a longer first-frame hold (up to 3 s), the result held longer (up to 4 s), then an
+end card up to 10 s; the brief says what filled it.
+
+Fixes from the case-requirement test of 2026-10-13 (see ../CASE-TEST-REPORT-2026-10-13.md):
+an edit keeps the game's own level file by name (the HUD number stays); an edit that plans the
+same moves reuses the parent's recording; rendering noise on a re-filmed recording with the same
+game state is not a change; hesitations are clamped per ending; "speeding up" and prompts in
+other languages keep what the planner read; a change the merge drops is shown as adjusted;
+hiding the clock also hides the HUD bar's panel ("MainBar:image"); an edit that changes nothing
+is refused instead of making a duplicate version; the page shows when another job runs and
+resumes its own job after a reload.

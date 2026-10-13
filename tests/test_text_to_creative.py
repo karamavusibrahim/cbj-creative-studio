@@ -343,7 +343,7 @@ def test_hidden_clock_drops_the_copy_that_quotes_it(rec):
 
 def test_hud_hide_lists():
     from cbj.studio import hud_hide
-    assert hud_hide({"hud_timer": False, "hud_level": True}) == ["TimerBackground", "TimerImage", "TimeText"]
+    assert hud_hide({"hud_timer": False, "hud_level": True}) == ["TimerBackground", "TimerImage", "TimeText", "MainBar:image"]
     assert hud_hide({"hud_timer": True, "hud_level": False}) == ["LevelCircle"]
     assert hud_hide({"hud_timer": False, "hud_level": False}) == ["MainBar"]
 

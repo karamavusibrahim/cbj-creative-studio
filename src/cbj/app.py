@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from . import brief as B
-from . import planner, studio
+from . import planner, reference, studio
 from .edits import direct_edit
 
 STATIC = Path(__file__).parent / "static"
@@ -35,6 +35,8 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost
 JOBS: dict[str, dict] = {}
 LOCK = threading.Lock()  # one job at a time
 UPLOAD_EXT = {".png", ".jpg", ".jpeg", ".webp"}
+VIDEO_EXT = {".mp4", ".mov", ".webm", ".m4v"}  # reference videos (case p.6): analysed, never placed in the ad
+MAX_IMAGE_MB, MAX_VIDEO_MB = 15, 80
 
 
 class PlanRequest(BaseModel):
@@ -92,13 +94,18 @@ def _plan(log: studio.Log, req: PlanRequest) -> dict:
             raise ValueError(f"no creative {req.creative_id}")
         current = {k: x for k, x in v["brief"].items() if k != "planner"}
         inventory = studio.planner_context(req.creative_id, v["n"])
-    all_ups = studio.uploads()
+    all_ups, vids = studio.uploads(), studio.videos()
     ups = {n: all_ups[n] for n in req.uploads if n in all_ups}
+    # attached videos are always references; attached images are when the prompt says so
+    # ("inspired by", "match", "like this"): they are analysed before planning (case p.6)
+    refs = {n: vids[n] for n in req.uploads if n in vids}
+    if reference.is_reference_prompt(req.prompt):
+        refs.update(ups)
     log.begin("plan", "reading the prompt" + (" as an edit of the current version" if current else "") + "...")
     # the files attached to this prompt are offered to the planner; every upload stays valid, so
     # an edit keeps the images its version already uses
     brief = planner.plan(req.prompt, uploads=ups, sprites=studio.sprite_names(), current=current, available=all_ups,
-                         inventory=inventory)
+                         inventory=inventory, references=refs, log=log)
     log(f"planned by {brief['planner']['model']} in {brief['planner']['seconds']} s")
     return brief
 
@@ -203,6 +210,15 @@ def api_job(jid: str, since: int = 0):
     return out
 
 
+@app.get("/api/jobs")
+def api_jobs():
+    """Recent jobs, newest first (the page resumes a running one after a reload)."""
+    out = []
+    for job in sorted(JOBS.values(), key=lambda j: j["started"], reverse=True)[:20]:
+        out.append({k: job[k] for k in ("id", "kind", "status", "stage", "started", "finished")})
+    return out
+
+
 @app.get("/api/creatives")
 def api_creatives():
     return studio.creatives()
@@ -221,9 +237,9 @@ def api_creative(cid: str):
 
 @app.get("/api/meta")
 def api_meta():
-    return {"controls": B.CONTROL_TITLES, "uploads": sorted(studio.uploads()), "sprites": sorted(studio.sprite_names()),
-            "models": list(planner.MODELS), "busy": LOCK.locked(),
-            "groups": {g: ctl for g, (ctl, _) in B.GROUPS.items()}}
+    return {"controls": B.CONTROL_TITLES, "uploads": sorted(studio.uploads()), "videos": sorted(studio.videos()),
+            "sprites": sorted(studio.sprite_names()), "models": list(planner.MODELS), "busy": LOCK.locked(),
+            "groups": {g: ctl for g, (ctl, _) in B.GROUPS.items()}, "group_names": B.GROUP_NAMES}
 
 
 @app.post("/api/upload")
@@ -233,12 +249,24 @@ async def api_upload(files: list[UploadFile] = File(...)):
     names = []
     for f in files:
         ext = Path(f.filename or "").suffix.lower()
-        if ext not in UPLOAD_EXT:
-            raise HTTPException(400, f"{f.filename}: only PNG, JPG or WebP images")
-        stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(f.filename).stem)[:40] or "image"
+        if ext not in UPLOAD_EXT | VIDEO_EXT:
+            raise HTTPException(400, f"{f.filename}: only PNG, JPG or WebP images, or an MP4, MOV or WebM video")
+        video = ext in VIDEO_EXT
+        stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(f.filename).stem)[:40] or ("video" if video else "image")
         data = await f.read()
-        if len(data) > 15 * 1024 * 1024:
-            raise HTTPException(400, f"{f.filename}: larger than 15 MB")
+        limit = MAX_VIDEO_MB if video else MAX_IMAGE_MB
+        if len(data) > limit * 1024 * 1024:
+            raise HTTPException(400, f"{f.filename}: larger than {limit} MB")
+        if video:
+            if not studio.looks_like_video(data):
+                raise HTTPException(400, f"{f.filename}: not a readable video file")
+        else:
+            try:  # the content, not the name: a text file named .png would break the compositor later
+                from io import BytesIO
+                from PIL import Image
+                Image.open(BytesIO(data)).verify()
+            except Exception:
+                raise HTTPException(400, f"{f.filename}: not a readable image (PNG, JPG or WebP)")
         name = f"{stem}{ext}"
         if (folder / name).exists() and (folder / name).read_bytes() != data:
             name = f"{stem}_{uuid.uuid4().hex[:4]}{ext}"

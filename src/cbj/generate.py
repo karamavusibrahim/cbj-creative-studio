@@ -1008,7 +1008,7 @@ def generate_for_brief(brief: dict, cache: Path, log) -> tuple[Path, str]:
         B.engine_note(brief, "level", "the generator's best narrow-centre board in the time budget was not a fair hard "
                                  "level, so the hand-checked one of the same shape (6x8, 7 blocks) is used.")
         return hand, ("the hand-checked hard narrow-centre level, 6x8, 7 blocks: 9 drags minimum, 2 repositioning, "
-                      "naive player 1.26x")
+                      "a casual player needs about 1.3x the minimum")
     if band != r.difficulty:
         B.engine_note(brief, "difficulty_pacing", f"no {r.difficulty} level of this shape and size turned up in the time "
                                              f"budget; the closest one rates {BAND_WORDS[band]} ({rt['min_drags']} drags, "
@@ -1016,5 +1016,5 @@ def generate_for_brief(brief: dict, cache: Path, log) -> tuple[Path, str]:
     kind = ", ".join(x for x in (", ".join(r.style), PIECE_WORDS[r.pieces]) if x)
     why = (f"a generated {BAND_WORDS[band]} {SHAPE_WORDS[r.shape]} level{' (' + kind + ')' if kind else ''}, "
            f"{r.width}x{r.height}, {rt['blocks']} blocks: {rt['min_drags']} drags minimum, {rt['extra_drags']} "
-           f"repositioning, naive player {rt['naive_ratio']:.2f}x")
+           f"repositioning, a casual player needs about {rt["naive_ratio"]:.1f}x the minimum")
     return path, why

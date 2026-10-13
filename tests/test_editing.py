@@ -371,8 +371,12 @@ def test_a_pinned_edit_never_adds_a_replay_nobody_saw(rec):
 def test_the_pinned_intro_note_gives_the_cut():
     from cbj.ad import _pinned_card
     notes = []
-    card, intro, total = _pinned_card(60, 30, 900, lambda ctl, text, status="adjusted": notes.append(text))
-    assert (intro, card, total) == (0, 90, 930) and "1.0 s shorter" in notes[0] and "longer" in notes[1]
+    card, intro, hold, total = _pinned_card(60, 30, 0, 900, lambda ctl, text, status="adjusted": notes.append(text))
+    assert (intro, hold, card, total) == (0, 0, 90, 930) and "1.0 s shorter" in notes[0] and "longer" in notes[1]
+    # an ad of the case's length is never shortened under 30 s: the freed time fills the card instead
+    notes = []
+    card, intro, hold, total = _pinned_card(600, 0, 0, 930, lambda ctl, text, status="adjusted": notes.append(text))
+    assert total == 900 and card > 300 and any("not shortened under 30" in n for n in notes)
 
 
 def test_side_effects_must_be_proven(versions):

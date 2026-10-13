@@ -37,14 +37,19 @@ def test_page_and_meta(client):
 
 
 def test_upload_names_are_safe_and_kept_apart(client):
-    png = b"\x89PNG fake"
+    from PIL import Image
+    def tiny(colour):
+        buf = io.BytesIO()
+        Image.new("RGB", (2, 2), colour).save(buf, "PNG")
+        return buf.getvalue()
+    png = tiny("red")
     r = client.post("/api/upload", files=[("files", ("../../evil name!.png", io.BytesIO(png), "image/png"))])
     assert r.status_code == 200
     name = r.json()["uploaded"][0]
     assert "/" not in name and ".." not in name and name.endswith(".png")
     assert (studio.STUDIO / "uploads" / name).read_bytes() == png
     # the same name with other bytes does not overwrite the first file
-    r2 = client.post("/api/upload", files=[("files", ("evil name!.png", io.BytesIO(b"other"), "image/png"))])
+    r2 = client.post("/api/upload", files=[("files", ("evil name!.png", io.BytesIO(tiny("blue")), "image/png"))])
     assert r2.json()["uploaded"][0] != name
     bad = client.post("/api/upload", files=[("files", ("x.svg", io.BytesIO(b"<svg/>"), "image/svg+xml"))])
     assert bad.status_code == 400

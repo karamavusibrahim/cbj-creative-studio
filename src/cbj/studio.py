@@ -41,7 +41,11 @@ HUD_LEVEL = ("LevelCircle",)
 def hud_hide(visuals: dict) -> list[str]:
     if not visuals["hud_timer"] and not visuals["hud_level"]:
         return ["MainBar"]  # the whole bar
-    return [*(HUD_TIMER if not visuals["hud_timer"] else ()), *(HUD_LEVEL if not visuals["hud_level"] else ())]
+    if not visuals["hud_timer"]:
+        # the clock's panel goes too ("MainBar:image": the bar's own graphic, not its children), so
+        # the Level badge does not sit on an empty purple bar
+        return [*HUD_TIMER, "MainBar:image"]
+    return [*(HUD_LEVEL if not visuals["hud_level"] else ())]
 REPLAY_EST_S = 3.0  # room an ad keeps for a replay when it picks the recording's length
 
 
@@ -50,9 +54,28 @@ def sprite_names() -> set[str]:
     return {p.name for p in folder.glob("*.png")} if folder.is_dir() else set()
 
 
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp"}
+VIDEO_EXT = {".mp4", ".mov", ".webm", ".m4v"}
+
+
 def uploads() -> dict[str, Path]:
+    """Uploaded images, by name: the files an ad may place."""
     folder = STUDIO / "uploads"
-    return {p.name: p for p in sorted(folder.iterdir()) if p.is_file()} if folder.is_dir() else {}
+    return ({p.name: p for p in sorted(folder.iterdir()) if p.is_file() and p.suffix.lower() in IMAGE_EXT}
+            if folder.is_dir() else {})
+
+
+def videos() -> dict[str, Path]:
+    """Uploaded reference videos, by name (never placed in an ad; analysed for the planner)."""
+    folder = STUDIO / "uploads"
+    return ({p.name: p for p in sorted(folder.iterdir()) if p.is_file() and p.suffix.lower() in VIDEO_EXT}
+            if folder.is_dir() else {})
+
+
+def looks_like_video(data: bytes) -> bool:
+    """The container's magic: an MP4/MOV 'ftyp' box or a WebM/Matroska EBML header."""
+    head = data[:64]
+    return b"ftyp" in head or head.startswith(b"\x1a\x45\xdf\xa3")
 
 
 def _sha(data: bytes | str) -> str:
@@ -89,18 +112,79 @@ def resolve_level(brief: dict, log: Log) -> tuple[Path, str]:
     from .generate import generate_for_brief
     lv, gp = brief["level"], brief["gameplay"]
     if lv["source"] == "shipped" and lv["shipped"]:
-        return LEVELS / f"Level_{lv['shipped']:02d}.json", f"the game's own Level {lv['shipped']}"
+        path = LEVELS / f"Level_{lv['shipped']:02d}.json"
+        short = _too_short(brief, path)
+        if short and not _asked_level_number(brief):
+            # "an easy level" with a long ad: the game's own levels are tutorial-size, so one is
+            # generated to the ad's length instead (the case asks for 30-60 s)
+            log(f"the game's Level {lv['shipped']} {short}; generating a level sized to the ad instead...")
+            B.engine_note(brief, "level", f"the game's own Level {lv['shipped']} {short}, so a level of the same "
+                                          f"difficulty is generated to fill the {brief['pacing']['length_s']:g} s ad.")
+            lv["source"], lv["shipped"] = "generate", None
+            if lv["difficulty"] == "any":
+                lv["difficulty"] = "easy"
+            return generate_for_brief(brief, STUDIO / "levels", log)
+        if short:
+            B.engine_note(brief, "difficulty_pacing", f"the game's own Level {lv['shipped']} {short}; the ad is filled "
+                                                      f"with a longer replay, a held first frame and a held result.")
+        return path, f"the game's own Level {lv['shipped']}"
     described = (any(lv[k] is not None for k in ("width", "height", "blocks")) or lv["colours"]
                  or lv["shape"] != "any" or lv["difficulty"] != "any" or lv["pieces"] != "mixed" or lv["style"])
     if lv["source"] == "generate" or described:
+        _more_play_for_a_long_ad(brief)
         return generate_for_brief(brief, STUDIO / "levels", log)
     if gp["events"]:
         why = _cannot_play(brief, NARROW)
         if why:
             log(f"the showcase level cannot play this order ({why}); generating a level that can...")
             return generate_for_brief(brief, STUDIO / "levels", log)
+    short = _too_short(brief, NARROW)
+    if short:
+        log(f"the showcase level {short}; generating a hard narrow-centre level sized to the ad...")
+        B.engine_note(brief, "level", f"the showcase level {short}, so a hard narrow-centre level is generated to "
+                                      f"fill the {brief['pacing']['length_s']:g} s ad.", status=None)
+        lv["source"], lv["shape"], lv["difficulty"] = "generate", "narrow_center", "hard"
+        _more_play_for_a_long_ad(brief)
+        return generate_for_brief(brief, STUDIO / "levels", log)
+    if gp["events"]:
         return NARROW, "the hand-checked hard narrow-centre level (6x8, 7 blocks), which can play the requested order"
     return NARROW, "the hand-checked hard narrow-centre level (6x8, 7 blocks)"
+
+
+LONG_AD_S = 50.0
+
+
+def _more_play_for_a_long_ad(brief: dict) -> None:
+    """One level gives at most about 33 s of play (10 blocks, 13-14 drags); a 50-60 s ad with a
+    mistake-based ending shows two mistakes unless the prompt set the count, and says so."""
+    gp = brief["gameplay"]
+    if brief["pacing"]["length_s"] >= LONG_AD_S and gp["mistakes"] is None and gp["ending"] in ("near_fail", "time_out"):
+        gp["mistakes"] = 2
+        B.engine_note(brief, "gameplay", f"a {brief['pacing']['length_s']:g} s ad needs more play than one level's "
+                                         f"moves give, so two mistakes are shown (say 'one mistake' to keep one).",
+                      status=None)
+
+
+def _asked_level_number(brief: dict) -> bool:
+    """Whether the prompt named one of the game's own levels ("level 4", "the game's level 2")."""
+    text = (brief.get("planner") or {}).get("prompt") or ""
+    return re.search(r"\b(level|lvl)\s*0?\d\b", text.lower()) is not None
+
+
+def _too_short(brief: dict, level_path: Path) -> str | None:
+    """Why this level cannot fill the ad's length (None if it can): its minimum drags are well
+    under what the length needs (generate._target_drags), so even long pauses leave an ad that
+    is mostly end card."""
+    from .generate import _target_drags
+    from .level import load_level
+    from .solver import solve_fast
+    drags = solve_fast(load_level(level_path)).min_drags
+    target = _target_drags(brief)
+    if brief["gameplay"]["ending"] == "cliffhanger":
+        target -= 2
+    if drags >= target - 3:
+        return None
+    return f"plays about {drags} drags (roughly {drags * 1.6 + 3:.0f} s), far too little for a {brief['pacing']['length_s']:g} s ad"
 
 
 def _cannot_play(brief: dict, level_path: Path) -> str | None:
@@ -505,7 +589,7 @@ def edit_level(brief: dict, prev: dict, log: Log) -> tuple[Path, str, dict | Non
         B.engine_note(brief, "difficulty_pacing", f"{what} rates {rel}, but not {target} ({meta['stats']['band']}); a "
                                                   f"new {target} board would change everything", status="adjusted")
     why = (f"v{prev['n']}'s level, made {rel}: {what}; {before['min_drags']} -> {rt['min_drags']} drags, "
-           f"{before['extra_drags']} -> {rt['extra_drags']} repositioning, naive player "
+           f"{before['extra_drags']} -> {rt['extra_drags']} repositioning, a casual player "
            f"{before['naive_mean'] / max(1, before['min_drags']):.2f}x -> {rt['naive_ratio']:.2f}x")
     edit = {"from_version": prev["n"], "direction": rel, "what": what, "blocks_moved": ed["blocks_moved"],
             "gates_moved": ed["gates_moved"], "blocks_recoloured": ed["blocks_recoloured"],
@@ -572,15 +656,70 @@ def same_frames(a: Path, b: Path) -> bool:
 
 
 def pin_of(prev: dict, brief: dict | None = None) -> dict:
-    """The structure of a version's ad that an edit keeping its frames keeps: length, intro, replay.
-    add_replay: the edit turns the replay on (only then may a replay the user never saw appear)."""
+    """The structure of a version's ad that an edit keeping its frames keeps: length, intro, replay,
+    and how long the hook stayed on screen. add_replay: the edit turns the replay on (only then may
+    a replay the user never saw appear)."""
     from .ad import seg_frames
     ad = json.loads((STUDIO / prev["ad_dir"] / "ad.json").read_text())
     seg = ad["segments"]
-    return {"n": prev["n"], "length_s": ad["length_s"],
+    hook_end = (ad.get("layers", {}).get("hook") or {}).get("end") or {}
+    hold = 0
+    if "result_hold" in ad["order"]:
+        hold = seg_frames(seg["result_hold"])
+    elif "question" in ad["order"]:
+        hold = max(0, seg_frames(seg["question"]) - 2 * 30)  # the cliffhanger's question is 2 s plus any fill
+    return {"n": prev["n"], "length_s": ad["length_s"], "hold": hold,
             "intro": seg_frames(seg["intro"]) if "intro" in ad["order"] else 0,
             "replay_from": seg["replay"]["from"] if "replay" in ad["order"] else None,
+            "hook_at": hook_end.get("at") if hook_end.get("seg") == "play" and "event" not in hook_end else None,
             "add_replay": bool(brief and brief["sequence"]["replay"] and not prev["brief"]["sequence"]["replay"])}
+
+
+def _level_source(prev: dict) -> Path:
+    """The file a version's level was made from, when it still exists unchanged (the game's own
+    levels keep their name, and with it the HUD's number); else the version's copy."""
+    src = prev["level"].get("source")
+    copy = STUDIO / prev["level"]["file"]
+    if not src:
+        return copy
+    p = Path(src) if Path(src).is_absolute() else REPO / src
+    try:
+        if p.is_file() and p.resolve() != copy.resolve() and _sha(p.read_bytes()) == prev["level"]["sha"]:
+            return p
+    except OSError:
+        pass
+    return copy
+
+
+def _same_play(brief: dict, level_path: Path, prev: dict, log: Log) -> Path | None:
+    """The parent's recording when this brief plans the very same moves on the same level, with
+    the same look and pace (an edit whose only request could not change the play): nothing to
+    record again, and nothing to compare frame by frame."""
+    prev_dir = STUDIO / prev["recording"]["dir"]
+    if not _usable(prev_dir) or prev["level"]["sha"] != _sha(level_path.read_bytes()):
+        return None
+    spec = _recording_spec(brief, level_path)
+    try:
+        pspec = json.loads((prev_dir / "spec.json").read_text())
+        play = json.loads((prev_dir / "play.json").read_text())
+    except (OSError, ValueError):
+        return None
+    plan_keys = ("events", "finish")
+    if any(spec.get(k) != pspec.get(k) for k in spec if k not in plan_keys) or any(k in pspec and k not in spec for k in plan_keys):
+        return None
+    if all(spec.get(k) == pspec.get(k) for k in plan_keys):
+        return None  # the same spec: ensure_recording finds it by its key
+    from .level import load_level
+    try:
+        script = _plan(brief, load_level(level_path), spec["seed"])
+    except ValueError:
+        return None
+    moves = lambda beats: [(b.get("kind"), b.get("block"), tuple(map(tuple, b.get("path") or [])), bool(b.get("exits")))
+                           for b in beats]
+    if moves(script.to_dict(load_level(level_path))["beats"]) != moves(play.get("beats", [])):
+        return None
+    log(f"the same moves as v{prev['n']} on the same level: its recording is reused (nothing re-recorded)")
+    return prev_dir
 
 
 # ---------- versions ----------
@@ -751,14 +890,23 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
         row["engine"] = []
     if prev is not None:
         _keep_conflicts(prev["brief"], brief, prompt)
+        if not B.changed_groups(prev["brief"], brief) and not (brief.get("planner") or {}).get("direct"):
+            shutil.rmtree(vdir, ignore_errors=True)
+            reasons = [r["why"] for r in brief["controls"] if r.get("why")] + [a for a in brief.get("assumptions", [])
+                                                                             if "no " in a.lower() or "not " in a.lower()]
+            raise ValueError(f"nothing in this request changes v{prev['n']}, so no new version was made"
+                             + (f" ({' '.join(reasons[:2])})" if reasons else "") + ". Say what to change: the hook "
+                             f"or a caption, a picture (the logo, the icon beside the hook, the end card), the colours, "
+                             f"the level, the ending, the mistakes, the length, the sound, or the language.")
     log.begin("level", "choosing the level...")
     level_edit = None
     lv = brief["level"]
     if prev is not None and lv.get("edit") and lv["edit"].get("of") is None:
         lv["edit"] = {**lv["edit"], "of": prev["n"]}  # relative to the version it is made from
     if prev is not None and prev["brief"]["level"] == brief["level"]:
-        # An edit that does not ask about the level keeps the previous version's level exactly.
-        level_path = STUDIO / prev["level"]["file"]
+        # An edit that does not ask about the level keeps the previous version's level exactly:
+        # the file it was made from (its name gives the game's own levels their HUD number).
+        level_path = _level_source(prev)
         level_why = prev["level"]["why"]
         stages.append({"stage": "level", "seconds": 0.0})
         log(f"the edit does not touch the level: v{prev['n']}'s level is kept")
@@ -766,8 +914,9 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
         level_path, level_why, level_edit = stage("level", edit_level, brief, prev, log)
     else:
         level_path, level_why = stage("level", resolve_level, brief, log)
-    if prev is not None and brief["level"]["label"] is None and prev["level"]["sha"] != _sha(level_path.read_bytes()):
-        # The HUD's "Level N" is part of the look: a harder board keeps the number the user saw.
+    if prev is not None and brief["level"]["label"] is None:
+        # The HUD's "Level N" is part of the look: an edit keeps the number the user saw (a harder
+        # board too), unless the prompt sets one.
         job = STUDIO / prev["recording"]["dir"] / "job.json"
         if job.is_file() and json.loads(job.read_text()).get("level_label"):
             brief["level"]["label"] = json.loads(job.read_text())["level_label"]
@@ -778,7 +927,12 @@ def make(prompt: str, brief: dict, cid: str | None = None, log: Log | None = Non
     if prev is not None and (level_edit is not None or (prev["level"]["sha"] == _sha(level_path.read_bytes())
                                                          and _replans(prev["brief"], brief))):
         stage("closest play", closest_seed, brief, level_path, STUDIO / prev["recording"]["dir"], prev["n"], log)
-    rec_dir, reused = stage("recording", ensure_recording, brief, level_path, log)
+    same = _same_play(brief, level_path, prev, log) if prev is not None else None
+    if same is not None:
+        rec_dir, reused = same, True
+        stages.append({"stage": "recording", "seconds": 0.0})
+    else:
+        rec_dir, reused = stage("recording", ensure_recording, brief, level_path, log)
     checks = gameplay_and_level_checks(brief, rec_dir, level_path, log)
     log.begin("compose", "the ad...")
     ad_dir = vdir / "ad"

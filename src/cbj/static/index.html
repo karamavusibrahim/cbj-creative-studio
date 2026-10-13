@@ -150,8 +150,9 @@
     <div class="card">
       <div class="mode" id="mode"><b>New creative</b>: describe the ad you want.</div>
       <textarea id="prompt" placeholder="e.g. Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost fails before solving it."></textarea>
-      <div class="drop" id="drop">Attach images (logo, mascot, hand, end-card art): drop here or click. Say in the prompt how to use them.</div>
-      <input type="file" id="file" accept="image/png,image/jpeg,image/webp" multiple class="hidden">
+      <div class="drop" id="drop">Attach images (a logo, a mascot, end-card art) or a reference image or video ("inspired by this", "a Color Block Jam version of this concept"): drop here or click. Say in the prompt how to use them.</div>
+      <input type="file" id="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm" multiple class="hidden">
+      <div class="muted hidden" id="serverBusy" style="margin-top:8px">Another creative is being made on this machine right now; a new request starts when it is done.</div>
       <div class="chips" id="files"></div>
       <div class="chips" id="earlier"></div>
       <div class="row" style="margin-top: 12px;">
@@ -210,7 +211,7 @@
 const STAGES = ["plan", "level", "recording", "compose", "proof", "done"];
 const NEW_EXAMPLES = [
   "Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost fails before solving it.",
-  "An easy level with a satisfying clean solve, fast-paced, 20 seconds, no replay.",
+  "An easy level with a satisfying clean solve, fast-paced, 30 seconds, no replay.",
   "The player makes two wrong moves, gets stuck, then solves it with one second left.",
   "Cliffhanger for TikTok: stop with two blocks left and ask if they can see the move.",
   "Candy theme: pink, mint and lemon blocks on a soft pink background, hook 'Sweet puzzle!'",
@@ -263,6 +264,7 @@ function setMode() {
 
 function busy(on) {
   S.busy = on;
+  if (!on) S.job = null;
   ["btnPlanMake", "btnPlan", "btnLevel", "btnMake"].forEach(id => $(id).disabled = on);
 }
 
@@ -274,18 +276,55 @@ function renderStages(current, failed) {
 
 async function poll(jid) {
   S.job = jid; S.lines = 0; $("log").textContent = ""; $("err").classList.add("hidden");
-  while (true) {
-    const j = await api(`/api/jobs/${jid}?since=${S.lines}`);
-    for (const l of j.lines) $("log").textContent += `${l.t.toFixed(1).padStart(6)} s  [${l.stage}] ${l.text}\n`;
-    S.lines = j.n_lines;
-    $("log").scrollTop = $("log").scrollHeight;
-    renderStages(j.status === "done" && j.kind === "make" ? "done" : j.stage);
-    if (j.status === "done") return j.result;
-    if (j.status === "failed") {
-      $("err").textContent = j.error; $("err").classList.remove("hidden");
-      throw new Error(j.error);
+  try { localStorage.setItem("cbjJob", jid); } catch (e) {}
+  try {
+    while (true) {
+      const j = await api(`/api/jobs/${jid}?since=${S.lines}`);
+      for (const l of j.lines) $("log").textContent += `${l.t.toFixed(1).padStart(6)} s  [${l.stage}] ${l.text}\n`;
+      S.lines = j.n_lines;
+      $("log").scrollTop = $("log").scrollHeight;
+      renderStages(j.status === "done" && j.kind === "make" ? "done" : j.stage);
+      if (j.status === "done") return j.result;
+      if (j.status === "failed") {
+        $("err").textContent = j.error; $("err").classList.remove("hidden");
+        throw new Error(j.error);
+      }
+      await new Promise(r => setTimeout(r, 700));
     }
-    await new Promise(r => setTimeout(r, 700));
+  } finally { try { localStorage.removeItem("cbjJob"); } catch (e) {} }
+}
+
+// After a reload, a job that was running keeps going on the server: pick it up again.
+async function resumeJob() {
+  let jid = null;
+  try { jid = localStorage.getItem("cbjJob"); } catch (e) {}
+  if (!jid) return;
+  let jobs = [];
+  try { jobs = await api("/api/jobs"); } catch (e) { return; }
+  const j = jobs.find(x => x.id === jid);
+  if (!j) { try { localStorage.removeItem("cbjJob"); } catch (e) {} return; }
+  busy(true);
+  $("mode").innerHTML = `<b>Picking up the ${esc(j.kind)} that was running before the page was reloaded…</b>`;
+  try {
+    const r = await poll(jid);
+    if (j.kind === "make" && r && r.id) await loadCreative(r.id, r.n);
+    else if (j.kind === "plan" && r) { S.brief = r; renderBrief(r, "Planned (not made yet)"); $("btnMake").classList.remove("hidden"); }
+  } catch (e) { showError(e); }
+  finally { busy(false); setMode(); }
+}
+
+// The server makes one creative at a time (one game player): say so when another page's job runs.
+async function watchServer() {
+  while (true) {
+    if (!S.busy) {
+      try {
+        const m = await api("/api/meta");
+        const other = m.busy && !S.job;
+        $("serverBusy").classList.toggle("hidden", !other);
+        ["btnPlanMake", "btnPlan", "btnLevel", "btnMake"].forEach(id => $(id).disabled = other);
+      } catch (e) {}
+    }
+    await new Promise(r => setTimeout(r, 2500));
   }
 }
 
@@ -299,7 +338,9 @@ function renderBrief(b, title) {
       <td>${esc(c.plan)}${changedBy(c).length ? `<div class="muted" style="margin-top:4px">Fields set by the prompt: ${esc(changedBy(c).join(", "))}</div>` : ""}${c.why ? `<div class="why ${c.status === "not_supported" ? "bad" : ""}">${esc(c.why)}</div>` : ""}${(c.engine || []).map(n => `<div class="why">While making it: ${esc(n)}</div>`).join("")}</td>
       <td><span class="st ${c.status}">${c.status.replace("_", " ")}</span></td></tr>`).join("");
   const p = b.planner || {};
-  const restored = (p.restored || []).length ? `<p class="muted">${p.edit ? "Kept from the previous version (the edit did not ask about it)" : "Left at the defaults (the prompt did not ask about it, so the planner's suggestions there were not used)"}: ${esc(p.restored.map(r => r.split(" (")[0]).join(", "))}</p>` : "";
+  const gname = r => { const g = r.split(":")[0]; return (S.meta.group_names || {})[g] || g.replace(/^assets\./, "the picture: ").replace(/_/g, " "); };
+  const restored = (p.restored || []).length ? `<p class="muted">${p.edit ? "Kept as it was (the edit did not ask about it)" : "Left at the tool's default (the prompt did not ask about it)"}: ${esc([...new Set(p.restored.map(gname))].join(", "))}</p>` : "";
+  const refs = (p.references || []).length ? `<ul class="assume">${p.references.map(r => `<li>Read from the attached ${esc(r.kind || "file")} ${esc(r.file)}: ${r.error ? "could not be read (" + esc(r.error) + ")" : esc(refSummary(r))}</li>`).join("")}</ul>` : "";
   const gp = b.gameplay, lv = b.level;
   const evText = e => `${e.block.all ? "all " : ""}${e.block.which !== "any" ? e.block.which + " " : ""}${e.block.colour || "block"} ${e.action}${e.when !== "next" ? " " + e.when : ""}`;
   const facts = [`ending: <b>${esc(b.gameplay.ending.replace("_", "-"))}</b>${gp.clock_left_s ? ` (00:0${gp.clock_left_s} left)` : ""}`,
@@ -317,10 +358,18 @@ function renderBrief(b, title) {
     <div class="muted" style="margin-bottom:10px">${facts.join(" · ")}</div>
     <table><thead><tr><th>Prompt control</th><th>Asked</th><th>What the tool does</th><th>Status</th></tr></thead>
     <tbody>${rows}</tbody></table>
+    ${refs}
     ${(b.assumptions || []).filter(a => a && a.length > 2).length ? `<ul class="assume">${b.assumptions.filter(a => a && a.length > 2).map(a => `<li>Assumed: ${esc(a)}</li>`).join("")}</ul>` : ""}
     ${restored}
     <div class="muted" style="margin-top:8px">${p.model ? `Planner: ${esc(p.model)}, ${p.seconds} s` : ""}</div>
     <details><summary>Brief as data (what the engine executes)</summary><pre>${esc(JSON.stringify(b, null, 1))}</pre></details>`;
+}
+
+function refSummary(r) {
+  const n = r.notes || {};
+  if (r.kind === "video") return `${n.concept_in_one_line || n.what_it_shows || "a video"}; ending ${n.ending || "?"}, pacing ${n.pacing || "?"}${n.hook ? `, hook “${n.hook}”` : ""}`;
+  const pal = (r.palette || []).slice(0, 4).map(p => p.name).join(", ");
+  return `${n.subject || "an image"}; colours ${pal}; mood ${n.mood || "?"}`;
 }
 
 function renderGameplay(d, title) {
@@ -577,6 +626,7 @@ $("prompt").addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaK
   S.meta = await api("/api/meta");
   $("meta").textContent = `planner: ${S.meta.models[0].split("/").pop()}`;
   renderStages(""); setMode(); refreshHistory(); renderEarlier();
+  resumeJob(); watchServer();
 })();
 </script>
 </body>

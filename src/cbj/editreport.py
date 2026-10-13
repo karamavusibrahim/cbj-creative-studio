@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 ITEMS = (("gameplay", "Gameplay"), ("timing", "Timing"), ("camera", "Camera"), ("composition", "Composition"),
@@ -346,6 +347,20 @@ def _presence_reason(c: _Ctx, lid: str) -> str | None:
     return None
 
 
+# Plain names for the ad's layers, for what the user reads.
+LAYER_NAMES = {"hook": "the hook", "cap_mistake": "the caption on the mistake", "cap_fix": "the caption on the fix",
+               "cap_hurry": "the 'hurry' caption", "cap_cascade": "the caption on the fast finish",
+               "cap_result": "the caption on the result screen", "end_title": "the end card's title",
+               "end_fact": "the end card's line", "end_cta": "the PLAY NOW button", "end_art": "the picture on the end card",
+               "logo": "the logo", "logo_end": "the logo on the end card", "cursor": "the tap cursor",
+               "replay_tag": "the REPLAY badge", "urgency": "the red urgency glow", "vignette": "the vignette",
+               "end_disclaimer": "the end card's small print", "hook_icon": "the icon beside the hook"}
+
+
+def layer_name(lid: str) -> str:
+    return LAYER_NAMES.get(lid, lid.replace("_", " "))
+
+
 def _composition(c: _Ctx, copy_diffs: list) -> tuple[str, list]:
     a, b, d = c.a, c.b, []
     la, lb = a["compose"].get("layers", {}), b["compose"].get("layers", {})
@@ -359,9 +374,9 @@ def _composition(c: _Ctx, copy_diffs: list) -> tuple[str, list]:
             continue
         if lid not in la or lid not in lb:
             why = _presence_reason(c, lid)
-            _check(d, f"{'added' if lid not in la else 'removed'}: {lid}", why)
+            _check(d, f"{'added' if lid not in la else 'removed'}: {layer_name(lid)}", why)
             continue
-        txt = f"{lid} placed or sized differently"
+        txt = f"{layer_name(lid)} placed or sized differently"
         if lid in c.copy_layers or lid in c.asset_layers:
             why = "asked"
         elif lid in explained_text:
@@ -407,12 +422,31 @@ VISUAL_GROUP = {"theme": "visuals.colours", "blocks": "visuals.colours", "backgr
                 "caption_fill": "visuals.captions", "caption_outline": "visuals.captions"}
 
 
+def _visual_value(k: str, v) -> str:
+    """A visual field's value in plain words."""
+    if k == "blocks":
+        return ", ".join(f"{e.get('slot', '?').lower()} shown as {e.get('name') or e.get('hex')}" for e in (v or [])) or "the game's own"
+    if k == "background":
+        return " to ".join(v) if v else "the game's own"
+    if k in ("hud_timer", "hud_level"):
+        return "shown" if v else "hidden"
+    if v in (None, "", []):
+        return "the game's own"
+    return str(v)
+
+
+VISUAL_NAMES = {"theme": "the look", "blocks": "the block colours", "background": "the background", "board": "the board colour",
+                "hud_timer": "the clock", "hud_level": "the level badge", "caption_fill": "the caption colour",
+                "caption_outline": "the caption outline"}
+
+
 def _visual(c: _Ctx) -> tuple[str, list]:
     a, b, d = c.a, c.b, []
     for k, g in VISUAL_GROUP.items():
         x, y = c.ba["visuals"].get(k), c.bb["visuals"].get(k)
         if x != y:
-            _check(d, f"{k.replace('_', ' ')}: {x} -> {y}", "asked" if g in c.groups else None)
+            _check(d, f"{VISUAL_NAMES.get(k, k)}: {_visual_value(k, x)} -> {_visual_value(k, y)}",
+                   "asked" if g in c.groups else None)
     if a["job"].get("level_label") != b["job"].get("level_label"):
         _check(d, f"the HUD level number: {a['job'].get('level_label')} -> {b['job'].get('level_label')}",
                "asked" if "level.label" in c.groups else None)
@@ -420,19 +454,36 @@ def _visual(c: _Ctx) -> tuple[str, list]:
     if not same_rec and not c.new_play and len(a["frames"]) == len(b["frames"]):
         ident = sum(x.get("hash") == y.get("hash") for x, y in zip(a["frames"], b["frames"]))
         if ident < len(a["frames"]):
-            _check(d, f"recorded frames: {ident} of {len(a['frames'])} identical",
-                   "asked" if c.looks else ("the same moves with other pauses" if c.pace else None))
+            how = "asked" if c.looks else ("the same moves with other pauses" if c.pace else None)
+            if how is None and _same_game_state(a, b):
+                # the renderer is not bit-exact between runs (about 1 % of frames differ by a few
+                # pixels); with the game state equal on every frame, that is noise, not a change
+                how = "the game state is identical on every frame; the rest is rendering noise"
+            _check(d, f"recorded frames: {ident} of {len(a['frames'])} identical", how)
         return "filmed again: every recorded frame identical", d
     return ("the same recording, the same look" if same_rec else "the same look"), d
+
+
+def _same_game_state(a: dict, b: dict) -> bool:
+    """Whether two recordings show the same game on every frame (blocks, finger, clock), as
+    cbj compare checks it."""
+    try:
+        from .render import compare_recordings
+        return bool(compare_recordings(a["rec"], b["rec"]).get("state_equal"))
+    except Exception:
+        return False
 
 
 def _assets(c: _Ctx) -> tuple[str, list]:
     sa, sb, d = asset_slots(c.a["ad"]), asset_slots(c.b["ad"]), []
     names = dict(ASSET_SLOTS)
+    plain = lambda r: re.sub(r" \([0-9a-f]{16}\)$", "", r) if r else "none"
     for k in sa:
         if sa[k] == sb[k]:
             continue
-        txt = f"{names[k]}: {sa[k] or 'none'} -> {sb[k] or 'none'}"
+        txt = f"{names[k]}: {plain(sa[k])} -> {plain(sb[k])}"
+        if plain(sa[k]) == plain(sb[k]):
+            txt += " (the same name, new file contents)"
         stopwatch = (sa[k] or "").startswith("stopwatch.png")
         defaults = all(x is None or x.startswith(("stopwatch.png", "CoinPile.png")) for x in (sa[k], sb[k]))
         if k in c.slots:
@@ -540,7 +591,12 @@ def report(prev: dict, cur: dict, studio: Path, groups=None, pixels: dict | None
         out["verdict"] = f"Only what was asked changed ({', '.join(changed)}); everything else is identical."
     else:
         side = [r["title"] for r in rows if r["status"] == "side_effect"]
-        out["verdict"] = (f"Changed as asked: {', '.join(r['title'] for r in rows if r['status'] == 'asked') or 'none'}; "
+        asked_rows = [r["title"] for r in rows if r["status"] == "asked"]
+        if not asked_rows:
+            # what was asked is not one of the rows (the ad's length, a new take, the level's
+            # difficulty when the edit only re-rated it): name it from the asked groups
+            asked_rows = [n for n in group_names(groups) if n not in ("the pictures",)] or ["none"]
+        out["verdict"] = (f"Changed as asked: {', '.join(asked_rows)}; "
                           f"also changed because of it: {', '.join(side)}. Everything else is identical.")
     if leak:
         out["verdict"] = "Some changed pixels are outside the edited layers. " + out["verdict"]
