@@ -737,8 +737,11 @@ def _evidence(group: str, prompt: str, new: dict) -> str | None:
     if group == "pacing.curve":
         return None if _has_word(text, CURVE_WORDS) else "the prompt asks for no change of pace over the video"
     if group.startswith("concept."):
+        from .reference import is_reference_prompt
         if QUOTED.search(prompt) or _has_word(text, COPY_WORDS + ("captions", "texts", "words", "says", "saying")):
             return None
+        if is_reference_prompt(prompt):
+            return None  # a reference's idea, hook and tone are an ask for copy in that spirit
         return "the prompt asks for no wording"
     return None
 

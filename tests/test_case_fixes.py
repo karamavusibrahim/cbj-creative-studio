@@ -256,3 +256,8 @@ def test_a_block_the_colour_of_the_background_keeps_the_game_s_colour():
                                               {"slot": "Green", "hex": "#6BD9A6", "name": "mint"}]}))
     assert [e["slot"] for e in b["visuals"]["blocks"]] == ["Green"]
     assert "vanish" in B.control(b, "visuals")["why"]
+
+
+def test_a_reference_prompt_counts_as_asking_for_copy_in_its_spirit():
+    assert B._evidence("concept.hook", "Create a Color Block Jam version of this concept.", {}) is None
+    assert B._evidence("concept.hook", "A clean win on a ring board.", {}) is not None
