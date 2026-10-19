@@ -1,0 +1,59 @@
+{
+ "rating": {
+  "level_name": "generated",
+  "blocks": 8,
+  "min_drags": 8,
+  "extra_drags": 0,
+  "exits_at_start": 7,
+  "first_moves": 135,
+  "naive_mean": 8.0,
+  "naive_p90": 8,
+  "naive_capped": 0,
+  "runs": 200,
+  "naive_ratio": 1.0
+ },
+ "stats": {
+  "tried": 3,
+  "valid": 3,
+  "solvable": 3,
+  "rated": 3,
+  "in_band": 3,
+  "improved": 0,
+  "seconds": 3.4,
+  "band": "easy",
+  "spec": {
+   "shape": "open",
+   "width": 7,
+   "height": 9,
+   "blocks": 8,
+   "colours": [
+    "Red",
+    "Blue"
+   ],
+   "difficulty": "easy",
+   "target_drags": 8,
+   "seed": 0,
+   "budget_s": 25.0,
+   "pieces": "mixed",
+   "style": [],
+   "events": [],
+   "finish": "auto",
+   "mistakes": 1,
+   "moves_asked": false,
+   "mistakes_asked": false,
+   "singles": [],
+   "time_out": false
+  },
+  "looks": {
+   "contrast": 1.0,
+   "sides": 1.0,
+   "touching": 1,
+   "merged": 0,
+   "fill": 0.32,
+   "fill_score": 0.56,
+   "score": 0.85
+  },
+  "colours_missing": 0,
+  "mistake_options": 6
+ }
+}

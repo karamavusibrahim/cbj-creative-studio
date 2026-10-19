@@ -76,7 +76,10 @@ def test_same_colour_for_every_block_is_taken_back_with_a_reason():
     b = B.check(b)
     row = B.control(b, "visuals")
     assert row["status"] == "adjusted" and "easy to tell apart" in row["why"]
-    assert len(b["visuals"]["blocks"]) == 1  # one slot keeps teal, the rest keep the game's colours
+    # every slot is kept, each deepened toward its own game colour until the gates can be told apart
+    shown = [e["hex"] for e in b["visuals"]["blocks"]]
+    assert len(shown) == len(B.COLOURS)
+    assert all(B.colour_distance(a, c) >= B.MIN_COLOUR_DISTANCE for i, a in enumerate(shown) for c in shown[i + 1:])
 
 
 def test_display_names_reach_the_captions():
@@ -105,9 +108,11 @@ def test_time_out_moves_to_social_and_a_medium_level():
     assert B.control(b, "gameplay")["status"] == "adjusted"
 
 
-def test_unsupported_format_says_so():
+def test_other_formats_are_made_from_the_master():
     b = B.check(raw_brief(format="1:1"))
-    assert b["format"] == "9:16" and B.control(b, "visuals")["status"] == "not_supported"
+    assert b["format"] == "1:1" and B.control(b, "visuals")["status"] != "not_supported"
+    b = B.check(raw_brief(format="3:2"))
+    assert b["format"] == "9:16" and "formats are" in B.control(b, "visuals")["why"]
 
 
 def test_clock_is_set_by_a_near_fail_not_the_prompt():

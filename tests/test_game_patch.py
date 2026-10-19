@@ -44,7 +44,9 @@ def test_patch_refuses_a_file_it_was_not_written_for(tmp_path):
 def test_the_patch_is_small_marked_and_matches_game_patch_file():
     diff = subprocess.run(["diff", "-ru", "original", "patched"], cwd=GAME_PATCH,
                           capture_output=True, text=True).stdout
-    assert diff == (GAME_PATCH / "game.patch").read_text()
+    # the file headers carry mtimes in the local timezone: compare the patch itself, not the clock
+    strip = lambda t: "\n".join(ln.split("\t")[0] if ln.startswith(("---", "+++")) else ln for ln in t.splitlines())
+    assert strip(diff) == strip((GAME_PATCH / "game.patch").read_text())
     added = [ln for ln in diff.splitlines() if ln.startswith("+") and not ln.startswith("+++")]
     removed = [ln for ln in diff.splitlines() if ln.startswith("-") and not ln.startswith("---")]
     assert len(added) <= 40 and len(removed) <= 5

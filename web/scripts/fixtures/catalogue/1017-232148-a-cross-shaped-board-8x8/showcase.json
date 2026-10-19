@@ -1,0 +1,1308 @@
+{
+ "id": "1017-232148-a-cross-shaped-board-8x8",
+ "title": "Cross board, then a palette from a picture",
+ "kind": "create",
+ "tagline": "A text prompt builds a cross-shaped board in orange and blue; a later edit takes the background and caption colours from an attached picture and keeps everything else.",
+ "versions": [
+  {
+   "n": 1,
+   "id": "1017-232148-a-cross-shaped-board-8x8",
+   "prompt": "A cross-shaped board 8x8 with 8 blocks in orange and blue only, a mint background fading to white and dark blue captions. The clock runs out with one block still on the board. 35 seconds.",
+   "edit": false,
+   "from": null,
+   "brief": {
+    "summary": "A 35-second ad on a new cross-shaped 8x8 board with 8 orange and blue blocks, a mint-to-white background and dark blue captions, where the clock runs out with one block still on the board.",
+    "controls": [
+     {
+      "control": "level",
+      "asked": "A cross-shaped board 8x8 with 8 blocks in orange and blue only",
+      "plan": "Build a new plus-shaped 8 by 8 board with its corners cut away, holding 8 blocks that are all orange or blue.",
+      "status": "adjusted",
+      "why": null,
+      "engine": [
+       "8 blocks in 2 colours would repeat colours a lot; blocks share the requested colours."
+      ]
+     },
+     {
+      "control": "gameplay",
+      "asked": "The clock runs out with one block still on the board.",
+      "plan": "The player clears the board but the clock hits zero one move short, with one block left.",
+      "status": "adjusted",
+      "why": "a staged fail is only used for social channels (Color Block Jam's network ads avoid fails); the channel is set to social.",
+      "engine": []
+     },
+     {
+      "control": "difficulty_pacing",
+      "asked": "35 seconds.",
+      "plan": "A 35-second ad at a normal, even pace.",
+      "status": "applied",
+      "why": null,
+      "engine": [
+       "no difficulty was asked: the level is medium (the middle of the game's range).",
+       "the play is short for 35 s, so it is filled with a longer replay (8.2 s), the result held 0.6 s longer."
+      ]
+     },
+     {
+      "control": "visuals",
+      "asked": "a mint background fading to white and dark blue captions",
+      "plan": "The area behind the board fades from mint at the top to white at the bottom; every caption is dark blue.",
+      "status": "applied",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "concept",
+      "asked": null,
+      "plan": "The tool's standard captions for an out-of-time ending.",
+      "status": "default",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "sequence",
+      "asked": null,
+      "plan": "Hook over the gameplay, slow-motion replay, the game's Out of Time screen, then the end card.",
+      "status": "default",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "assets",
+      "asked": null,
+      "plan": "No uploaded pictures; the game's own pictures and sound effects stay.",
+      "status": "default",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "unchanged",
+      "asked": null,
+      "plan": "New ad, nothing to keep.",
+      "status": "default",
+      "why": null,
+      "engine": []
+     }
+    ],
+    "assumptions": [
+     "'Mint fading to white' read as mint at the top and white at the bottom; it could also go the other way.",
+     "'Dark blue captions' read as the caption text colour; the purple outline stays."
+    ],
+    "channel": "social",
+    "language": "en",
+    "format": "9:16",
+    "level": {
+     "source": "generate",
+     "shipped": null,
+     "shape": "cross",
+     "width": 8,
+     "height": 8,
+     "blocks": 8,
+     "colours": [
+      "Orange",
+      "Blue"
+     ],
+     "difficulty": "any",
+     "label": null,
+     "moves": null,
+     "changes": [],
+     "pieces": "mixed",
+     "style": [],
+     "edit": null
+    },
+    "gameplay": {
+     "ending": "time_out",
+     "mistakes": null,
+     "mistake_kinds": [],
+     "hesitations": null,
+     "timer_s": null,
+     "seed": null,
+     "events": [],
+     "finish": "auto",
+     "clock_left_s": null,
+     "blocks_left": null
+    },
+    "pacing": {
+     "length_s": 35.0,
+     "tempo": "normal",
+     "curve": "even"
+    },
+    "visuals": {
+     "theme": "custom",
+     "blocks": [],
+     "background": [
+      "#BDF5DC",
+      "#FFFFFF"
+     ],
+     "background_image": null,
+     "board": null,
+     "caption_fill": "#1A2E6E",
+     "caption_outline": null,
+     "camera_zoom": null,
+     "punch_ins": [],
+     "caption_colours": [],
+     "cursor": "ring",
+     "hud_timer": true,
+     "hud_level": true,
+     "names": {},
+     "names_src": {}
+    },
+    "concept": {
+     "angle": "So close: the clock beats the player by one block.",
+     "hook": null,
+     "mistake": null,
+     "fix": null,
+     "hurry": null,
+     "cascade": null,
+     "result": null,
+     "end_title": null,
+     "end_fact": null,
+     "cta": null
+    },
+    "sequence": {
+     "style": "standard",
+     "replay": true,
+     "result_screen": true,
+     "end_card": true,
+     "intro_s": null,
+     "hold_s": null,
+     "caption_times": []
+    },
+    "assets": [],
+    "audio": {
+     "sfx": true,
+     "music": null
+    },
+    "keep": [],
+    "changed": [
+     "level.source",
+     "level.shape",
+     "level.size",
+     "level.blocks",
+     "level.colours",
+     "gameplay.ending",
+     "pacing.length",
+     "channel",
+     "visuals.colours",
+     "visuals.background",
+     "visuals.captions"
+    ],
+    "planner": {
+     "model": "claude-cli/opus",
+     "seconds": 18.2,
+     "prompt": "A cross-shaped board 8x8 with 8 blocks in orange and blue only, a mint background fading to white and dark blue captions. The clock runs out with one block still on the board. 35 seconds.",
+     "edit": false,
+     "restored": [],
+     "references": [],
+     "route": {
+      "intent": "new",
+      "edit_type": "new_creative",
+      "analysis_level": 0,
+      "requires_video_analysis": false,
+      "requires_gameplay_regeneration": false,
+      "requires_compositing": true,
+      "targets": [],
+      "preserve": [],
+      "allowed_groups": [],
+      "direct_op": null,
+      "feasible": true,
+      "notes": [],
+      "matched": null,
+      "level_name": "Level 0, direct (from the creative's metadata; no video analysis)",
+      "why": "a new creative from the prompt alone: nothing to analyse"
+     },
+     "workflow": "create"
+    },
+    "needs": []
+   },
+   "level": {
+    "file": "1017-232148-a-cross-shaped-board-8x8/v1/level.json",
+    "source": "studio/levels/gen_2e1c3e76f84b.json",
+    "why": "a generated medium cross-shaped level, 8x8, 8 blocks: 9 drags minimum, 1 repositioning, a casual player needs about 1.5x the minimum",
+    "sha": "7bddf5ad464bc7d8542c9dfaf0d2a493d1d3732a83b4bc963786238ec11304bd"
+   },
+   "recording": {
+    "dir": "recordings/ce5f2643f42f24ba",
+    "reused": false
+   },
+   "board": "1017-232148-a-cross-shaped-board-8x8/v1/board.png",
+   "checks": [
+    {
+     "check": "Difficulty",
+     "status": "info",
+     "detail": "9 drags minimum, 1 repositioning, 2 block(s) can leave at once, a casual player needs about 1.4x the minimum -> medium",
+     "from": "level"
+    },
+    {
+     "check": "Block count",
+     "status": "pass",
+     "detail": "8 blocks (asked: 8)",
+     "from": "level"
+    },
+    {
+     "check": "Board shape",
+     "status": "info",
+     "detail": "cross-shaped, 8x8, 16 cells cut out",
+     "from": "level"
+    },
+    {
+     "check": "Planned moves",
+     "status": "pass",
+     "detail": "all 10 drags played as planned: the same block, cells and outcome",
+     "from": "recording"
+    },
+    {
+     "check": "Ending",
+     "status": "pass",
+     "detail": "the clock runs out with 1 block(s) left; the last drag was cut short",
+     "from": "recording"
+    },
+    {
+     "check": "Mistakes",
+     "status": "pass",
+     "detail": "1 mistake(s) played (asked: the ending's default): drag 2, B2 (blue) is moved the wrong way, which does not help",
+     "from": "recording"
+    },
+    {
+     "check": "Asked: block count",
+     "status": "pass",
+     "detail": "8 asked, the board has 8",
+     "from": "prompt",
+     "where": null
+    },
+    {
+     "check": "Asked: blocks a viewer can count",
+     "status": "pass",
+     "detail": "8 blocks, 8 pieces a viewer can tell apart",
+     "from": "prompt",
+     "where": null
+    },
+    {
+     "check": "Asked: a visually interesting board (the case)",
+     "status": "info",
+     "detail": "8x8, 8 blocks in 2 colours, corner, long, small pieces, 16 wall cell(s), 8 doors",
+     "from": "prompt",
+     "where": null
+    },
+    {
+     "check": "Asked: 30-60 s (the case)",
+     "status": "pass",
+     "detail": "the ad is 35.0 s",
+     "from": "prompt",
+     "where": null
+    },
+    {
+     "check": "Asked: length",
+     "status": "pass",
+     "detail": "35 s asked, the ad is 35.0 s",
+     "from": "prompt",
+     "where": null
+    },
+    {
+     "check": "Asked: ending",
+     "status": "pass",
+     "detail": "the clock runs out with 1 block(s) left; the last drag was cut short",
+     "from": "prompt",
+     "where": null
+    },
+    {
+     "check": "Asked: background",
+     "status": "failed",
+     "detail": "a mint background asked; the frame's margins are #D4F6FB (nearest named colour: lavender)",
+     "from": "prompt",
+     "where": "ad"
+    },
+    {
+     "check": "Asked: facts read from the prompt",
+     "status": "info",
+     "detail": "8 blocks; 35 s; ending time_out; a mint background (a phrasing the audit does not recognise gives no row; the viewer's review covers the rest)",
+     "from": "prompt",
+     "where": null
+    },
+    {
+     "check": "Asked: gameplay at the centre (the case)",
+     "status": "pass",
+     "detail": "gameplay (play, replay, the result clip) is 27.9 s of 35 s (80%); the rest is held screens and the end card",
+     "from": "prompt",
+     "where": null
+    },
+    {
+     "check": "Rules: the level",
+     "status": "pass",
+     "detail": "a valid board: blocks on active cells, no overlaps, every block has a door of its colour",
+     "from": "rules",
+     "where": null
+    },
+    {
+     "check": "Rules: the moves",
+     "status": "pass",
+     "detail": "10 drags replayed through the game's rules: one block a drag, the pivot through neighbouring free active cells only; 7 exit(s) through the first door of the block's own colour it touched, with a clear lane, during the drag",
+     "from": "rules",
+     "where": null
+    },
+    {
+     "check": "Rules: the clock",
+     "status": "pass",
+     "detail": "the clock only counts down and never goes below zero",
+     "from": "rules",
+     "where": null
+    },
+    {
+     "check": "Rules: the result",
+     "status": "pass",
+     "detail": "the game reports 'failed' with 7 of 8 blocks gone",
+     "from": "rules",
+     "where": null
+    }
+   ],
+   "ad_dir": "1017-232148-a-cross-shaped-board-8x8/v1/ad",
+   "video": "1017-232148-a-cross-shaped-board-8x8/v1/ad/ad.mp4",
+   "poster": "1017-232148-a-cross-shaped-board-8x8/v1/ad/poster.png",
+   "length_s": 35.0,
+   "qa": {
+    "failures": [],
+    "warnings": []
+   },
+   "stages": [
+    {
+     "stage": "level",
+     "seconds": 17.3
+    },
+    {
+     "stage": "level gate",
+     "seconds": 0.3
+    },
+    {
+     "stage": "recording",
+     "seconds": 35.0
+    },
+    {
+     "stage": "compose",
+     "seconds": 31.4
+    }
+   ],
+   "seconds": 84.4,
+   "created": "2026-10-17 23:23:12",
+   "workflow": "create",
+   "parts": "1017-232148-a-cross-shaped-board-8x8/v1/parts.json",
+   "evaluation": {
+    "kind": "text",
+    "what": "text-to-creative: the board, the play, the game's rules, every fact the prompt asks for, the case's rows",
+    "groups": [
+     "board",
+     "play",
+     "rules",
+     "asked facts",
+     "case"
+    ]
+   },
+   "review": {
+    "match": [
+     {
+      "control": "the level's type or structure",
+      "verdict": "match",
+      "seen": "From 0 to 17 s the board is clearly a plus-shaped grid with the corners cut away, and every block is orange or blue. I count about 8 blocks at 0 s."
+     },
+     {
+      "control": "the gameplay behaviour",
+      "verdict": "match",
+      "seen": "The clock reaches zero at 17 s with one orange T-shaped block still on the board. The replay at 24 to 25 s and the Out of Time screen at 26 to 28 s confirm it."
+     },
+     {
+      "control": "difficulty or pacing",
+      "verdict": "match",
+      "seen": "The ad is exactly 35 s long. Blocks are cleared at a steady rate from 1 to 15 s, but the replay from 18 to 25 s plays the same final seconds again and slows things down."
+     },
+     {
+      "control": "visual elements",
+      "verdict": "partial",
+      "seen": "The captions are dark navy or purple, as asked. Behind the board, the gameplay from 0 to 25 s sits on a pale icy blue rather than mint, with little fade toward white. Only the end card from 29 to 34 s shows a real mint-to-white fade."
+     },
+     {
+      "control": "the creative concept",
+      "verdict": "not asked",
+      "seen": "The tool used its standard captions: \"Can you beat the clock?\" (0 to 1 s), \"Oops!\" (3 to 4 s), \"Hurry!\" (13 to 15 s) and \"So close!\" (26 to 28 s)."
+     },
+     {
+      "control": "the sequence of events",
+      "verdict": "not asked",
+      "seen": "Gameplay runs to 17 s, the replay from 18 to 25 s, Out of Time from 26 to 28 s, then the end card from 29 to 34 s."
+     },
+     {
+      "control": "the assets used",
+      "verdict": "not asked",
+      "seen": "Only the game's own board, blocks, timer and end-card stopwatch appear. No outside pictures are used."
+     },
+     {
+      "control": "what had to remain unchanged",
+      "verdict": "not asked",
+      "seen": "This is a new ad, so there was nothing to keep."
+     }
+    ],
+    "viewer": {
+     "pace": 3,
+     "readability": 3,
+     "clarity": 4,
+     "cta": 4,
+     "first_second": 5,
+     "dead_time": 5
+    },
+    "would_download": "maybe",
+    "why": "Racing the clock on a neat cross-shaped board looks fun and the near miss teases me, but the long replay of the last few seconds made me want to scroll on.",
+    "fixes": [
+     "Change the background behind the gameplay to a clear mint green that fades to white at the bottom, so it matches the end card and the brief.",
+     "Cut the slow-motion replay to about 3 seconds and give the time to the live play, so the ad keeps moving.",
+     "Make the captions bigger and bolder with a light outline, so the small dark text stands out on the board."
+    ],
+    "suggested_edit": "Keep everything, but change the background behind the board during gameplay and the replay to a clear mint green that fades to white at the bottom, matching the end card.",
+    "overall": "ship",
+    "low": [],
+    "model": "claude-cli/opus",
+    "seconds": 16.0,
+    "sheet": "1017-232148-a-cross-shaped-board-8x8/v1/review_sheet.png",
+    "facts": {
+     "length_s": 35.0,
+     "parts": {
+      "intro": 0.5,
+      "play": 17.0,
+      "replay": 8.2,
+      "result": 2.7,
+      "result_hold": 0.6,
+      "end": 6.0
+     },
+     "first_move_s": 1.5,
+     "drags": [
+      "drag 1: blue block leaves (0.5-1.0 s)",
+      "drag 2: blue block moves (2.0-2.4 s)",
+      "drag 3: orange block leaves (4.2-4.7 s)",
+      "drag 4: blue block moves (6.2-6.6 s)",
+      "drag 5: orange block leaves (7.2-7.6 s)",
+      "drag 6: blue block leaves (8.2-9.0 s)",
+      "drag 7: blue block leaves (9.5-10.3 s)",
+      "drag 8: blue block leaves (10.9-11.8 s)",
+      "drag 9: orange block leaves (12.4-13.5 s)",
+      "drag 10: orange block is stopped (14.8-16.6 s)"
+     ],
+     "static_s": 7.1,
+     "static_share": 0.2,
+     "captions": [
+      {
+       "id": "hook",
+       "text": "Can you beat the clock?",
+       "from_s": 0.0,
+       "to_s": 1.9,
+       "needs_s": 1.9,
+       "readable": true
+      },
+      {
+       "id": "cap_mistake",
+       "text": "Oops!",
+       "from_s": 3.0,
+       "to_s": 5.0,
+       "needs_s": 0.8,
+       "readable": true
+      },
+      {
+       "id": "cap_hurry",
+       "text": "Hurry!",
+       "from_s": 12.5,
+       "to_s": 15.8,
+       "needs_s": 0.8,
+       "readable": true
+      },
+      {
+       "id": "cap_result",
+       "text": "So close!",
+       "from_s": 26.0,
+       "to_s": 28.4,
+       "needs_s": 1.0,
+       "readable": true
+      },
+      {
+       "id": "end_title",
+       "text": "Color Block Jam",
+       "from_s": 29.0,
+       "to_s": 35.0,
+       "needs_s": 1.3,
+       "readable": true
+      },
+      {
+       "id": "end_fact",
+       "text": "Out of time with one\u00a0block left!",
+       "from_s": 29.0,
+       "to_s": 35.0,
+       "needs_s": 2.5,
+       "readable": true
+      }
+     ],
+     "checks": [
+      {
+       "check": "Asked: background",
+       "status": "failed",
+       "detail": "a mint background asked; the frame's margins are #D4F6FB (nearest named colour: lavender)",
+       "from": "prompt",
+       "where": "ad"
+      }
+     ],
+     "qa": []
+    }
+   }
+  },
+  {
+   "n": 8,
+   "id": "1017-232148-a-cross-shaped-board-8x8",
+   "prompt": "Keep this creative exactly the same, but take the background and the caption colours from this picture.",
+   "edit": true,
+   "from": 3,
+   "brief": {
+    "summary": "The same 35-second near-miss ad on the cross-shaped orange-and-blue board, now with a grey-to-steel-blue shipping-yard background and white captions with a purple outline, all taken from the uploaded screenshot.",
+    "controls": [
+     {
+      "control": "level",
+      "asked": "Keep this creative exactly the same, but take the background and the caption colours from this picture.",
+      "plan": "a level like the board in T4_cargo_crossroads.png: 8x8, 8 blocks in blue, orange; generated in that spirit, not copied cell by cell.",
+      "status": "applied",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "gameplay",
+      "asked": null,
+      "plan": "Same take: the clock runs out with one block left.",
+      "status": "default",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "difficulty_pacing",
+      "asked": null,
+      "plan": "Same 35-second length and normal pace.",
+      "status": "default",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "visuals",
+      "asked": "take the background and the caption colours from this picture",
+      "plan": "The background behind the board becomes a gradient from the picture's soft grey at the top to its steel blue at the bottom. The captions become white with the deep purple outline from the picture's level-and-timer banner, so they read clearly on the grey.",
+      "status": "applied",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "concept",
+      "asked": null,
+      "plan": "Same captions and wording.",
+      "status": "default",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "sequence",
+      "asked": null,
+      "plan": "Same order: hook, play, replay, result screen, short hold, end card.",
+      "status": "default",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "assets",
+      "asked": null,
+      "plan": "Same pictures and sound. The screenshot is only used for its colours and is not placed in the ad.",
+      "status": "default",
+      "why": null,
+      "engine": []
+     },
+     {
+      "control": "unchanged",
+      "asked": "Keep this creative exactly the same",
+      "plan": "The board, the gameplay, the timing, the camera, the wording, the order, the pictures and the sound all stay exactly as they are.",
+      "status": "applied",
+      "why": null,
+      "engine": []
+     }
+    ],
+    "assumptions": [
+     "I made the caption colours white text with the picture's purple outline, matching how the game's own banner text looks in the screenshot. Another option was to colour the text purple, but purple text would be hard to read on the grey background.",
+     "I built the background from the picture's two biggest colours, grey and steel blue. Another option was a single flat grey.",
+     "Read from T4_cargo_crossroads.png: Color Block Jam level 61: a cross-shaped grid board with blue and orange blocks, viewed from above over a blurred shipping-yard background, with 00:16 left on the clock; colours grey, violet, grey, grey; mood urgent, busy, industrial, playful.",
+     "T4_cargo_crossroads.png is used as a board reference: a level like the board in the picture: 8x8, 8 blocks in blue, orange (a similar level is generated in that spirit; the exact layout, doors and solution are the generator's, so the puzzle is playable)"
+    ],
+    "channel": "social",
+    "language": "en",
+    "format": "9:16",
+    "level": {
+     "source": "generate",
+     "shipped": null,
+     "shape": "cross",
+     "width": 8,
+     "height": 8,
+     "blocks": 8,
+     "colours": [
+      "Orange",
+      "Blue"
+     ],
+     "difficulty": "any",
+     "label": 61,
+     "moves": null,
+     "changes": [],
+     "pieces": "mixed",
+     "style": [],
+     "edit": null
+    },
+    "gameplay": {
+     "ending": "time_out",
+     "mistakes": null,
+     "mistake_kinds": [],
+     "hesitations": null,
+     "timer_s": null,
+     "seed": null,
+     "events": [],
+     "finish": "auto",
+     "clock_left_s": null,
+     "blocks_left": null
+    },
+    "pacing": {
+     "length_s": 35.0,
+     "tempo": "normal",
+     "curve": "even"
+    },
+    "visuals": {
+     "theme": "custom",
+     "blocks": [],
+     "background": [
+      "#797A8C",
+      "#445989"
+     ],
+     "background_image": null,
+     "board": null,
+     "caption_fill": "#FFFFFF",
+     "caption_outline": "#6A3FD0",
+     "camera_zoom": null,
+     "punch_ins": [],
+     "caption_colours": [],
+     "cursor": "ring",
+     "hud_timer": true,
+     "hud_level": true,
+     "names": {},
+     "names_src": {}
+    },
+    "concept": {
+     "angle": "So close: the clock beats the player by one block.",
+     "hook": null,
+     "mistake": null,
+     "fix": null,
+     "hurry": null,
+     "cascade": null,
+     "result": null,
+     "end_title": null,
+     "end_fact": null,
+     "cta": null
+    },
+    "sequence": {
+     "style": "standard",
+     "replay": true,
+     "result_screen": true,
+     "end_card": true,
+     "intro_s": null,
+     "hold_s": null,
+     "caption_times": []
+    },
+    "assets": [],
+    "audio": {
+     "sfx": true,
+     "music": null
+    },
+    "keep": [
+     "level",
+     "gameplay",
+     "timing",
+     "camera",
+     "copy",
+     "sequence",
+     "assets",
+     "sound"
+    ],
+    "changed": [
+     "visuals.background",
+     "visuals.captions"
+    ],
+    "needs": [],
+    "planner": {
+     "model": "claude-cli/opus",
+     "seconds": 21.4,
+     "prompt": "Keep this creative exactly the same, but take the background and the caption colours from this picture.",
+     "edit": true,
+     "restored": [],
+     "references": [
+      {
+       "file": "T4_cargo_crossroads.png",
+       "kind": "image",
+       "palette": [
+        {
+         "hex": "#797A8C",
+         "name": "grey",
+         "share": 0.36
+        },
+        {
+         "hex": "#445989",
+         "name": "violet",
+         "share": 0.31
+        },
+        {
+         "hex": "#96939E",
+         "name": "grey",
+         "share": 0.15
+        },
+        {
+         "hex": "#817073",
+         "name": "grey",
+         "share": 0.12
+        },
+        {
+         "hex": "#6B508E",
+         "name": "grey",
+         "share": 0.05
+        },
+        {
+         "hex": "#7E7987",
+         "name": "grey",
+         "share": 0.01
+        }
+       ],
+       "notes": {
+        "subject": "Color Block Jam level 61: a cross-shaped grid board with blue and orange blocks, viewed from above over a blurred shipping-yard background, with 00:16 left on the clock",
+        "kind": "game screenshot",
+        "style": "glossy 3D casual mobile game, toy-brick blocks, top-down view",
+        "mood": "urgent, busy, industrial, playful",
+        "dominant_colours": [
+         "#2F5FD6",
+         "#F07A22",
+         "#9AA0A8",
+         "#6A3FD0",
+         "#3A3D4A"
+        ],
+        "background_colour": "#5E6270",
+        "text_seen": "Level 61, Time, 00:16",
+        "composition": "purple level-and-timer banner at the top, cross-shaped board in the centre, blurred warehouses and stacked containers around the edges",
+        "idea_for_an_ad": "A 'cargo crossroads' hook: the clock runs down from 16 seconds while the player sorts blue and orange cargo out through their matching dock gates, styled like a busy shipping yard",
+        "board": {
+         "is_puzzle_board": true,
+         "grid_cols": 8,
+         "grid_rows": 8,
+         "block_count": 8,
+         "block_colours": [
+          "blue",
+          "orange"
+         ],
+         "walls": null,
+         "doors_visible": true,
+         "crowded": "normal",
+         "symmetric": false
+        }
+       },
+       "model": "claude-cli/opus",
+       "seconds": 14.9,
+       "role": {
+        "style": false,
+        "composition": true,
+        "asset": false,
+        "modify": false,
+        "primary": "composition",
+        "kind": "game screenshot",
+        "file": "T4_cargo_crossroads.png",
+        "taken": [
+         "a level like the board in the picture: 8x8, 8 blocks in blue, orange (a similar level is generated in that spirit; the exact layout, doors and solution are the generator's, so the puzzle is playable)"
+        ]
+       },
+       "copied": true
+      }
+     ],
+     "route": {
+      "intent": "edit",
+      "edit_type": "known_layers",
+      "analysis_level": 0,
+      "requires_video_analysis": false,
+      "requires_gameplay_regeneration": false,
+      "requires_compositing": true,
+      "targets": [
+       {
+        "kind": "look",
+        "id": "background",
+        "name": "the background behind the board",
+        "field": "visuals.background",
+        "how": "name",
+        "clause": "take the background and the caption colours from this picture"
+       }
+      ],
+      "preserve": [
+       "gameplay",
+       "level",
+       "timing",
+       "camera",
+       "captions",
+       "pictures",
+       "audio",
+       "sequence"
+      ],
+      "allowed_groups": [
+       "visuals.background"
+      ],
+      "direct_op": null,
+      "feasible": true,
+      "notes": [],
+      "matched": null,
+      "level_name": "Level 0, direct (from the creative's metadata; no video analysis)",
+      "why": "target: the background behind the board",
+      "kept_clauses": [
+       "Keep this creative exactly the same"
+      ]
+     },
+     "workflow": "edit"
+    }
+   },
+   "level": {
+    "file": "1017-232148-a-cross-shaped-board-8x8/v8/level.json",
+    "source": "studio/levels/gen_2e1c3e76f84b.json",
+    "why": "a generated medium cross-shaped level, 8x8, 8 blocks: 9 drags minimum, 1 repositioning, a casual player needs about 1.5x the minimum",
+    "sha": "7bddf5ad464bc7d8542c9dfaf0d2a493d1d3732a83b4bc963786238ec11304bd"
+   },
+   "recording": {
+    "dir": "recordings/78c32c3c3607ec30",
+    "reused": false
+   },
+   "board": "1017-232148-a-cross-shaped-board-8x8/v8/board.png",
+   "checks": [
+    {
+     "check": "Difficulty",
+     "status": "info",
+     "detail": "9 drags minimum, 1 repositioning, 2 block(s) can leave at once, a casual player needs about 1.4x the minimum -> medium",
+     "from": "level"
+    },
+    {
+     "check": "Block count",
+     "status": "pass",
+     "detail": "8 blocks (asked: 8)",
+     "from": "level"
+    },
+    {
+     "check": "Board shape",
+     "status": "info",
+     "detail": "cross-shaped, 8x8, 16 cells cut out",
+     "from": "level"
+    },
+    {
+     "check": "Planned moves",
+     "status": "pass",
+     "detail": "all 10 drags played as planned: the same block, cells and outcome",
+     "from": "recording"
+    },
+    {
+     "check": "Ending",
+     "status": "pass",
+     "detail": "the clock runs out with 1 block(s) left; the last drag was cut short",
+     "from": "recording"
+    },
+    {
+     "check": "Mistakes",
+     "status": "pass",
+     "detail": "1 mistake(s) played (asked: the ending's default): drag 2, B2 (blue) is moved the wrong way, which does not help",
+     "from": "recording"
+    },
+    {
+     "check": "Asked: facts read from the prompt",
+     "status": "info",
+     "detail": "none the audit measures (a phrasing the audit does not recognise gives no row; the viewer's review covers the rest)",
+     "from": "prompt",
+     "where": null
+    },
+    {
+     "check": "Rules: the level",
+     "status": "pass",
+     "detail": "a valid board: blocks on active cells, no overlaps, every block has a door of its colour",
+     "from": "rules",
+     "where": null
+    },
+    {
+     "check": "Rules: the moves",
+     "status": "pass",
+     "detail": "10 drags replayed through the game's rules: one block a drag, the pivot through neighbouring free active cells only; 7 exit(s) through the first door of the block's own colour it touched, with a clear lane, during the drag",
+     "from": "rules",
+     "where": null
+    },
+    {
+     "check": "Rules: the clock",
+     "status": "pass",
+     "detail": "the clock only counts down and never goes below zero",
+     "from": "rules",
+     "where": null
+    },
+    {
+     "check": "Rules: the result",
+     "status": "pass",
+     "detail": "the game reports 'failed' with 7 of 8 blocks gone",
+     "from": "rules",
+     "where": null
+    }
+   ],
+   "ad_dir": "1017-232148-a-cross-shaped-board-8x8/v8/ad",
+   "video": "1017-232148-a-cross-shaped-board-8x8/v8/ad/ad.mp4",
+   "poster": "1017-232148-a-cross-shaped-board-8x8/v8/ad/poster.png",
+   "length_s": 35.0,
+   "qa": {
+    "failures": [],
+    "warnings": []
+   },
+   "stages": [
+    {
+     "stage": "level",
+     "seconds": 0.0
+    },
+    {
+     "stage": "recording",
+     "seconds": 29.6
+    },
+    {
+     "stage": "compose",
+     "seconds": 28.5
+    },
+    {
+     "stage": "proof",
+     "seconds": 0.0
+    }
+   ],
+   "seconds": 58.4,
+   "created": "2026-10-18 03:26:53",
+   "workflow": "edit",
+   "parts": "1017-232148-a-cross-shaped-board-8x8/v8/parts.json",
+   "evaluation": {
+    "kind": "edit",
+    "what": "controlled editing: the edit report (what changed, what was kept) and the facts the edit asks for; the rules are re-checked only when the play was re-filmed",
+    "groups": [
+     "edit report",
+     "asked facts",
+     "rules"
+    ]
+   },
+   "proof": {
+    "asked": [
+     "visuals.background",
+     "visuals.captions"
+    ],
+    "asked_names": [
+     "background",
+     "caption colours"
+    ],
+    "rows": [
+     {
+      "item": "gameplay",
+      "title": "Gameplay",
+      "status": "kept",
+      "detail": "the same 10 moves, block by block"
+     },
+     {
+      "item": "timing",
+      "title": "Timing",
+      "status": "kept",
+      "detail": "30 fps, 35.0 s, play 0.50-17.53 s, first move 1.53 s, 10 drags, clock 16 -> 0.0 s; every part and every caption on the same frames",
+      "numbers": {
+       "before": {
+        "fps": 30,
+        "duration_s": 35.0,
+        "play_s": [
+         0.5,
+         17.53
+        ],
+        "first_move_s": 1.53,
+        "clock_start_s": 16.0,
+        "clock_end_s": 0.0,
+        "drags": 10
+       },
+       "after": {
+        "fps": 30,
+        "duration_s": 35.0,
+        "play_s": [
+         0.5,
+         17.53
+        ],
+        "first_move_s": 1.53,
+        "clock_start_s": 16.0,
+        "clock_end_s": 0.0,
+        "drags": 10
+       }
+      }
+     },
+     {
+      "item": "camera",
+      "title": "Camera",
+      "status": "kept",
+      "detail": "the game's camera, the framing of every part and the finger's path"
+     },
+     {
+      "item": "composition",
+      "title": "Composition",
+      "status": "kept",
+      "detail": "all 11 layers in the same place and size"
+     },
+     {
+      "item": "sequence",
+      "title": "Sequence",
+      "status": "kept",
+      "detail": "intro > play > replay > result > result_hold > end; the play's moments in the same order"
+     },
+     {
+      "item": "visual",
+      "title": "Visual structure",
+      "status": "asked",
+      "detail": "the background: #5FE3A1 to #FFFFFF -> #797A8C to #445989; the caption colour: #1A2E6E -> #FFFFFF; the caption outline: the game's own -> #6A3FD0; recorded frames: 0 of 591 identical"
+     },
+     {
+      "item": "assets",
+      "title": "Other assets",
+      "status": "kept",
+      "detail": "every picture (same file contents)"
+     },
+     {
+      "item": "copy",
+      "title": "Captions",
+      "status": "kept",
+      "detail": "all 8 texts word for word"
+     },
+     {
+      "item": "sound",
+      "title": "Sound",
+      "status": "kept",
+      "detail": "the same sound effects, sample for sample"
+     }
+    ],
+    "ok": true,
+    "changes": [
+     "background",
+     "caption colours"
+    ],
+    "preserves": [
+     "Gameplay",
+     "Timing",
+     "Camera",
+     "Composition",
+     "Sequence",
+     "Other assets",
+     "Captions",
+     "Sound"
+    ],
+    "checklist": {
+     "level_unchanged": {
+      "ok": true,
+      "evidence": "level sha 7bddf5ad464b -> 7bddf5ad464b"
+     },
+     "moves_unchanged": {
+      "ok": true,
+      "evidence": "10 -> 10 drags, block and cells compared"
+     },
+     "move_timing_unchanged": {
+      "ok": true,
+      "evidence": "every drag's start, exit and end frame and the gameplay window compared"
+     },
+     "gameplay_render_reused": {
+      "ok": false,
+      "evidence": "recording db4e636943ed0168 -> 78c32c3c3607ec30"
+     },
+     "duration_unchanged": {
+      "ok": true,
+      "evidence": "35.0 s -> 35.0 s"
+     },
+     "camera_unchanged": {
+      "ok": true,
+      "evidence": "the recorder's camera and the ad's zoom compared"
+     },
+     "hud_unchanged": {
+      "ok": true,
+      "evidence": "the HUD's hidden parts and the level number compared"
+     },
+     "captions_unchanged": {
+      "ok": true,
+      "evidence": "every caption's text compared"
+     },
+     "pictures_unchanged": {
+      "ok": true,
+      "evidence": "every picture slot compared"
+     },
+     "audio_unchanged": {
+      "ok": true,
+      "evidence": "mix sha ee39d021e13e -> ee39d021e13e"
+     }
+    },
+    "pixels": {
+     "frames_changed": 1050,
+     "frames": 1050,
+     "ranges": [
+      [
+       0,
+       1049
+      ]
+     ],
+     "layers": [
+      "cap_hurry",
+      "cap_mistake",
+      "cap_result",
+      "end_fact",
+      "end_title",
+      "hook"
+     ],
+     "same_sound": true,
+     "note": "the gameplay was filmed again with the new look, so its frames differ by design"
+    },
+    "verdict": "Only what was asked changed (Visual structure); everything else is identical.",
+    "route": {
+     "ok": false,
+     "evidence": "Level 0, direct (from the creative's metadata; no video analysis); the gameplay render was NOT reused although the route did not change the play",
+     "level": 0,
+     "edit_type": "known_layers",
+     "video_analysis": false
+    }
+   },
+   "review": {
+    "match": [
+     {
+      "control": "the level's type or structure",
+      "verdict": "match",
+      "seen": "From 0 to 25 s it is the same 8x8 cross-shaped board with blue and orange blocks, unchanged as asked."
+     },
+     {
+      "control": "the gameplay behaviour",
+      "verdict": "not asked",
+      "seen": "Same play as before: blocks get cleared, the clock hits zero at 17 s with one orange block left, and the replay at 18-25 s shows the same miss."
+     },
+     {
+      "control": "difficulty or pacing",
+      "verdict": "not asked",
+      "seen": "Same 35-second length and the same steady speed of moves from 1 to 17 s."
+     },
+     {
+      "control": "visual elements",
+      "verdict": "match",
+      "seen": "The background is a soft grey at the top fading to steel blue at the bottom. The captions (the hook at 0-1 s, 'Oops!' at 3-4 s, 'Hurry!' at 13-15 s, 'So close!' at 26-28 s and the end card titles at 29-34 s) are white with a deep purple outline, matching the picture's banner."
+     },
+     {
+      "control": "the creative concept",
+      "verdict": "not asked",
+      "seen": "The hook and caption wording are unchanged."
+     },
+     {
+      "control": "the sequence of events",
+      "verdict": "not asked",
+      "seen": "Same order: hook, play to 17 s, replay from 18 to 25 s, 'Out of Time!' result from 26 to 28 s, then the end card from 29 to 34 s."
+     },
+     {
+      "control": "the assets used",
+      "verdict": "not asked",
+      "seen": "Same game pictures and stopwatch end card. The reference screenshot is not placed in the ad."
+     },
+     {
+      "control": "what had to remain unchanged",
+      "verdict": "match",
+      "seen": "Board, moves, timing, camera, wording and order all look the same as the approved version. Only the background and caption colours changed."
+     }
+    ],
+    "viewer": {
+     "pace": 4,
+     "readability": 4,
+     "clarity": 4,
+     "cta": 4,
+     "first_second": 5,
+     "dead_time": 5
+    },
+    "would_download": "maybe",
+    "why": "The race against the clock and the near miss with one block left made me want to try it, but the replay of the same miss slowed things down.",
+    "fixes": [
+     "Cut the replay from about 8 seconds to about 4 so the ad gets to 'So close!' sooner.",
+     "Make the hook caption bigger so it stands out more on the light grey at the top.",
+     "Shorten the end card from 6 seconds to about 4."
+    ],
+    "suggested_edit": "Keep everything, but shorten the replay to about 4 seconds so the 'So close!' result comes sooner.",
+    "overall": "ship",
+    "low": [],
+    "model": "claude-cli/opus",
+    "seconds": 20.4,
+    "sheet": "1017-232148-a-cross-shaped-board-8x8/v8/review_sheet.png",
+    "facts": {
+     "length_s": 35.0,
+     "parts": {
+      "intro": 0.5,
+      "play": 17.0,
+      "replay": 8.2,
+      "result": 2.7,
+      "result_hold": 0.6,
+      "end": 6.0
+     },
+     "first_move_s": 1.5,
+     "drags": [
+      "drag 1: blue block leaves (0.5-1.0 s)",
+      "drag 2: blue block moves (2.0-2.4 s)",
+      "drag 3: orange block leaves (4.2-4.7 s)",
+      "drag 4: blue block moves (6.2-6.6 s)",
+      "drag 5: orange block leaves (7.2-7.6 s)",
+      "drag 6: blue block leaves (8.2-9.0 s)",
+      "drag 7: blue block leaves (9.5-10.3 s)",
+      "drag 8: blue block leaves (10.9-11.8 s)",
+      "drag 9: orange block leaves (12.4-13.5 s)",
+      "drag 10: orange block is stopped (14.8-16.6 s)"
+     ],
+     "static_s": 7.1,
+     "static_share": 0.2,
+     "captions": [
+      {
+       "id": "hook",
+       "text": "Can you beat the clock?",
+       "from_s": 0.0,
+       "to_s": 1.9,
+       "needs_s": 1.9,
+       "readable": true
+      },
+      {
+       "id": "cap_mistake",
+       "text": "Oops!",
+       "from_s": 3.0,
+       "to_s": 5.0,
+       "needs_s": 0.8,
+       "readable": true
+      },
+      {
+       "id": "cap_hurry",
+       "text": "Hurry!",
+       "from_s": 12.5,
+       "to_s": 15.8,
+       "needs_s": 0.8,
+       "readable": true
+      },
+      {
+       "id": "cap_result",
+       "text": "So close!",
+       "from_s": 26.0,
+       "to_s": 28.4,
+       "needs_s": 1.0,
+       "readable": true
+      },
+      {
+       "id": "end_title",
+       "text": "Color Block Jam",
+       "from_s": 29.0,
+       "to_s": 35.0,
+       "needs_s": 1.3,
+       "readable": true
+      },
+      {
+       "id": "end_fact",
+       "text": "Out of time with one\u00a0block left!",
+       "from_s": 29.0,
+       "to_s": 35.0,
+       "needs_s": 2.5,
+       "readable": true
+      }
+     ],
+     "checks": [],
+     "qa": []
+    }
+   }
+  }
+ ]
+}

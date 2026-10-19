@@ -35,7 +35,7 @@ STATUS_WORDS = {"kept": "kept", "asked": "changed, as asked", "side_effect": "ch
                 "not_asked": "CHANGED WITHOUT BEING ASKED", "changed": "differs"}
 
 LEVEL_GROUPS = ("level.source", "level.shape", "level.size", "level.blocks", "level.colours", "level.difficulty",
-                "level.pieces", "level.style")
+                "level.pieces", "level.style", "level.moves", "level.changes")
 PLAY_GROUPS = ("gameplay.ending", "gameplay.mistakes", "gameplay.hesitations", "gameplay.retake",
                "gameplay.events", "gameplay.finish", "channel")
 PACE_GROUPS = ("pacing.length", "pacing.tempo", "pacing.curve", "gameplay.clock", "gameplay.clock_left")
@@ -46,11 +46,12 @@ LAYER_OF = {"concept.hook": "hook", "concept.mistake": "cap_mistake", "concept.f
             "concept.end_title": "end_title", "concept.end_fact": "end_fact", "concept.cta": "end_cta"}
 TEXT_LAYERS = tuple(LAYER_OF.values()) + ("replay_tag",)
 BAND_CAPTIONS = ("hook", "cap_mistake", "cap_fix", "cap_hurry", "cap_cascade")
-ASSET_SLOTS = (("logo", "the logo"), ("hook_icon", "the icon beside the hook"), ("end_art", "the end-card picture"),
+ASSET_SLOTS = (("logo", "the logo"), ("logo2", "the top-right sticker"), ("hook_icon", "the icon beside the hook"),
+               ("end_art", "the end-card picture"),
                ("button", "the button"), ("end_background", "the end card's background"),
-               ("cursor", "the cursor"))
-SLOT_LAYERS = {"logo": ("logo", "logo_end"), "hook_icon": ("hook",), "end_art": ("end_art",), "button": ("end_cta",),
-               "cursor": ("cursor",), "end_background": ()}
+               ("cursor", "the cursor"), ("obstacle", "the picture on the walls"), ("skin", "the texture on a block"))
+SLOT_LAYERS = {"logo": ("logo", "logo_end"), "logo2": ("logo2", "logo2_end"), "hook_icon": ("hook",), "end_art": ("end_art",), "button": ("end_cta",),
+               "cursor": ("cursor",), "end_background": (), "obstacle": ("obstacle",), "skin": ("skin",)}
 PART_OF = {"replay": "replay", "result_screen": "result", "style": "teaser"}  # sequence field -> ad part
 LAYER_PART = {"replay_tag": "replay", "cap_result": "result"}  # layers that exist with a part
 PLAY_LAYERS = ("cap_mistake", "cap_fix", "cap_hurry", "urgency", "cap_cascade", "cap_result", "replay_tag")
@@ -99,6 +100,9 @@ def asset_slots(ad: dict, compose: dict | None = None) -> dict[str, str | None]:
     cursor = L.get("cursor")
     out = {
         "logo": asset_ref((L.get("logo") or {}).get("image")),
+        "logo2": asset_ref((L.get("logo2") or {}).get("image")),
+        "obstacle": asset_ref((L.get("obstacle") or {}).get("image")),
+        "skin": asset_ref((L.get("skin") or {}).get("image")),
         "hook_icon": asset_ref((L.get("hook") or {}).get("icon")),
         "end_art": asset_ref((L.get("end_art") or {}).get("image")),
         "button": asset_ref((L.get("end_cta") or {}).get("image")),
@@ -144,6 +148,55 @@ def _fmt_s(f: int) -> str:
     return f"{f / 30:.2f} s"
 
 
+def numbers(x: dict) -> dict:
+    """The timeline of a version in numbers (case p.7 "timing"; research note 13.4): fps, the ad's
+    length, the gameplay window, the first move and the clock at the first and the last drag."""
+    comp, res = x["compose"], x["result"]
+    fps = comp.get("fps", 30)
+    tl = comp.get("timeline", {})
+    play = (tl.get("play") or {}).get("frames")
+    intro = (tl.get("intro") or {}).get("frames") or [0, 0]
+    out = {"fps": fps, "duration_s": comp.get("duration_s"),
+           "play_s": [round(play[0] / fps, 2), round(play[1] / fps, 2)] if play else None,
+           "first_move_s": round((intro[1] - intro[0] + res.get("first_touch_frame", 0)) / fps, 2) if res else None,
+           "clock_start_s": res.get("timer_start"), "clock_end_s": round(res["timer_end"], 1) if res.get("timer_end") is not None else None,
+           "drags": len(res.get("drags") or [])}
+    return out
+
+
+def numbers_text(n: dict) -> str:
+    play = f"{n['play_s'][0]:.2f}-{n['play_s'][1]:.2f} s" if n.get("play_s") else "?"
+    return (f"{n['fps']} fps, {n['duration_s']} s, play {play}, first move {n['first_move_s']} s, "
+            f"{n['drags']} drags, clock {n['clock_start_s']:g} -> {n['clock_end_s']} s"
+            if n.get("clock_start_s") is not None else f"{n['fps']} fps, {n['duration_s']} s, play {play}")
+
+
+def checklist(a: dict, b: dict, copy_diffs: list, asset_diffs: list) -> dict:
+    """The flat preservation facts of an edit (research note 13.6), each {ok, evidence}: what a
+    reviewer can read in one glance and what the case's p.7 list names."""
+    starts = lambda r: [(x["start_frame"], x.get("exit_frame"), x["end_frame"]) for x in r["result"].get("drags", [])]
+    tl = lambda x: {k: v.get("frames") for k, v in x["compose"].get("timeline", {}).items()}
+    same_rec = a["v"]["recording"]["dir"] == b["v"]["recording"]["dir"]
+    sha_a, sha_b = (a["v"].get("level") or {}).get("sha"), (b["v"].get("level") or {}).get("sha")
+    wav_a, wav_b = a["compose"].get("wav_sha256"), b["compose"].get("wav_sha256")
+    copied_audio = bool((b["compose"].get("patched") or {}).get("audio_copied"))
+    out = {
+        "level_unchanged": {"ok": sha_a == sha_b and sha_a is not None, "evidence": f"level sha {str(sha_a)[:12]} -> {str(sha_b)[:12]}"},
+        "moves_unchanged": {"ok": _moves(a["play"]) == _moves(b["play"]), "evidence": f"{len(_moves(a['play']))} -> {len(_moves(b['play']))} drags, block and cells compared"},
+        "move_timing_unchanged": {"ok": starts(a) == starts(b) and tl(a).get("play") == tl(b).get("play") and tl(a).get("intro") == tl(b).get("intro"),
+                                  "evidence": "every drag's start, exit and end frame and the gameplay window compared"},
+        "gameplay_render_reused": {"ok": same_rec, "evidence": f"recording {a['v']['recording']['dir'].split('/')[-1]}" + ("" if same_rec else f" -> {b['v']['recording']['dir'].split('/')[-1]}")},
+        "duration_unchanged": {"ok": a["compose"].get("frames") == b["compose"].get("frames"), "evidence": f"{a['compose'].get('duration_s')} s -> {b['compose'].get('duration_s')} s"},
+        "camera_unchanged": {"ok": a["job"].get("camera") == b["job"].get("camera") and a["compose"].get("camera") == b["compose"].get("camera"), "evidence": "the recorder's camera and the ad's zoom compared"},
+        "hud_unchanged": {"ok": a["job"].get("hide") == b["job"].get("hide") and a["job"].get("level_label") == b["job"].get("level_label"), "evidence": "the HUD's hidden parts and the level number compared"},
+        "captions_unchanged": {"ok": not copy_diffs, "evidence": "every caption's text compared"},
+        "pictures_unchanged": {"ok": not asset_diffs, "evidence": "every picture slot compared"},
+        "audio_unchanged": {"ok": wav_a == wav_b and wav_a is not None,
+                            "evidence": ("the approved video's audio stream copied byte for byte" if copied_audio else f"mix sha {str(wav_a)[:12]} -> {str(wav_b)[:12]}")},
+    }
+    return out
+
+
 # ---------- the comparison ----------
 
 class _Ctx:
@@ -171,10 +224,27 @@ class _Ctx:
         self.slots = {s for s in set(sa) | set(sb) if sa.get(s) != sb.get(s)} if "assets" in g else set()
         if "visuals.cursor" in g:
             self.slots.add("cursor")
+        # "use this object instead of the obstacle" on a board without walls: the compositor puts the
+        # picture beside the hook and says so; that slot is then the asked one (2026-10-18)
+        self.obstacle_fallback = False
+        if "obstacle" in self.slots:
+            drawn = asset_slots(b["ad"])
+            want = (sb.get("obstacle") or {}).get("file")
+            if drawn.get("obstacle") is None and want and want != "builtin:none" and (drawn.get("hook_icon") or "").startswith(want):
+                self.slots.add("hook_icon")
+                self.obstacle_fallback = True
         self.asset_layers = {lid for s in self.slots for lid in SLOT_LAYERS.get(s, ())}
         self.hud = "visuals.hud" in g
         self.new_play = a["v"]["recording"]["dir"] != b["v"]["recording"]["dir"] and _moves(a["play"]) != _moves(b["play"])
         self.timeline_from = self.play or self.pace or self.length  # a new recording: its own structure
+        self.timing = "sequence.timing" in g  # an asked length for the still opening frame or the held result
+        self.cap_times = ({LAYER_OF["concept." + t["caption"]] for t in bb["sequence"].get("caption_times") or []}
+                          | {LAYER_OF["concept." + t["caption"]] for t in ba["sequence"].get("caption_times") or []}
+                          if "sequence.caption_times" in g else set())
+        self.camera_move = "visuals.punch_in" in g or "visuals.zoom" in g  # the framing changed as asked
+        if "visuals.captions" in g:  # one caption's colour: its layer is the asked one
+            self.copy_layers |= {LAYER_OF["concept." + x["caption"]] for x in
+                                 (bb["visuals"].get("caption_colours") or []) + (ba["visuals"].get("caption_colours") or [])}
 
 
 def _check(diffs: list, text: str, how) -> None:
@@ -218,12 +288,19 @@ def _layer_seg(ad: dict, lid: str) -> str | None:
 def _timing(c: _Ctx) -> tuple[str, list]:
     a, b, d = c.a, c.b, []
     same_moves = _moves(a["play"]) == _moves(b["play"])
+    starts = lambda r: [(x["start_frame"], x.get("exit_frame"), x["end_frame"]) for x in r["result"]["drags"]]
     if a["v"]["recording"]["dir"] != b["v"]["recording"]["dir"] and (
-            [x["start_frame"] for x in a["result"]["drags"]] != [x["start_frame"] for x in b["result"]["drags"]]
-            or len(a["frames"]) != len(b["frames"])):
-        why = "asked" if c.pace else ("the new moves take their own time" if c.play else None)
-        _check(d, f"the recording: {len(a['frames'])} -> {len(b['frames'])} frames"
-                  + ("; the same moves with other pauses" if same_moves else ""), why)
+            starts(a) != starts(b) or len(a["frames"]) != len(b["frames"])):
+        if same_moves and starts(a) == starts(b):
+            # the same job on a changed board: every drag on its frame; only the end differs
+            gap = len(a["frames"]) - len(b["frames"])
+            _check(d, f"the recording: {len(a['frames'])} -> {len(b['frames'])} frames (every drag on the same frame; "
+                      f"the win screen comes {abs(gap)} frame{'s' if abs(gap) != 1 else ''} {'earlier' if gap > 0 else 'later'})",
+                   "a moved door changes how long its block's exit slide takes" if c.level else None)
+        else:
+            why = "asked" if c.pace else ("the new moves take their own time" if c.play else None)
+            _check(d, f"the recording: {len(a['frames'])} -> {len(b['frames'])} frames"
+                      + ("; the same moves with other pauses" if same_moves else ""), why)
     ta, tb = a["compose"].get("timeline", {}), b["compose"].get("timeline", {})
     for sid in dict.fromkeys([*ta, *tb]):
         fa, fb = (ta.get(sid) or {}).get("frames"), (tb.get(sid) or {}).get("frames")
@@ -231,8 +308,12 @@ def _timing(c: _Ctx) -> tuple[str, list]:
             continue
         txt = f"part '{sid}': " + (f"{_fmt_s(fa[0])}-{_fmt_s(fa[1])}" if fa else "none") + " -> " + \
               (f"{_fmt_s(fb[0])}-{_fmt_s(fb[1])}" if fb else "none")
-        if sid in c.parts:
+        if sid in c.parts or (c.timing and sid in ("intro", "result_hold", "question")):
             why = "asked"
+        elif c.timing and fa and fb and fb[1] - fb[0] == fa[1] - fa[0]:
+            why = "moved, whole, by the asked change before it"
+        elif c.timing and sid == "end":
+            why = "the end card keeps its length; the asked change moves where it starts"
         elif c.timeline_from:
             why = "asked" if c.length or c.pace else "the new play has its own length"
         elif c.parts and (fa is None or fb is None or sid in ("end", "intro")):
@@ -252,20 +333,22 @@ def _timing(c: _Ctx) -> tuple[str, list]:
         if sh is not None and sh != 0 and fb[0] - fa[0] == sh and fb[1] - fa[1] == sh:
             continue  # it moved with its part (reported above)
         txt = f"{lid} on screen {_fmt_s(fa[0])}-{_fmt_s(fa[1])} -> {_fmt_s(fb[0])}-{_fmt_s(fb[1])}"
-        if lid in c.copy_layers or lid in c.asset_layers:
+        if lid in c.copy_layers or lid in c.asset_layers or lid in c.cap_times:
             why = "asked"
+        elif c.timing and lid in ("logo", "logo2", "cursor", "hook") and fb[0] == fa[0]:
+            why = "it runs to the end of a part whose length was asked"
         elif lid in BAND_CAPTIONS and resized and fb[1] - fb[0] == fa[1] - fa[0]:
             # one caption at a time in the band: a longer asked caption makes the next one wait, a
             # shorter one lets it go back to its moment
             why = f"one caption at a time in the band, and {', '.join(resized)} now runs {'longer' if fb[0] > fa[0] else 'shorter'}"
         elif c.new_play or c.timeline_from:
             why = "it follows its moment in the new play"
-        elif c.parts:
+        elif c.parts or c.timing:
             why = "its part moved"
         else:
             why = None
         _check(d, txt, why)
-    return f"{b['compose'].get('duration_s')} s; every part and every caption on the same frames", d
+    return f"{numbers_text(numbers(b))}; every part and every caption on the same frames", d
 
 
 def _camera(c: _Ctx) -> tuple[str, list]:
@@ -277,6 +360,11 @@ def _camera(c: _Ctx) -> tuple[str, list]:
     for s in ta:
         if s in tb and ta[s].get("fit") != tb[s].get("fit"):
             _check(d, f"framing of '{s}'", None)
+    pa, pb = a["compose"].get("camera") or [], b["compose"].get("camera") or []
+    if pa != pb:
+        word = lambda cs: "; ".join(f"{x['f0'] / 30:.1f}-{x['f1'] / 30:.1f} s, {round((x['zoom'] - 1) * 100)}% closer"
+                                    + (f" toward the {x['toward'].lower()} block" if x.get("toward") else "") for x in cs) or "none"
+        _check(d, f"a camera punch-in: {word(pa)} -> {word(pb)}", "asked" if "visuals.punch_in" in c.groups else None)
     same_moves = _moves(a["play"]) == _moves(b["play"])
     fin = lambda fr: [(round(f.get("finger_x", 0)), round(f.get("finger_y", 0)), f.get("finger")) for f in fr]
     if (a["v"]["recording"]["dir"] != b["v"]["recording"]["dir"] and same_moves
@@ -352,7 +440,8 @@ LAYER_NAMES = {"hook": "the hook", "cap_mistake": "the caption on the mistake", 
                "cap_hurry": "the 'hurry' caption", "cap_cascade": "the caption on the fast finish",
                "cap_result": "the caption on the result screen", "end_title": "the end card's title",
                "end_fact": "the end card's line", "end_cta": "the PLAY NOW button", "end_art": "the picture on the end card",
-               "logo": "the logo", "logo_end": "the logo on the end card", "cursor": "the tap cursor",
+               "logo": "the logo", "logo_end": "the logo on the end card", "logo2": "the top-right sticker",
+               "logo2_end": "the top-right sticker on the end card", "cursor": "the tap cursor",
                "replay_tag": "the REPLAY badge", "urgency": "the red urgency glow", "vignette": "the vignette",
                "end_disclaimer": "the end card's small print", "hook_icon": "the icon beside the hook"}
 
@@ -365,10 +454,15 @@ def _composition(c: _Ctx, copy_diffs: list) -> tuple[str, list]:
     a, b, d = c.a, c.b, []
     la, lb = a["compose"].get("layers", {}), b["compose"].get("layers", {})
     explained_text = {t.split(":")[0] for t, how in copy_diffs if how}
-    band_asked = "logo" in c.slots
+    band_asked = "logo" in c.slots or "logo2" in c.slots
     band_changed = a["ad"].get("band") != b["ad"].get("band")
     if band_changed:
         _check(d, "the caption band", "asked" if band_asked else None)
+    fa, fb = (x["compose"].get("format") or {"format": "9:16"} for x in (a, b))
+    if fa.get("format") != fb.get("format"):
+        how = (f": the 9:16 content area {fb['window']} scaled {fb['scale']:g} into {fb['size'][0]}x{fb['size'][1]} with "
+               f"blurred side extensions; every layer keeps its place inside it" if fb.get("window") else "")
+        _check(d, f"the format: {fa['format']} -> {fb['format']}{how}", "asked" if "format" in c.groups else None)
     for lid in dict.fromkeys([*la, *lb]):
         if lid in la and lid in lb and la[lid].get("box") == lb[lid].get("box"):
             continue
@@ -385,6 +479,16 @@ def _composition(c: _Ctx, copy_diffs: list) -> tuple[str, list]:
             why = "the logo in a top corner narrows the caption band"
         elif lid == "cursor" and (c.new_play or c.timeline_from or "replay" in c.parts):
             why = "the cursor follows the moves on screen"
+        elif lid == "cursor" and c.camera_move:
+            why = "the cursor stays on the finger in the new framing"
+        elif lid in ("obstacle", "skin") and c.camera_move:
+            why = "the picture follows the board's cells in the new framing"  # 2026-10-18: a zoom edit was failed for this
+        elif lid in ("obstacle", "skin") and (c.new_play or c.timeline_from):
+            why = "the picture follows the board's cells on the new recording"
+        elif c.ending and lid in ("cap_result", "end_title", "end_fact", "end_cta", "end_art", "question"):
+            why = "the result and the end card follow the new ending"  # 2026-10-18: an ending edit was failed for this
+        elif lid == "replay_tag" and c.hud:
+            why = "the REPLAY badge sits on the HUD's level circle, which the HUD change showed, hid or moved"
         elif lid == "hook" and c.hud:
             why = "a hidden clock also hides the stopwatch beside the hook"
         elif lid == "end_art" and c.ending:
@@ -402,7 +506,7 @@ def _sequence(c: _Ctx) -> tuple[str, list]:
         if (sid in oa) == (sid in ob):
             continue
         txt = f"{'added' if sid not in oa else 'removed'}: the {sid}"
-        if sid in c.parts:
+        if sid in c.parts or (c.timing and sid in ("intro", "result_hold")):
             why = "asked"
         elif sid == "intro" and c.parts:
             why = "the frozen intro gives way to the part that was added"
@@ -419,7 +523,8 @@ def _sequence(c: _Ctx) -> tuple[str, list]:
 
 VISUAL_GROUP = {"theme": "visuals.colours", "blocks": "visuals.colours", "background": "visuals.background",
                 "board": "visuals.board", "hud_timer": "visuals.hud", "hud_level": "visuals.hud",
-                "caption_fill": "visuals.captions", "caption_outline": "visuals.captions"}
+                "caption_fill": "visuals.captions", "caption_outline": "visuals.captions",
+                "background_image": "visuals.background", "caption_colours": "visuals.captions"}
 
 
 def _visual_value(k: str, v) -> str:
@@ -428,6 +533,10 @@ def _visual_value(k: str, v) -> str:
         return ", ".join(f"{e.get('slot', '?').lower()} shown as {e.get('name') or e.get('hex')}" for e in (v or [])) or "the game's own"
     if k == "background":
         return " to ".join(v) if v else "the game's own"
+    if k == "caption_colours":
+        return ", ".join(f"the {x['caption'].replace('_', ' ')} in {x['fill']}" for x in v or []) or "the same for all"
+    if k == "background_image":
+        return f"the picture {v}" if v else "the game's own"
     if k in ("hud_timer", "hud_level"):
         return "shown" if v else "hidden"
     if v in (None, "", []):
@@ -437,7 +546,8 @@ def _visual_value(k: str, v) -> str:
 
 VISUAL_NAMES = {"theme": "the look", "blocks": "the block colours", "background": "the background", "board": "the board colour",
                 "hud_timer": "the clock", "hud_level": "the level badge", "caption_fill": "the caption colour",
-                "caption_outline": "the caption outline"}
+                "caption_outline": "the caption outline", "background_image": "the background behind the board",
+                "caption_colours": "one caption's colour"}
 
 
 def _visual(c: _Ctx) -> tuple[str, list]:
@@ -454,7 +564,7 @@ def _visual(c: _Ctx) -> tuple[str, list]:
     if not same_rec and not c.new_play and len(a["frames"]) == len(b["frames"]):
         ident = sum(x.get("hash") == y.get("hash") for x, y in zip(a["frames"], b["frames"]))
         if ident < len(a["frames"]):
-            how = "asked" if c.looks else ("the same moves with other pauses" if c.pace else None)
+            how = "asked" if c.looks or c.level else ("the same moves with other pauses" if c.pace else None)
             if how is None and _same_game_state(a, b):
                 # the renderer is not bit-exact between runs (about 1 % of frames differ by a few
                 # pixels); with the game state equal on every frame, that is noise, not a change
@@ -486,7 +596,10 @@ def _assets(c: _Ctx) -> tuple[str, list]:
             txt += " (the same name, new file contents)"
         stopwatch = (sa[k] or "").startswith("stopwatch.png")
         defaults = all(x is None or x.startswith(("stopwatch.png", "CoinPile.png")) for x in (sa[k], sb[k]))
-        if k in c.slots:
+        if k == "hook_icon" and c.obstacle_fallback:
+            why = "asked"
+            txt += " (the board has no walls, so the obstacle picture goes beside the hook)"
+        elif k in c.slots:
             why = "asked"
         elif k == "hook_icon" and stopwatch and sb[k] is None and c.hud:
             why = "a hidden clock also hides the stopwatch beside the hook"
@@ -501,14 +614,26 @@ def _assets(c: _Ctx) -> tuple[str, list]:
 
 
 def _sound(c: _Ctx) -> tuple[str, list]:
+    """The effects and the music apart (compose.json keeps a hash of each stem); a version made
+    before the stems were kept compares its whole track."""
     a, b, d = c.a, c.b, []
     on = lambda x: bool(x["ad"].get("audio", {}).get("events"))
+    music = lambda x: x["compose"].get("music") or None
+    ma, mb = music(a), music(b)
+    if (ma or {}).get("sha256") != (mb or {}).get("sha256") or (ma or {}).get("gain") != (mb or {}).get("gain"):
+        name = lambda m: m["file"] if m else "no music"
+        _check(d, f"the music: {name(ma)} -> {name(mb)}", "asked" if "audio.music" in c.groups else None)
+    stems = "sfx_sha256" in a["compose"] and "sfx_sha256" in b["compose"]
     if on(a) != on(b):
         _check(d, f"sound effects {'on' if on(a) else 'off'} -> {'on' if on(b) else 'off'}",
                "asked" if "audio" in c.groups else None)
-    elif a["compose"].get("wav_sha256") != b["compose"].get("wav_sha256"):
+    elif (a["compose"].get("sfx_sha256") != b["compose"].get("sfx_sha256") if stems
+          else a["compose"].get("wav_sha256") != b["compose"].get("wav_sha256") and not (ma or mb)):
         _check(d, "the effects play at other moments",
-               "the effects follow the new moves and parts" if c.new_play or c.timeline_from or c.parts else None)
+               "the effects follow the new moves and parts" if c.new_play or c.timeline_from or c.parts
+               else "the effects follow the parts the asked change moved" if c.timing else None)
+    if stems:
+        return "the same sound effects, sample for sample" + (", and the same music" if ma else ""), d
     return "the same sound track, sample for sample", d
 
 
@@ -568,10 +693,14 @@ def report(prev: dict, cur: dict, studio: Path, groups=None, pixels: dict | None
         reasons = _reasons(diffs, notes or []) if status not in ("kept", "changed") else []
         if reasons:
             row["reasons"] = reasons
+        if item == "timing":
+            row["numbers"] = {"before": numbers(a), "after": numbers(b)}
         rows.append(row)
     bad = [r["title"] for r in rows if r["status"] == "not_asked"]
     changed = [r["title"] for r in rows if r["status"] != "kept"]
-    out = {"asked": groups, "asked_names": group_names(groups), "rows": rows, "ok": not bad}
+    out = {"asked": groups, "asked_names": group_names(groups), "rows": rows, "ok": not bad,
+           "changes": group_names(groups), "preserves": [r["title"] for r in rows if r["status"] == "kept"],
+           "checklist": checklist(a, b, copy_d, parts["assets"][1])}
     leak = pixels is not None and pixels.get("contained") is False
     if pixels is not None:
         out["pixels"] = pixels
@@ -600,6 +729,10 @@ def report(prev: dict, cur: dict, studio: Path, groups=None, pixels: dict | None
                           f"also changed because of it: {', '.join(side)}. Everything else is identical.")
     if leak:
         out["verdict"] = "Some changed pixels are outside the edited layers. " + out["verdict"]
+    cp = (pixels or {}).get("copied")
+    if cp and not compare:
+        out["verdict"] += (f" The video itself was patched: {cp['frames']} of {cp['of']} frames are the approved "
+                           f"video's bytes, {cp['gops_rendered']} of {cp['gops']} GOPs were rendered again.")
     return out
 
 

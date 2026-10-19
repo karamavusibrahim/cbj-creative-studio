@@ -1,0 +1,50 @@
+{
+ "file": "loltap_wcj_rainforest_bubble.mp4",
+ "width": 1920,
+ "height": 1080,
+ "box": {
+  "x": 0.1552,
+  "y": 0.1713,
+  "w": 0.2073,
+  "h": 0.6296
+ },
+ "frame": {
+  "columns": 6,
+  "rows": 6,
+  "shape": "open",
+  "blocks": 13,
+  "colours": [
+   "green",
+   "red",
+   "magenta",
+   "yellow",
+   "cyan",
+   "orange"
+  ],
+  "pieces": "varied",
+  "gates_sides": 4,
+  "symmetric": false,
+  "wall_cells": 0,
+  "obstacles": [
+   "numbered bubbles 4"
+  ],
+  "busy": "busy"
+ },
+ "crop": {
+  "columns": 6,
+  "rows": 10,
+  "shape": "open",
+  "blocks": 4,
+  "colours": [
+   "green",
+   "cyan",
+   "magenta"
+  ],
+  "pieces": "mixed",
+  "gates_sides": 1,
+  "symmetric": false,
+  "wall_cells": 0,
+  "obstacles": [],
+  "busy": "simple"
+ }
+}

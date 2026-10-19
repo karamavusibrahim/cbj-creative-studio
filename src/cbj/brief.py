@@ -47,9 +47,9 @@ GAME_HEX = {"Green": "#14FF17", "Yellow": "#FFCC04", "Blue": "#1469FF", "Red": "
 ENDINGS = ("win", "near_fail", "cliffhanger", "time_out")
 MISTAKE_KINDS = ("blocked", "wrong_way", "fidget")
 SHAPES = ("any", "open", "narrow_center", "door", "holes", "cross", "ring", "lanes")
-PIECES = ("mixed", "small", "big", "long")
-STYLES = ("symmetric", "packed", "colourful")
-EVENT_ACTIONS = ("leaves", "moves", "stuck", "hesitates")
+PIECES = ("mixed", "small", "big", "long", "varied")
+STYLES = ("symmetric", "packed", "colourful", "spacious")
+EVENT_ACTIONS = ("leaves", "moves", "stuck", "hesitates", "blocks")  # blocks: moved into another block's way (a wrong move)
 EVENT_WHEN = ("first", "next", "last")
 EVENT_WHICH = ("any", "biggest", "smallest", "longest")
 FINISHES = ("auto", "streak")
@@ -58,12 +58,17 @@ CLOCK_LEFT_RANGE = (1, 3)
 MAX_EVENTS = 6
 THEMES = ("game", "candy", "pastel", "neon", "dark", "custom")
 SEQUENCES = ("standard", "result_first")
-ASSET_ROLES = ("logo", "mascot", "sticker", "cursor", "end_art", "end_background", "button")
+ASSET_ROLES = ("logo", "mascot", "sticker", "cursor", "end_art", "end_background", "button", "obstacle", "skin")
 ASSET_WHEN = ("whole", "hook", "end_card")
 ASSET_WHERE = ("auto", "top_left", "top_right", "beside_hook", "end_card")
 KEEP = ("level", "gameplay", "timing", "camera", "visuals", "copy", "sequence", "assets", "sound")
 CONCEPT_TEXTS = ("hook", "mistake", "fix", "hurry", "cascade", "result", "end_title", "end_fact", "cta")
 FORMATS = ("9:16", "1:1", "4:5", "16:9")
+AUDIO_EXT = (".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac")  # music files an ad may play
+
+
+def is_audio(name) -> bool:
+    return str(name).lower().endswith(AUDIO_EXT)
 LENGTH_RANGE_S = (30.0, 60.0)  # the case asks for 30-60 second creatives (p.2)
 # Hesitations a believable play can show per ending (play.plan refuses more).
 MAX_HESITATIONS = {"win": 1, "near_fail": 2, "cliffhanger": 1, "time_out": 1}
@@ -119,13 +124,18 @@ SCHEMA = _obj({
     "language": _S,
     "format": _enum(FORMATS),
     "level": _obj({
-        "source": _enum(("auto", "shipped", "generate")),
-        "shipped": _nullable(_I),
+        "source": _enum(("auto", "shipped", "generate", "picture")),  # picture: a board read cell by cell from a reference (imagecells, 2026-10-19)
+        "shipped": _nullable(_I), "file": _nullable(_S),
         "shape": _enum(SHAPES),
         "width": _nullable(_I), "height": _nullable(_I), "blocks": _nullable(_I),
         "colours": {"type": "array", "items": _enum(COLOURS)},
         "difficulty": _enum(("any", "easy", "medium", "hard")),
         "label": _nullable(_I),
+        "moves": _nullable(_I),
+        "changes": {"type": "array", "items": _obj({
+            "op": _enum(("move_gate", "add_wall", "remove_wall")), "colour": _nullable(_enum(COLOURS)),
+            "side": _nullable(_enum(("top", "bottom", "left", "right", "opposite"))),
+            "column": _nullable(_I), "row": _nullable(_I)})},
         "pieces": _enum(PIECES),
         "style": {"type": "array", "items": _enum(STYLES)},
     }),
@@ -138,26 +148,35 @@ SCHEMA = _obj({
         "seed": _nullable(_I),
         "events": {"type": "array", "items": _obj({
             "block": _obj({"colour": _nullable(_enum(COLOURS)), "which": _enum(EVENT_WHICH), "all": _B}),
-            "action": _enum(EVENT_ACTIONS), "when": _enum(EVENT_WHEN)})},
+            "action": _enum(EVENT_ACTIONS), "when": _enum(EVENT_WHEN), "by": _nullable(_enum(COLOURS))})},
         "finish": _enum(FINISHES),
         "clock_left_s": _nullable(_I),
+        "blocks_left": _nullable(_I),
     }),
     "pacing": _obj({"length_s": _N, "tempo": _enum(("calm", "normal", "fast")), "curve": _enum(CURVES)}),
     "visuals": _obj({
         "theme": _enum(THEMES),
         "blocks": {"type": "array", "items": _obj({"slot": _enum(COLOURS), "hex": _S, "name": _S})},
         "background": {"type": "array", "items": _S},
+        "background_image": _nullable(_S),
         "board": _nullable(_S),
         "caption_fill": _nullable(_S), "caption_outline": _nullable(_S),
         "camera_zoom": _nullable(_N),
+        "punch_ins": {"type": "array", "items": _obj({"from_s": _N, "to_s": _N, "zoom": _N,
+                                                     "toward": _nullable(_enum(COLOURS))})},
+        "caption_colours": {"type": "array", "items": _obj({"caption": _enum(CONCEPT_TEXTS), "fill": _S})},
         "cursor": _enum(("ring", "hand", "none")),
         "hud_timer": _B, "hud_level": _B,
     }),
     "concept": _obj({"angle": _S, **{k: _nullable(_S) for k in CONCEPT_TEXTS}}),
-    "sequence": _obj({"style": _enum(SEQUENCES), "replay": _B, "result_screen": _B, "end_card": _B}),
+    "sequence": _obj({"style": _enum(SEQUENCES), "replay": _B, "result_screen": _B, "end_card": _B,
+                      "intro_s": _nullable(_N), "hold_s": _nullable(_N),
+                      "caption_times": {"type": "array", "items": _obj({"caption": _enum(CONCEPT_TEXTS),
+                                                                       "start_s": _N, "end_s": _N})}}),
     "assets": {"type": "array", "items": _obj({
-        "file": _S, "role": _enum(ASSET_ROLES), "when": _enum(ASSET_WHEN), "where": _enum(ASSET_WHERE)})},
-    "audio": _obj({"sfx": _B}),
+        "file": _S, "role": _enum(ASSET_ROLES), "when": _enum(ASSET_WHEN), "where": _enum(ASSET_WHERE),
+        "block": _nullable(_enum(COLOURS))})},
+    "audio": _obj({"sfx": _B, "music": _nullable(_S)}),
     "keep": {"type": "array", "items": _enum(KEEP)},
     "changed": {"type": "array", "items": {"type": "string"}},
 })
@@ -172,19 +191,23 @@ def default_brief() -> dict:
         "channel": "network",
         "language": "en",
         "format": "9:16",
-        "level": {"source": "auto", "shipped": None, "shape": "any", "width": None, "height": None,
-                  "blocks": None, "colours": [], "difficulty": "any", "label": None, "pieces": "mixed",
+        "level": {"source": "auto", "shipped": None, "file": None, "shape": "any", "width": None, "height": None,
+                  "blocks": None, "colours": [], "difficulty": "any", "label": None, "moves": None, "changes": [],
+                  "pieces": "mixed",
                   "style": [], "edit": None},
         "gameplay": {"ending": "near_fail", "mistakes": None, "mistake_kinds": [], "hesitations": None,
-                     "timer_s": None, "seed": None, "events": [], "finish": "auto", "clock_left_s": None},
+                     "timer_s": None, "seed": None, "events": [], "finish": "auto", "clock_left_s": None, "blocks_left": None},
         "pacing": {"length_s": 30.0, "tempo": "normal", "curve": "even"},
-        "visuals": {"theme": "game", "blocks": [], "background": [], "board": None, "caption_fill": None,
-                    "caption_outline": None, "camera_zoom": None, "cursor": "ring", "hud_timer": True,
+        "visuals": {"theme": "game", "blocks": [], "background": [], "background_image": None, "board": None,
+                    "caption_fill": None,
+                    "caption_outline": None, "camera_zoom": None, "punch_ins": [], "caption_colours": [],
+                    "cursor": "ring", "hud_timer": True,
                     "hud_level": True, "names": {}, "names_src": {}},
         "concept": {"angle": "", **{k: None for k in CONCEPT_TEXTS}},
-        "sequence": {"style": "standard", "replay": True, "result_screen": True, "end_card": True},
+        "sequence": {"style": "standard", "replay": True, "result_screen": True, "end_card": True,
+                     "intro_s": None, "hold_s": None, "caption_times": []},
         "assets": [],
-        "audio": {"sfx": True},
+        "audio": {"sfx": True, "music": None},
         "keep": [],
         "changed": [],
     }
@@ -225,6 +248,12 @@ def _rgb(h: str) -> tuple[int, int, int]:
     return int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16)
 
 
+def _blend(a: str, b: str, k: float) -> str:
+    """a moved k of the way toward b, as #RRGGBB."""
+    (r1, g1, b1), (r2, g2, b2) = _rgb(a), _rgb(b)
+    return "#%02X%02X%02X" % (round(r1 + (r2 - r1) * k), round(g1 + (g2 - g1) * k), round(b1 + (b2 - b1) * k))
+
+
 def colour_distance(a: str, b: str) -> float:
     """A rough perceptual distance between two #RRGGBB colours (weighted RGB, 'redmean')."""
     (r1, g1, b1), (r2, g2, b2) = _rgb(a), _rgb(b)
@@ -245,6 +274,38 @@ def display_colours(brief: dict) -> dict[str, dict]:
         if slot in out and name:
             out[slot]["name"] = name
     return out
+
+
+SLOT_WORD_DISTANCE = 70  # a colour word within this redmean distance of a shown colour names that slot
+
+
+def slot_of_colour_word(word: str, brief: dict | None, used=None) -> str | None:
+    """The game slot a colour word in a request names, ON THIS CREATIVE: first the name the ad shows a slot in
+    ("the cyan block" on a trailer copy whose green slot is painted cyan), then the game's own names, then the nearest
+    shown colour to the shade the word stands for (videoref.COLOUR_RGB: "teal", "magenta", "light blue"). `used`
+    restricts the answer to the slots on the board. None when nothing is near (2026-10-19: "apply this texture to the
+    cyan block" on a footage-coloured copy was refused as a picture on a block, although the planner had read it)."""
+    w = re.sub(r"\s+", " ", str(word or "").strip().lower().replace("-", " "))
+    if not w:
+        return None
+    slots = [s for s in COLOURS if used is None or s in used]
+    shown = display_colours(brief) if brief else {s: {"hex": GAME_HEX[s], "name": COLOUR_WORDS[s]} for s in COLOURS}
+    for s in slots:  # the name this creative shows the slot in (a repaint's name) comes first
+        if (shown[s].get("name") or "").lower() == w:
+            return s
+    game = {v: k for k, v in COLOUR_WORDS.items()} | {"darkgreen": "DarkGreen"}
+    if w in game and game[w] in slots and not shown[game[w]].get("repainted"):
+        return game[w]  # the game's own name, shown as itself
+    from .videoref import colour_rgb  # the shade a colour name stands for (lazy: videoref imports this module)
+    rgb = colour_rgb(w)
+    if rgb is not None:  # the nearest shown colour to the shade the word stands for ("teal" on a cyan-painted slot)
+        hx = "#%02X%02X%02X" % rgb
+        best = min(slots, key=lambda s: colour_distance(hx, shown[s]["hex"]), default=None)
+        if best is not None and colour_distance(hx, shown[best]["hex"]) <= SLOT_WORD_DISTANCE:
+            return best
+    if w in game and game[w] in slots:
+        return game[w]  # the game's name of a repainted slot, when nothing shown is nearer
+    return None
 
 
 def background(brief: dict) -> list[str]:
@@ -271,6 +332,18 @@ def _complete(b: dict) -> dict:
         elif isinstance(value, dict):
             for k, v in value.items():
                 b[key].setdefault(k, copy.deepcopy(v))
+    for a in b.get("assets") or []:
+        # the role says what the slot is: a "logo" placed beside the hook is the icon there (a
+        # stored "logo" role would make a later "replace the logo" reach it)
+        slot = asset_slot(a)
+        if a.get("role") == "skin":
+            a["block"] = a.get("block") if a.get("block") in COLOURS else None
+        else:
+            a.pop("block", None)
+        if a.get("role") == "logo" and slot == "hook_icon":
+            a["role"] = "sticker"
+        elif a.get("role") == "logo" and slot == "end_art":
+            a["role"] = "end_art"
     seen = {c.get("control") for c in b["controls"]}
     b["controls"] = [c for c in b["controls"] if c.get("control") in CONTROLS]
     for c in CONTROLS:
@@ -292,9 +365,8 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
     sprites = sprites or set()
     lv, gp, pc, vs, cc, sq = (b[k] for k in ("level", "gameplay", "pacing", "visuals", "concept", "sequence"))
 
-    if b["format"] != "9:16":
-        adjust(b, "visuals", f"only 9:16 (1080x1920) is rendered in this version, not {b['format']}.",
-               status="not_supported")
+    if b["format"] not in FORMATS:
+        adjust(b, "visuals", f"the formats are {', '.join(FORMATS)}; 9:16 is used.")
         b["format"] = "9:16"
     if b["channel"] not in ("network", "social"):
         b["channel"] = "network"
@@ -307,8 +379,13 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
     if lv["source"] == "shipped" and lv["difficulty"] in ("medium", "hard"):
         adjust(b, "level", "the shipped levels are tutorial-easy, so a harder level is used instead.")
         lv["source"], lv["shipped"] = "auto", None
+    if lv["source"] == "picture" and not re.fullmatch(r"picture_[0-9a-f]{12}\.json", str(lv.get("file") or "")):
+        adjust(b, "level", "the picture's level file is not one the tool wrote; a level is generated instead.")
+        lv["source"], lv["file"] = "generate", None
     for k, lo, hi in (("width", 4, 9), ("height", 4, 10), ("blocks", 2, 10)):
         v = lv[k]
+        if lv["source"] == "picture":
+            break  # the picture's board is what it is (its file is played as read); the generator's limits do not apply
         if v is not None and not lo <= v <= hi:
             lv[k] = min(hi, max(lo, v))
             adjust(b, "level", f"{k} {v} is outside what the board supports ({lo}-{hi}); {lv[k]} is used.")
@@ -319,6 +396,25 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
         lv["edit"] = None
     if lv["label"] is not None and not 1 <= lv["label"] <= 9999:
         lv["label"] = None
+    if gp.get("blocks_left") is not None:
+        if gp["ending"] == "time_out":
+            if gp["blocks_left"] != 1:
+                adjust(b, "gameplay", f"a time-out ends with exactly one block, one cell from its gate (the play engine's race); "
+                                      f"{gp['blocks_left']} blocks left is not played.")
+            gp["blocks_left"] = None
+        elif gp["ending"] != "cliffhanger":
+            adjust(b, "gameplay", "blocks left at the cut only apply to a cliffhanger (the other endings clear the board); ignored.")
+            gp["blocks_left"] = None
+        elif not 1 <= gp["blocks_left"] <= 3:
+            adjust(b, "gameplay", f"a cliffhanger cuts with 1-3 blocks left; {min(3, max(1, gp['blocks_left']))} is used.")
+            gp["blocks_left"] = min(3, max(1, gp["blocks_left"]))
+    if lv.get("moves") is not None:
+        if lv["moves"] < 3:
+            adjust(b, "level", f"a level of {lv['moves']} moves is too small to read as a puzzle; 3 is used.")
+            lv["moves"] = 3
+        elif lv["moves"] > 16:
+            adjust(b, "level", f"{lv['moves']} moves would not fit a 30-60 s ad; 16 is used.")
+            lv["moves"] = 16
         adjust(b, "level", "the HUD level number must be 1-9999.")
     # ---- gameplay ----
     for k in ("mistakes", "hesitations"):
@@ -343,7 +439,9 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
                               f"{gp['hesitations']}.")
         gp["hesitations"] = max_hes
     if gp["timer_s"] is not None:
-        if gp["ending"] != "win":
+        if gp["ending"] in ("near_fail", "time_out"):
+            # a cliffhanger keeps an asked clock (2026-10-19: "keep its clock", the trailer's 01:05; play.fit_clock cuts
+            # wherever the clock stands then); a near-fail and a time-out land on a planned second
             adjust(b, "difficulty_pacing", f"the clock is set by the ending ({gp['ending'].replace('_', '-')} "
                                            f"lands on a planned second), so {gp['timer_s']} s on the clock is not used.")
             gp["timer_s"] = None
@@ -354,6 +452,9 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
     if lv["pieces"] not in PIECES:
         lv["pieces"] = "mixed"
     lv["style"] = [x for x in dict.fromkeys(lv["style"]) if x in STYLES]
+    if "spacious" in lv["style"] and "packed" in lv["style"]:
+        adjust(b, "level", "a board cannot be both packed and spacious; it is made spacious, with room to move.")
+        lv["style"].remove("packed")
     if lv["source"] == "shipped" and (lv["pieces"] != "mixed" or lv["style"]):
         adjust(b, "level", "the game's own levels are fixed boards; a level is generated to the description instead.")
         lv["source"], lv["shipped"] = "generate", None
@@ -364,17 +465,20 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
         if e.get("action") not in EVENT_ACTIONS or (colour is not None and colour not in COLOURS):
             adjust(b, "gameplay", f"the event {e} names no game colour or action the engine knows; it is left out.")
             continue
-        events.append({"block": {"colour": colour, "which": blk.get("which") if blk.get("which") in EVENT_WHICH else "any",
-                                 "all": bool(blk.get("all"))},
-                       "action": e["action"], "when": e.get("when") if e.get("when") in EVENT_WHEN else "next"})
+        ev = {"block": {"colour": colour, "which": blk.get("which") if blk.get("which") in EVENT_WHICH else "any",
+                        "all": bool(blk.get("all"))},
+              "action": e["action"], "when": e.get("when") if e.get("when") in EVENT_WHEN else "next"}
+        if e["action"] in ("stuck", "blocks") and e.get("by") in COLOURS:
+            ev["by"] = e["by"]  # stuck: the colour of the block that stops it; blocks: the colour of the block it then blocks
+        events.append(ev)
     if len(events) > MAX_EVENTS:
         adjust(b, "gameplay", f"{len(events)} steps are more than one short level can show in order; the first "
                               f"{MAX_EVENTS} are played.")
         events = events[:MAX_EVENTS]
-    stuck = [e for e in events if e["action"] == "stuck"]
+    stuck = [e for e in events if e["action"] in ("stuck", "blocks")]
     if len(stuck) > 3:
-        adjust(b, "gameplay", "at most 3 blocks can get stuck in one short level; the first 3 are played.")
-        events = [e for e in events if e["action"] != "stuck" or e in stuck[:3]]
+        adjust(b, "gameplay", "at most 3 wrong moves (stuck or in the way) can be played in one short level; the first 3 are played.")
+        events = [e for e in events if e["action"] not in ("stuck", "blocks") or e in stuck[:3]]
     if gp["ending"] in ("cliffhanger", "time_out") and any(e["when"] == "last" for e in events):
         why = ("a cliffhanger stops before the last block leaves" if gp["ending"] == "cliffhanger" else
                "a time-out cuts the last block short of its gate")
@@ -429,46 +533,60 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
     # black background hides the grid).
     bg_now = background(b)
     if vs["board"] is not None and bg_now and min(colour_distance(vs["board"], h) for h in bg_now) < MIN_COLOUR_DISTANCE:
-        adjust(b, "visuals", f"the board colour {vs['board']} would disappear into the background; the game's own "
-                             f"board colour is kept.")
+        adjust(b, "visuals", "the board colour asked for would disappear into the background behind it; the game's "
+                             "own board colour is kept.")
         vs["board"] = None
     if vs["camera_zoom"] is not None:
         z = vs["camera_zoom"]
         if not ZOOM_RANGE[0] <= z <= ZOOM_RANGE[1]:
             vs["camera_zoom"] = min(ZOOM_RANGE[1], max(ZOOM_RANGE[0], z))
             adjust(b, "visuals", f"zoom {z:g} would crop the board; {vs['camera_zoom']:g} is used.")
+        if abs(vs["camera_zoom"] - 1.0) < 1e-6:
+            vs["camera_zoom"] = None  # 1.0 is the game's own framing, the same as no zoom
     # Gates must stay tell-apart-able: a repainted colour may not come too close to another
-    # colour of the level (the game's own pairs, like green and dark green, are its design).
+    # colour of the level (the game's own pairs, like green and dark green, are its design), nor
+    # to the background behind the board. A clash is repaired first (the colour is deepened a
+    # little toward the game's own, so a pastel stays a pastel), and only reverted when that fails.
     slots = lv["colours"] or list(COLOURS)
-    reverted = []
-    for _ in range(len(COLOURS)):
-        shown = display_colours(b)
-        clash = next(((s1, s2) for i, s1 in enumerate(slots) for s2 in slots[i + 1:]
-                      if (shown[s1]["repainted"] or shown[s2]["repainted"])
-                      and colour_distance(shown[s1]["hex"], shown[s2]["hex"]) < MIN_COLOUR_DISTANCE), None)
-        if clash is None:
-            break
-        s1, s2 = clash
-        back = s2 if shown[s2]["repainted"] else s1  # undo one repaint and look again
-        reverted.append(f"{shown[back]['name']} ({COLOUR_WORDS[back]})")
-        vs["blocks"] = [e for e in vs["blocks"] if e["slot"] != back]
-        if vs["theme"] not in ("game", "custom", "dark"):
-            vs["blocks"].append({"slot": back, "hex": GAME_HEX[back], "name": COLOUR_WORDS[back]})
-    if reverted:
-        adjust(b, "visuals", f"blocks of different colours must stay easy to tell apart (each has its own gate), so "
-                             f"these keep the game's own colour: {', '.join(reverted)}.")
-    # A repainted block must also stand out from the background behind the board.
     bg_now = background(b)
-    faded = []
-    for e in list(vs["blocks"]):
-        if bg_now and min(colour_distance(e["hex"], h) for h in bg_now) < MIN_COLOUR_DISTANCE:
-            faded.append(f"{e['name'] or COLOUR_WORDS[e['slot']]} ({COLOUR_WORDS[e['slot']]})")
-            vs["blocks"] = [x for x in vs["blocks"] if x["slot"] != e["slot"]]
-            if vs["theme"] not in ("game", "custom", "dark"):
-                vs["blocks"].append({"slot": e["slot"], "hex": GAME_HEX[e["slot"]], "name": COLOUR_WORDS[e["slot"]]})
-    if faded:
-        adjust(b, "visuals", f"a block the colour of the background would vanish into it, so these keep the game's "
-                             f"own colour: {', '.join(faded)}.")
+    deepened, reverted = [], []
+
+    def clash(hexv: str, slot: str, shown: dict) -> str | None:
+        if bg_now and min(colour_distance(hexv, h) for h in bg_now) < MIN_COLOUR_DISTANCE:
+            return "the background"
+        other = next((s for s in slots if s != slot and colour_distance(hexv, shown[s]["hex"]) < MIN_COLOUR_DISTANCE), None)
+        return f"{shown[other]['name']} ({COLOUR_WORDS[other]})" if other else None
+
+    for _ in range(2):  # a repaired colour can move toward a later one; a second pass settles it
+        for e in list(vs["blocks"]):
+            slot = e["slot"]
+            if slot not in slots:
+                continue
+            shown = display_colours(b)
+            why = clash(e["hex"], slot, shown)
+            if why is None:
+                continue
+            # the smallest step that passes: toward the game's own colour, or darker (keeps a muted hue)
+            cands = [_blend(e["hex"], GAME_HEX[slot], k) for k in (0.2, 0.35, 0.5, 0.65, 0.8)] + \
+                    [_blend(e["hex"], "#000000", k) for k in (0.12, 0.22, 0.32, 0.42)]
+            passing = [c for c in cands if clash(c, slot, shown) is None]
+            fixed = min(passing, key=lambda c: colour_distance(e["hex"], c)) if passing else None
+            label = f"{e['name'] or COLOUR_WORDS[slot]} ({COLOUR_WORDS[slot]})"
+            if fixed:
+                e["hex"] = fixed
+                deepened.append(f"{label}, too close to {why}")
+            else:
+                reverted.append(f"{label}, too close to {why}")
+                vs["blocks"] = [x for x in vs["blocks"] if x["slot"] != slot]
+                if vs["theme"] not in ("game", "custom", "dark"):
+                    vs["blocks"].append({"slot": slot, "hex": GAME_HEX[slot], "name": COLOUR_WORDS[slot]})
+    # the theme's own palette entries that are not in vs["blocks"] (candy, pastel, neon) were designed apart
+    if deepened:
+        adjust(b, "visuals", "blocks must stay easy to tell apart from each other and from the background (each has "
+                             "its own gate), so these were deepened a little: " + "; ".join(dict.fromkeys(deepened)) + ".")
+    if reverted:
+        adjust(b, "visuals", "blocks of different colours must stay easy to tell apart (each has its own gate), so "
+                             "these keep the game's own colour: " + "; ".join(dict.fromkeys(reverted)) + ".")
     if vs["cursor"] == "hand" and not any(a["role"] == "cursor" for a in b["assets"]):
         b["assets"].append({"file": "builtin:hand", "role": "cursor", "when": "whole", "where": "auto"})
     elif vs["cursor"] != "hand":
@@ -492,16 +610,54 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
     if not sq["end_card"]:
         adjust(b, "sequence", "the end card holds the call to action; it stays (shortest: 3 s).")
         sq["end_card"] = True
+    for k, hi in (("intro_s", 6.0), ("hold_s", 9.0)):
+        v = sq.get(k)
+        if v is not None:
+            sq[k] = round(min(hi, max(0.0, float(v))), 2)
+            if sq[k] != v:
+                adjust(b, "sequence", f"{'the still opening frame' if k == 'intro_s' else 'the held result'} is "
+                                      f"0-{hi:g} s; {sq[k]:g} s is used.")
+    sq["caption_times"] = [{"caption": t["caption"], "start_s": round(float(t.get("start_s") or 0), 2),
+                            "end_s": round(float(t.get("end_s") or 0), 2)}
+                           for t in sq.get("caption_times") or [] if t.get("caption") in CONCEPT_TEXTS
+                           and (t.get("start_s") or t.get("end_s"))]
+    vs["caption_colours"] = [{"caption": c["caption"], "fill": c["fill"].upper()} for c in vs.get("caption_colours") or []
+                             if c.get("caption") in CONCEPT_TEXTS and HEX.match(str(c.get("fill", "")))]
+    good = []
+    for c in vs.get("punch_ins") or []:
+        try:
+            f0, f1, z = float(c["from_s"]), float(c["to_s"]), float(c["zoom"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if f1 - f0 < 0.3 or f0 < 0:
+            adjust(b, "visuals", f"a camera punch-in needs a window of at least 0.3 s; {f0:g}-{f1:g} s is left out.")
+            continue
+        z = min(1.25, max(1.01, z if z > 1 else 1 + z if z < 0.5 else z))  # "8%" may come as 0.08
+        good.append({"from_s": round(f0, 2), "to_s": round(f1, 2), "zoom": round(z, 3),
+                     "toward": c.get("toward") if c.get("toward") in COLOURS else None})
+    vs["punch_ins"] = good
     # ---- assets ----
     kept = []
     for a in b["assets"]:
         f = a.get("file", "")
+        if is_audio(f):
+            adjust(b, "assets", f"{f} is a sound file: it can be the music, not a picture.")
+            continue
         if f.startswith("builtin:") or f in uploads or f in sprites:
             kept.append(a)
         else:
             adjust(b, "assets", f"{f!r} was not uploaded and is not one of the game's sprites; it was left out.",
                    status="adjusted" if kept else "not_supported")
     b["assets"] = kept
+    bi = vs.get("background_image")
+    if bi is not None and not ((bi in uploads or bi in sprites) and not is_audio(bi)
+                               and str(bi).lower().endswith((".png", ".jpg", ".jpeg", ".webp"))):
+        adjust(b, "visuals", f"{bi!r} is not an uploaded picture or one of the game's own; the game's own background is kept.")
+        vs["background_image"] = None
+    m = b["audio"].get("music")
+    if m is not None and not (is_audio(m) and m in uploads):
+        adjust(b, "assets", f"{m!r} is not an uploaded music file (WAV, MP3, M4A, AAC, OGG or FLAC); the ad has no music.")
+        b["audio"]["music"] = None
     b["keep"] = [k for k in dict.fromkeys(b["keep"]) if k in KEEP]
     return b
 
@@ -511,12 +667,14 @@ def check(brief: dict, uploads: dict[str, Path] | None = None, sprites: set[str]
 # Field groups: what the planner declares it changed ("changed" in the brief), the control each
 # belongs to, and the brief fields in it.
 GROUPS = {
-    "level.source": ("level", [("level", "source"), ("level", "shipped")]),
+    "level.source": ("level", [("level", "source"), ("level", "shipped"), ("level", "file")]),
     "level.shape": ("level", [("level", "shape")]),
     "level.size": ("level", [("level", "width"), ("level", "height")]),
     "level.blocks": ("level", [("level", "blocks")]),
     "level.colours": ("level", [("level", "colours")]),
     "level.label": ("level", [("level", "label")]),
+    "level.moves": ("level", [("level", "moves")]),
+    "level.changes": ("level", [("level", "changes")]),
     "level.difficulty": ("difficulty_pacing", [("level", "difficulty"), ("level", "edit")]),
     "level.pieces": ("level", [("level", "pieces")]),
     "level.style": ("level", [("level", "style")]),
@@ -528,32 +686,40 @@ GROUPS = {
     "gameplay.events": ("gameplay", [("gameplay", "events")]),
     "gameplay.finish": ("gameplay", [("gameplay", "finish")]),
     "gameplay.clock_left": ("gameplay", [("gameplay", "clock_left_s")]),
+    "gameplay.blocks_left": ("gameplay", [("gameplay", "blocks_left")]),
     "pacing.length": ("difficulty_pacing", [("pacing", "length_s")]),
     "pacing.tempo": ("difficulty_pacing", [("pacing", "tempo")]),
     "pacing.curve": ("difficulty_pacing", [("pacing", "curve")]),
     "channel": ("gameplay", [("channel",)]),
     "visuals.colours": ("visuals", [("visuals", "theme"), ("visuals", "blocks")]),
-    "visuals.background": ("visuals", [("visuals", "background")]),
+    "visuals.background": ("visuals", [("visuals", "background"), ("visuals", "background_image")]),
     "visuals.board": ("visuals", [("visuals", "board")]),
-    "visuals.captions": ("visuals", [("visuals", "caption_fill"), ("visuals", "caption_outline")]),
+    "visuals.captions": ("visuals", [("visuals", "caption_fill"), ("visuals", "caption_outline"),
+                                     ("visuals", "caption_colours")]),
     "visuals.zoom": ("visuals", [("visuals", "camera_zoom")]),
+    "visuals.punch_in": ("visuals", [("visuals", "punch_ins")]),
     "visuals.cursor": ("visuals", [("visuals", "cursor")]),
     "visuals.hud": ("visuals", [("visuals", "hud_timer"), ("visuals", "hud_level")]),
     "format": ("visuals", [("format",)]),
     "language": ("concept", [("language",)]),
     **{f"concept.{k}": ("concept", [("concept", k)]) for k in CONCEPT_TEXTS},
-    "sequence": ("sequence", [("sequence",)]),
+    "sequence": ("sequence", [("sequence", "style"), ("sequence", "replay"), ("sequence", "result_screen"),
+                              ("sequence", "end_card")]),
+    "sequence.timing": ("sequence", [("sequence", "intro_s"), ("sequence", "hold_s")]),
+    "sequence.caption_times": ("sequence", [("sequence", "caption_times")]),
     "assets": ("assets", [("assets",)]),
-    "audio": ("assets", [("audio",)]),
+    "audio": ("assets", [("audio", "sfx")]),
+    "audio.music": ("assets", [("audio", "music")]),
 }  # "keep" is not a group: it is always this prompt's own list (see merge)
 # Plain names for the groups, for what the user reads (never a field path).
 GROUP_NAMES = {
     "level.source": "which level is used", "level.shape": "the board's shape", "level.size": "the board's size",
-    "level.blocks": "the number of blocks", "level.colours": "the board's colours", "level.label": "the level number",
+    "level.blocks": "the number of blocks", "level.colours": "the board's colours", "level.label": "the level number", "level.moves": "the number of moves",
+    "level.changes": "the board's walls and doors",
     "level.difficulty": "the level's difficulty", "level.pieces": "the blocks' shapes", "level.style": "the board's look",
     "gameplay.ending": "the ending", "gameplay.mistakes": "the mistakes", "gameplay.hesitations": "the hesitations",
     "gameplay.retake": "a new take of the play", "gameplay.clock": "the clock", "gameplay.events": "the order of moves",
-    "gameplay.finish": "the finish", "gameplay.clock_left": "the seconds left at the end", "pacing.length": "the ad's length",
+    "gameplay.finish": "the finish", "gameplay.clock_left": "the seconds left at the end", "gameplay.blocks_left": "the blocks left at the cut", "pacing.length": "the ad's length",
     "pacing.tempo": "the tempo", "pacing.curve": "the change of pace", "channel": "the channel",
     "visuals.colours": "the block colours", "visuals.background": "the background", "visuals.board": "the board colour",
     "visuals.captions": "the caption colours", "visuals.zoom": "the camera zoom", "visuals.cursor": "the cursor",
@@ -562,11 +728,13 @@ GROUP_NAMES = {
     "concept.hurry": "the 'hurry' caption", "concept.cascade": "the caption on the fast finish",
     "concept.result": "the caption on the result", "concept.end_title": "the end card's title",
     "concept.end_fact": "the end card's line", "concept.cta": "the button's text", "sequence": "the sequence of parts",
-    "assets": "the pictures", "audio": "the sound",
+    "sequence.timing": "the still opening frame and the held result", "sequence.caption_times": "when captions appear",
+    "visuals.punch_in": "a camera punch-in",
+    "assets": "the pictures", "audio": "the sound effects", "audio.music": "the music",
 }
 # Groups a model tends to fill without being asked (copy, board sizes, colours, a level number,
 # assets): accepted only when declared AND the prompt's words show it asked for them.
-PRONE = {"level.size", "level.blocks", "level.colours", "level.label", "assets", "level.pieces", "level.style", "level.shape",
+PRONE = {"level.changes", "audio.music", "level.size", "level.blocks", "level.colours", "level.label", "level.moves", "gameplay.blocks_left", "assets", "level.pieces", "level.style", "level.shape",
          "level.difficulty", "gameplay.retake",
          "gameplay.events", "gameplay.finish", "gameplay.clock_left", "pacing.curve", "pacing.length",
          *(f"concept.{k}" for k in CONCEPT_TEXTS)}
@@ -582,16 +750,29 @@ DIFFICULTY_WORDS = ("easy", "easier", "simple", "hard", "harder", "difficult", "
                     "asmr", "rage", "frustrating", "frustration", "nightmare", "brain", "genius", "nothing can leave",
                     "level up", "makes you think", "make you think", "nobody can solve", "no one can solve",
                     "can't solve", "cannot solve", "experienced", "pro", "pros", "advanced", "intense", "chill",
-                    "laid-back", "laid back", "relaxed", "hardcore", "casual")
+                    "laid-back", "laid back", "relaxed", "hardcore", "casual",
+                    # what the player has to do says how hard the board is
+                    "out of the way", "in each other's way", "in the way", "block each other", "blocking each other",
+                    "rearrange", "reposition", "repositioning", "make room", "create room", "clear the way",
+                    "maneuver", "manoeuvre", "think", "planning", "plan ahead", "straight out", "immediately",
+                    "obvious", "first-time", "first time", "no thinking", "without thinking", "plenty of empty space")
 SHAPE_WORDS = ("narrow", "centre", "center", "middle", "waist", "bottleneck", "hourglass", "door", "doorway", "room",
                "rooms", "gap", "hole", "holes", "pillar", "pillars", "obstacle", "obstacles", "cross", "plus", "ring",
                "donut", "doughnut", "loop", "lane", "lanes", "corridor", "corridors", "shape", "shaped", "open",
                "rectangle", "square", "layout", "structure", "wall", "walls", "maze", "empty", "plain", "corner",
                "corners", "column", "columns", "row", "rows")
 PIECE_WORDS = ("big", "bigger", "chunky", "large", "huge", "giant", "small", "smaller", "tiny", "little", "long",
-               "longer", "bar", "bars", "stick", "sticks", "line", "lines", "short")
+               "longer", "bar", "bars", "stick", "sticks", "line", "lines", "short", "l-shaped", "l shaped", "t-shaped",
+               "corner", "corners", "mix of", "mixture", "variety", "varied", "different shapes", "rectangular",
+               "block shapes", "shapes of blocks")
 STYLE_WORDS = ("symmetric", "symmetrical", "symmetry", "mirror", "mirrored", "packed", "full", "jam", "jammed",
-               "crowded", "dense", "busy", "colourful", "colorful", "rainbow", "every colour", "every color",
+               "spacious", "roomy", "free space", "empty space", "open space", "room to move", "room for movement",
+               "empty cells", "free cells", "empty tiles", "free tiles",
+               "space for movement", "space to move", "uncluttered", "sparse", "airy", "not crowded", "not packed",
+               "not cramped", "breathing room", "lots of space", "plenty of space", "enough space", "enough room",
+               "crowded", "dense", "densely", "busy", "clustered", "cluster", "tightly", "tight", "few empty",
+               "little room", "little space", "cramped", "congested", "squeezed", "no room", "limited space", "limited room",
+               "limited empty", "limited free", "compact board", "colourful", "colorful", "rainbow", "every colour", "every color",
                "all colours", "all colors", "all the colours", "all the colors", "visually", "pretty", "beautiful",
                "interesting", "eye-catching", "eye catching", "striking", "satisfying to look", "looks", "gorgeous",
                "stunning", "lots of colours", "lots of colors", "many colours", "many colors", "eye candy")
@@ -601,11 +782,28 @@ ORDER_WORDS = ("first", "then", "last", "before", "after", "order", "one by one"
                "start", "starts", "start with", "begin", "begins", "end", "ends", "at the end", "very end",
                "finish with", "finishes with", "escape", "escapes", "exit", "exits", "aside", "save", "saved",
                "blocked", "gets blocked", "trapped", "can't reach", "cannot reach")
+# a leaving order: sequencing words only (not "exit" or "block", which every prompt has)
+SEQUENCE_WORDS = ("first", "second", "third", "fourth", "fifth", "then", "last", "before", "after", "order", "one by one", "colour by colour", "color by color",
+                  "finally", "next", "followed", "sequence", "until", "start with", "starts with", "begin with",
+                  "begins with", "end with", "ends with", "at the end", "very end", "finish with", "finishes with",
+                  "early", "late", "lastly", "leaves first", "goes first", "opens the route", "clears the way",
+                  "for the end", "to the end", "till the end", "begin by", "start by", "begins by", "starts by",
+                  "save", "saved", "keep", "kept", "right away", "straight away", "at the start", "at the beginning",
+                  "so the", "so that", "once", "as soon as", "when", "the end", "the beginning")
+ACTION_WORDS = ("stuck", "hesitate", "hesitates", "hesitating", "doubt", "pick up", "picks up", "picked up", "grab", "grabs",
+                "out of the way", "aside", "blocked", "gets blocked", "trapped", "can't reach", "cannot reach", "wrong way",
+                "in the way", "blocks the", "blocking", "unhelpful", "prevents", "obstruct", "obstructs", "cuts off",
+                "moved", "reposition", "repositions", "repositioning", "rearrange", "shuffle", "slide")
 BLOCK_WORDS = ("biggest", "smallest", "longest", "big", "small", "long", "block", "blocks", "piece", "one")
 FINISH_WORDS = ("satisfying", "satisfy", "one move", "single move", "chain", "cascade", "domino", "combo", "streak",
                 "in a row", "fly out", "flies out", "frees", "free them", "unlock", "relaxing", "relax", "asmr",
-                "calming", "calm", "oddly", "smooth", "speedrun", "flow", "one after another", "one after the other")
+                "calming", "calm", "oddly", "smooth", "speedrun", "flow", "one after another", "one after the other",
+                "quick sequence", "sequence of exits", "sequence of successful exits", "rapid", "burst", "quick run",
+                "quick succession", "succession", "rapid-fire", "fast finish", "quick finish", "quick exits",
+                "rush of exits", "run of exits")
 CURVE_WORDS = ("tension", "tense", "build", "builds", "building", "rise", "rising", "rises", "escalate", "escalates",
+               "begin with", "begins with", "beginning with", "start with", "starts with", "end with", "ends with",
+               "followed by", "then quick", "then fast", "quick succession", "consecutive clears", "then speed",
                "speeds up", "speed up", "speeding up", "speeding", "faster", "faster and faster", "gets faster",
                "getting faster", "accelerate", "accelerates", "accelerating", "quicker and quicker", "pace",
                "slows down", "slow down", "slowing down", "slowing", "slower", "slower and slower", "gets slower",
@@ -617,7 +815,9 @@ RETAKE_WORDS = ("take", "retake", "re-take", "reshoot", "re-shoot", "different m
 HARDER_WORDS = ("harder", "more difficult", "tougher", "trickier", "more challenging", "more of a challenge",
                 "less easy", "make it hard", "make it difficult")
 EASIER_WORDS = ("easier", "simpler", "less difficult", "less hard", "less tricky", "not so hard", "too hard",
-                "make it easy", "more relaxed")
+                "make it easy", "more relaxed", "simplify", "simplified", "simplifies", "simplifying", "ease it",
+                "ease up", "loosen", "open it up", "more room", "more space", "more movement space", "less crowded",
+                "less packed", "gentler", "friendlier")
 
 
 # Words that make a "harder"/"easier" clause about the ad's copy or pictures, not the level.
@@ -625,6 +825,122 @@ NOT_LEVEL_WORDS = ("hook", "caption", "captions", "text", "texts", "read", "titl
                    "image", "font", "word", "words", "say", "says", "copy", "ignore", "spot", "see", "notice",
                    "message", "line", "tagline", "slogan", "headline", "end card", "background", "colours", "colors",
                    "eyes", "look", "looks")
+
+
+FIELD_NAMES = {
+    "level.source": "which level is used", "level.shipped": "the game's own level", "level.shape": "the board's shape",
+    "level.width": "the board's width", "level.height": "the board's height", "level.blocks": "the number of blocks",
+    "level.colours": "the board's colours", "level.difficulty": "the difficulty", "level.label": "the level number",
+    "level.pieces": "the blocks' shapes", "level.style": "the board's look", "gameplay.ending": "the ending",
+    "gameplay.mistakes": "the mistakes", "gameplay.mistake_kinds": "the kind of mistake",
+    "gameplay.hesitations": "the hesitations", "gameplay.timer_s": "the clock", "gameplay.seed": "the take",
+    "gameplay.events": "the order of moves", "gameplay.finish": "the finish", "gameplay.clock_left_s": "the seconds left",
+    "pacing.length_s": "the ad's length", "pacing.tempo": "the tempo", "pacing.curve": "the change of pace",
+    "visuals.theme": "the colour theme", "visuals.blocks": "the block colours", "visuals.background": "the background",
+    "visuals.board": "the board colour", "visuals.caption_fill": "the caption colour",
+    "visuals.caption_outline": "the caption outline", "visuals.camera_zoom": "the camera zoom", "visuals.cursor": "the cursor",
+    "visuals.hud_timer": "the clock on screen", "visuals.hud_level": "the level number on screen",
+    "concept.angle": "the angle", "concept.hook": "the hook", "concept.mistake": "the caption on the mistake",
+    "concept.fix": "the caption on the fix", "concept.hurry": "the 'hurry' caption", "concept.cascade": "the caption on the fast finish",
+    "concept.result": "the caption on the result", "concept.end_title": "the end card's title",
+    "concept.end_fact": "the end card's line", "concept.cta": "the button's text", "sequence.style": "the order of parts",
+    "sequence.replay": "the replay", "sequence.result_screen": "the result screen", "sequence.end_card": "the end card",
+    "audio.sfx": "the sound", "assets.role": "the picture's place",
+}
+TOKEN_NAMES = {
+    "timer_s": "the clock", "length_s": "the length", "clock_left_s": "the seconds left", "near_fail": "a near-fail",
+    "time_out": "a time-out", "end_art": "the picture on the end card", "end_background": "the end card's background",
+    "obstacle": "the picture on the board's walls",
+    "end_title": "the end card's title", "end_fact": "the end card's line", "mistake_kinds": "the kind of mistake",
+    "hud_timer": "the clock on screen", "hud_level": "the level number on screen", "camera_zoom": "the camera zoom",
+    "caption_fill": "the caption colour", "caption_outline": "the caption outline", "result_screen": "the result screen",
+    "end_card": "the end card", "narrow_center": "a narrow centre", "result_first": "the result first",
+    "speeds_up": "speeding up", "slows_down": "slowing down", "wrong_way": "a wrong-way move", "clock_left": "the seconds left",
+    "beside_hook": "beside the hook", "top_left": "top left", "top_right": "top right", "sfx": "the sound effects",
+    "cta": "the button",
+}
+_FIELD = re.compile(r"\b(level|gameplay|visuals|pacing|concept|sequence|assets|audio)\.([a-z_]+)\b")
+_TOKEN = re.compile(r"(?<![\w'])(" + "|".join(sorted(TOKEN_NAMES, key=len, reverse=True)) + r")(?![\w'])")
+_QUOTED_ENUM = re.compile(r"(?<!'s )\b(channel|format|language|theme|ending|tempo|curve|difficulty|shape|cursor)\s+'([^']+)'")
+_DOUBLED = re.compile(r"\b(the|a|an) (the|a|an) \b")
+_ENUM_WORDS = {("channel", "network"): "the ad-network channel", ("channel", "social"): "the social channel",
+               ("language", "en"): "English", ("language", "tr"): "Turkish"}
+
+
+def plain_text(text: str | None) -> str | None:
+    """Field names and enum tokens a model lets slip into text the user reads, in plain words."""
+    if not text:
+        return text
+    def field(m):
+        key = f"{m.group(1)}.{m.group(2)}"
+        return FIELD_NAMES.get(key) or GROUP_NAMES.get(key) or {"level": "the level", "gameplay": "the play",
+            "visuals": "the look", "pacing": "the pacing", "concept": "the wording", "sequence": "the sequence",
+            "assets": "the pictures", "audio": "the sound"}[m.group(1)]
+    def quoted(m):
+        w, v = m.group(1), m.group(2)
+        if (w, v) in _ENUM_WORDS:
+            return _ENUM_WORDS[(w, v)]
+        return f"the {TOKEN_NAMES.get(v, v.replace('_', ' '))} {w}" if w in ("format", "theme", "tempo", "curve", "difficulty", "shape", "cursor") else f"the {w} {v}"
+    # a {fact} placeholder in quoted copy ("Cleared with {clock_left} left") is left exactly as it is
+    parts = re.split(r"(\{\w+\})", text)
+    for i in range(0, len(parts), 2):
+        t = _FIELD.sub(field, parts[i])
+        t = _QUOTED_ENUM.sub(quoted, t)
+        t = _TOKEN.sub(lambda m: TOKEN_NAMES[m.group(1)], t)
+        parts[i] = _DOUBLED.sub(lambda m: m.group(2) + " ", t)
+    return "".join(parts)
+
+
+def plain_texts(brief: dict) -> None:
+    """Scrub every text the user reads: the summary, the assumptions, each row's plan and why."""
+    brief["summary"] = plain_text(brief.get("summary"))
+    brief["assumptions"] = [plain_text(a) for a in brief.get("assumptions") or []]
+    for row in brief.get("controls", []):
+        row["plan"] = plain_text(row.get("plan"))
+        row["why"] = plain_text(row.get("why"))
+
+
+_SIZE = re.compile(r"\b(a |an |the )?(new |fresh |small |big |large |compact )?(\d{1,2})\s*(x|×|by)\s*(\d{1,2})(\s*(open |square |small |big )?(board|grid|level))?", re.I)
+_NBLOCKS = re.compile(r"\b(exactly |only |just |with )?(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|twelve)\s+"
+                      r"((coloured|colored|different|matching|single|small|big|long)\s+)?blocks?\b", re.I)
+
+
+_LENGTH = re.compile(r"\b(\d{1,3})(?:[.,]\d+)?\s*-?\s*(s|sec|secs|second|seconds)\b(?!\s*(left|remaining|on the clock|to spare|to go))")
+_CLOCK_LEFT = re.compile(r"\b(with |at |finishing with |finishes with |ending with |ends with )?(\d{1,2}|one|two|three)\s*-?\s*"
+                         r"(s|sec|secs|second|seconds)\s+(left|remaining|to spare|to go|on the clock)(\s+on the clock)?", re.I)
+
+
+def drop_numbers(brief: dict, group: str) -> None:
+    """The planner wrote a board size or a block count that the prompt never gave and the merge did
+    not take: the words must not keep promising it."""
+    def fix(text):
+        if not text:
+            return text
+        if group == "level.size":
+            # "sized at 6x6" -> "sized to the ad"; "a 6x6 board" -> "a board sized to the ad"; a bare "6x8" is dropped
+            text = re.sub(r"\b(sized|size|sizes|dimensions)\s+(at|of|to|is|are|:)\s*(\d{1,2})\s*(x|×|by)\s*(\d{1,2})\b", "sized to the ad", text, flags=re.I)
+            text = _SIZE.sub(lambda m: (("a " if m.group(1) else "") + "board sized to the ad") if m.group(6)
+                             else (m.group(1) or ""), text)
+            text = re.sub(r"  +", " ", text)
+        if group == "level.blocks":
+            text = _NBLOCKS.sub(lambda m: ("with " if (m.group(1) or "").strip() == "with" else "") + "the blocks the ad needs", text)
+        if group == "pacing.length":
+            want = brief.get("pacing", {}).get("length_s")
+            if want:
+                text = _LENGTH.sub(lambda m: f"{int(want)}-second" if m.group(2).startswith("sec") and m.group(0).rstrip().endswith("second") else f"{int(want)} seconds", text)
+        if group == "gameplay.clock_left":
+            text = _CLOCK_LEFT.sub(lambda m: (m.group(1) or "") + "a little time left", text)
+        # a dropped number must not leave its words behind: "(about )", "about cells wide and tall"
+        text = re.sub(r"\(\s*(about|around|roughly|approximately)?\s*\)", "", text)
+        text = re.sub(r"\b(about|around|roughly|approximately)\s+(cells\s+wide(\s+and\s+tall)?|cells|wide|tall|blocks)\b", "", text)
+        text = re.sub(r"\s+([,.;)])", r"\1", re.sub(r"  +", " ", text))
+        return _DOUBLED.sub(lambda m: m.group(2) + " ", text)
+    rows = {"level.size": "level", "level.blocks": "level", "pacing.length": "difficulty_pacing", "gameplay.clock_left": "gameplay"}
+    brief["summary"] = fix(brief.get("summary"))
+    brief["assumptions"] = [fix(a) for a in brief.get("assumptions") or []]
+    for row in brief.get("controls", []):
+        if row["control"] == rows[group]:
+            row["plan"] = fix(row.get("plan"))
 
 
 def clauses(text: str) -> list[str]:
@@ -649,7 +965,9 @@ COPY_WORDS = ("hook", "caption", "text", "copy", "say", "says", "tone", "angle",
 
 def _get(d: dict, path: tuple):
     for k in path:
-        d = d[k]
+        if not isinstance(d, dict):
+            return None
+        d = d.get(k)  # a brief written before a field existed (level.file, 2026-10-19) reads as None, never a KeyError
     return d
 
 
@@ -690,22 +1008,47 @@ def _evidence(group: str, prompt: str, new: dict) -> str | None:
     # numbers that are lengths, clocks or counts of other things are not board sizes
     sized = re.sub(r"\d+(\.\d+)?\s*-?\s*(s|sec|secs|second|seconds|min|minute|minutes|%|percent)\b", " ", text)
     sized = re.sub(r"\b(level|lvl)\s*\d+", " ", sized)
+    if group == "level.changes":
+        door = r"\b(doors?|gates?|exits?)\b"
+        wall = r"\b(walls?|obstacles?|holes?|pillars?|barriers?|tiles?|cells?|blockers?)\b"
+        verb = r"\b(move|moved|moving|put|place|relocate|shift|add|adding|insert|remove|removing|delete|take out|get rid of|drop)\b"
+        if re.search(verb, text) and (re.search(door, text) or re.search(wall, text)):
+            return None
+        return "the prompt does not ask to move a door or to add or remove a wall"
+    if group == "audio.music":
+        if _has_word(text, ("music", "track", "song", "soundtrack", "tune", "melody", "bgm", "jingle", "beat")) or \
+                is_audio(new.get("audio", {}).get("music") or "") and (new["audio"]["music"] or "").lower() in text:
+            return None
+        return "the prompt does not mention music"
     if group == "level.size":
         if re.search(r"\d\s*(x|by|×)\s*\d", sized) or _has_word(sized, ("big", "large", "small", "tiny", "huge", "wide",
-                                                                           "tall", "compact")):
+                                                                           "medium-sized", "medium sized", "mid-sized", "medium-size",
+                                                                           "tall", "compact", "square", "spacious",
+                                                                           "roomy", "empty space", "lots of space",
+                                                                           "plenty of space", "cramped")):
             return None
         return "the prompt gives no board size"
     if group == "level.blocks":
-        if re.search(r"\d", sized) or _has_word(sized, NUMBER_WORDS_ANY):
+        counted = re.sub(r"\b(a few|few|two|three|four|five|several|many|only a few|a couple of) (colou?rs|colors|shades|hues)\b", " ", sized)
+        if re.search(r"\d", counted) or _has_word(counted, NUMBER_WORDS_ANY):
             return None
         return "the prompt gives no block count"
     if group == "level.colours":
-        if _has_word(text, COLOUR_WORDS_ANY + ("colours", "colors")):
+        # "five coloured blocks" / "colourful blocks" speaks of the blocks' colours too: an edit that
+        # says so may release an earlier palette (a 3-colour limit stayed on a "five colored blocks"
+        # level, 2026-10-15)
+        if _has_word(text, COLOUR_WORDS_ANY + ("colours", "colors", "coloured", "colored", "colourful", "colorful",
+                                               "multicoloured", "multicolored", "multi-coloured", "multi-colored")):
             return None
         return "the prompt names no colours"
+    if group == "level.moves":
+        if re.search(r"\d+\s*(to|-|–|or)?\s*\d*\s*(?:(meaningful|block|necessary|player|good|real|single|clever)\s+){0,3}(moves?|movements?|drags?|steps|swipes)\b", sized) \
+                or re.search(r"(moves?|movements?|drags?|steps|swipes)\b[^.]{0,20}\b\d", sized):
+            return None
+        return "the prompt gives no number of moves"
     if group == "level.label":
         label = new["level"]["label"]
-        return None if label is None or str(label) in text else "the prompt gives no level number"
+        return None if label is None or re.search(rf"(?<![\d.]){label}(?![\d.:])", text) else "the prompt gives no level number"
     if group == "level.difficulty":
         return None if _has_word(text, DIFFICULTY_WORDS) else "the prompt asks for no difficulty"
     if group == "gameplay.retake":
@@ -718,17 +1061,37 @@ def _evidence(group: str, prompt: str, new: dict) -> str | None:
             return None
         return "the prompt gives no length for the ad"
     if group == "level.shape":
-        return None if _has_word(text, SHAPE_WORDS) else "the prompt asks for no board shape"
+        # "L-shaped blocks" is about the pieces, not the board
+        shape_text = re.sub(r"\b[a-z]-shaped\b|\bshaped (blocks?|pieces?)\b|\bblock shapes?\b", " ", text)
+        return None if _has_word(shape_text, SHAPE_WORDS) else "the prompt asks for no board shape"
     if group == "level.pieces":
         return None if _has_word(text, PIECE_WORDS) else "the prompt says nothing about the blocks' shapes"
     if group == "level.style":
         return None if _has_word(text, STYLE_WORDS) else "the prompt asks for no particular look of the board"
     if group == "gameplay.events":
-        if _has_word(text, ORDER_WORDS) and (_has_word(text, COLOUR_WORDS_ANY) or _has_word(text, BLOCK_WORDS)):
-            return None
+        # "first-time player", "your first move" and "exit doors" are not an order of moves: a leaving
+        # order needs a sequencing word; a stuck/hesitating/moved-aside block needs its own word.
+        # on `sized`: "15-second" is a length, not the ordinal "second"
+        seq_text = re.sub(r"\bfirst[\s-]+(time|timer|timers|try|go|puzzle|level)\b|\b(your|the|a|an|its|their|his|her) first move\b|\bat first\b", " ", sized)
+        # "start with an uncluttered board", "end with the board cleared" are about the ad, not a block
+        seq_text = re.sub(r"\b(start|starts|begin|begins|open|opens)\s+(with|on)\s+(a|an|the)\b[^,.;]{0,40}\b(board|level|puzzle|layout|cluster|grid)\b"
+                          r"|\b(end|ends|finish|finishes|close|closes)\s+(with|on)\s+(a|an|the|all|every)\b[^,.;]{0,40}"
+                          r"\b(board|cleared|clear|victory|win|empty|success|screen|moment)\b", " ", seq_text)
+        evs = new.get("gameplay", {}).get("events") or []
+        wants_order = any(e.get("action") == "leaves" for e in evs) or not evs
+        wants_action = any(e.get("action") in ("stuck", "hesitates", "moves", "blocks") for e in evs)
+        if (_has_word(seq_text, SEQUENCE_WORDS) if wants_order else False) or \
+                (_has_word(seq_text, ACTION_WORDS) if wants_action else False):
+            if _has_word(text, COLOUR_WORDS_ANY) or _has_word(text, BLOCK_WORDS):
+                return None
         return "the prompt names no order of moves for particular blocks"
     if group == "gameplay.finish":
         return None if _has_word(text, FINISH_WORDS) else "the prompt asks for no particular finish"
+    if group == "gameplay.blocks_left":
+        if re.search(r"\b(one|1|two|2|three|3|a single|the last|the final)\s+(\w+\s+)?(blocks?|pieces?|moves?)\b[^.]{0,40}\b(left|remaining|away|before|short|to go)\b"
+                     r"|\b(one|a single|the last|the final|decisive) (move|drag|block)\b|\bone (move|step|drag) (away|from|short)\b|\bleaving (one|a single|two)\b", text):
+            return None
+        return "the prompt gives no number of blocks left at the cut"
     if group == "gameplay.clock_left":
         if re.search(r"\d+\s*(s|sec|secs|second|seconds)\b", text) or re.search(r"\b0?0:0\d\b", text) or \
                 _has_word(text, ("one second", "two seconds", "three seconds", "last second", "a second")):
@@ -747,17 +1110,31 @@ def _evidence(group: str, prompt: str, new: dict) -> str | None:
 
 
 def asset_slot(a: dict) -> str:
-    """The picture slot an asset fills: logo, hook_icon, end_art, button, end_background, cursor."""
-    role, when = a.get("role"), a.get("when")
-    if role == "end_art" or (role in ("mascot", "sticker") and when == "end_card"):
+    """The picture slot an asset fills: logo, logo2 (a second corner picture), hook_icon, end_art, button,
+    end_background, cursor, obstacle (on the board's walls)."""
+    role, when, where = a.get("role"), a.get("when"), a.get("where")
+    if role in ("cursor", "button", "end_background", "obstacle", "skin"):
+        return str(role)  # obstacle: the picture on the board's walls (holes); skin: a texture on one block
+    if role == "end_art":
         return "end_art"
-    if role in ("mascot", "sticker"):
+    # a picture's place decides its slot (a "logo" put beside the hook is the icon there)
+    if where == "beside_hook" or (when == "hook" and where not in ("top_left", "top_right")):
         return "hook_icon"
-    return str(role)
+    if role in ("mascot", "sticker", "logo") and (where == "end_card" or when == "end_card"):
+        return "end_art"  # a picture for the end card only is the end card's picture
+    if role in ("sticker", "mascot") and where == "top_right":
+        return "logo2"  # a sticker in the top-right corner: its own slot, so two corner pictures can coexist
+    if where in ("top_left", "top_right") or role == "logo":
+        return "logo"  # a logo (in either corner), or a sticker asked for the top-left corner, for the whole ad
+    return "hook_icon"
 
 
 REMOVE_WORDS = ("remove", "removed", "delete", "drop", "get rid", "hide", "take out", "take away", "lose")
-SLOT_WORDS = {"logo": ("logo", "brand", "watermark"),
+SLOT_WORDS = {"obstacle": ("obstacle", "obstacles", "wall", "walls", "pillar", "pillars", "barrier", "blocker"),
+              "skin": ("texture", "skin", "the block", "that block", "brick", "piece"),
+              "logo": ("logo", "brand", "watermark", "corner", "upper-left", "upper left", "top-left", "top left",
+                       "upper-right", "upper right", "top-right", "top right"),
+              "logo2": ("corner", "upper-right", "upper right", "top-right", "top right", "sticker", "stickers"),
               "hook_icon": ("icon", "stopwatch", "clock icon", "sticker", "hook icon", "next to the hook",
                             "beside the hook"),
               "end_art": ("coin", "coins", "coin pile", "end card picture", "end-card picture", "picture", "art",

@@ -1,0 +1,18 @@
+{
+  "note": "QA fixture: three of the files the tool was built and tested with (the real index lists every one).",
+  "groups": [
+    {
+      "title": "Logos and stickers",
+      "items": [
+        { "file": "asset_a_logo.png", "path": "assets/logos/asset_a_logo.png", "about": "A flat studio logo to place on the end card.", "bytes": 3550, "kind": "image" }
+      ]
+    },
+    {
+      "title": "Trailers and music",
+      "items": [
+        { "file": "qa_trailer.mp4", "path": "assets/trailers/qa_trailer.mp4", "about": "A one-second violet clip standing in for a Color Block Jam trailer (a reference video).", "bytes": 1878, "kind": "video" },
+        { "file": "qa_track.wav", "path": "assets/music/qa_track.wav", "about": "A quarter-second tone standing in for the music track.", "bytes": 4078, "kind": "audio" }
+      ]
+    }
+  ]
+}

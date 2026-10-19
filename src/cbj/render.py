@@ -296,9 +296,12 @@ def visuals_job(visuals: dict | None) -> dict:
     """The job's visuals section: {"blocks": [{"slot", "hex"}], "grid", "background_top",
     "background_bottom"}; empty fields keep the game's look."""
     v = visuals or {}
-    return {"blocks": [{"slot": b["slot"], "hex": b["hex"]} for b in v.get("blocks", [])],
-            "grid": v.get("grid") or "", "background_top": v.get("background_top") or "",
-            "background_bottom": v.get("background_bottom") or ""}
+    out = {"blocks": [{"slot": b["slot"], "hex": b["hex"]} for b in v.get("blocks", [])],
+           "grid": v.get("grid") or "", "background_top": v.get("background_top") or "",
+           "background_bottom": v.get("background_bottom") or ""}
+    if v.get("background_image"):
+        out["background_image"] = str(Path(v["background_image"]).resolve())
+    return out
 
 
 def rerun(folder: str | Path, out_dir: str | Path, changes: dict | None = None) -> dict:
@@ -320,6 +323,24 @@ def rerun(folder: str | Path, out_dir: str | Path, changes: dict | None = None) 
         if k not in ("visuals", "hide", "camera", "level_label"):
             raise ValueError(f"rerun can change only the look ({k} would change the play)")
         job[k] = v
+    stock = json.loads((folder / "result.json").read_text()).get("game_patched") is False
+    return run_player(job, app=PLAYER_STOCK if stock else None)
+
+
+def rerun_on(folder: str | Path, out_dir: str | Path, level: dict) -> dict:
+    """The same job (the same drags, the same timing) played again on a changed board: a board
+    edit that every move survives (a wall removed, a door moved where the play still uses it).
+    The clock the ad used is kept; the game itself checks every move again."""
+    folder, out = Path(folder).resolve(), Path(out_dir).resolve()
+    if not (folder / "job.json").is_file():
+        raise ValueError(f"{folder}: no recording (job.json) there")
+    job = json.loads((folder / "job.json").read_text())
+    used = json.loads((folder / "level.json").read_text()) if (folder / "level.json").is_file() else {}
+    lv = {**level, "timerCount": used.get("timerCount", level.get("timerCount"))}
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "level.json").write_text(json.dumps(lv, indent=2))
+    job["level_path"] = str(out / "level.json")
+    job["out_dir"] = str(out)
     stock = json.loads((folder / "result.json").read_text()).get("game_patched") is False
     return run_player(job, app=PLAYER_STOCK if stock else None)
 

@@ -119,9 +119,14 @@ def test_colourful_keeps_touching_blocks_apart():
 
 
 def test_old_specs_keep_their_cache_key():
-    """A spec written before pieces, style, events and finish existed hashes as it did then."""
+    """A spec written before pieces, style, events and finish existed hashes as it did then, plus the
+    gate-placement version (a deliberate break on 2026-10-14: boards cached before it could start a
+    block on its gate, so none of them may be reused)."""
+    from cbj.generate import GATES_VERSION
     r = Spec("narrow_center", difficulty="hard", target_drags=8).resolved()
-    old = {k: v for k, v in asdict(r).items() if k not in ("pieces", "style", "events", "finish")}
+    old = {k: v for k, v in asdict(r).items() if k not in ("pieces", "style", "events", "finish", "mistakes", "moves_asked",
+                                                              "mistakes_asked", "singles", "time_out")}  # all later fields
+    old["gates"] = GATES_VERSION
     assert r.key() == hashlib.sha256(json.dumps(old, sort_keys=True).encode()).hexdigest()[:12]
     assert Spec("narrow_center", difficulty="hard", target_drags=8, style=["packed"]).resolved().key() != r.key()
 
@@ -258,6 +263,23 @@ def test_stuck_event_is_checked_on_the_mistake(tmp_path):
     assert script.beats[0].kind == "mistake" and level.blocks[script.beats[0].drag.block].color.name == "RED"
     c = by_name(gameplay_checks(b, fake_recording(tmp_path / "r", NC, script), NC))
     assert c["Order of interactions"]["status"] == "pass" and "drag 1" in c["Order of interactions"]["detail"]
+
+
+def test_a_stuck_step_names_the_block_in_the_way(tmp_path):
+    """"Blue stops because a red block blocks the route": the Mistakes check says whether the asked
+    blocker stopped it (2026-10-15; the first version of this check imported color_name from the
+    wrong module and crashed the make)."""
+    level = load_level(NC)
+    colours = {b.color.name for b in level.blocks}
+    mover = "RED" if "RED" in colours else next(iter(colours))
+    by = next(c for c in ("Blue", "Green", "Yellow", "Red", "Purple", "Orange") if c.upper() in colours and c.upper() != mover)
+    events = [{**ev(mover.capitalize(), "stuck", when="first"), "by": by}]
+    b = B.check(raw(gameplay={"ending": "near_fail", "events": events}))
+    assert b["gameplay"]["events"][0]["by"] == by
+    script = plan(level, "near_fail", events=from_brief(level, b["gameplay"]["events"])[0])
+    c = by_name(gameplay_checks(b, fake_recording(tmp_path / "r", NC, script), NC))
+    assert f"asked: stopped by a {by.lower()} block" in c["Mistakes"]["detail"]
+    assert c["Mistakes"]["status"] in ("pass", "adjusted")
 
 
 # ---------- fixes from the Fable 5.1 check ----------
@@ -419,3 +441,163 @@ def test_the_red_block_leaves_last_with_two_red_blocks_is_the_final_exit():
 ])
 def test_more_natural_phrasings(group, prompt, ok):
     assert (B._evidence(group, prompt, B.default_brief()) is None) == ok
+
+
+def test_spacious_boards_have_room_to_move():
+    """"Enough free space for movement": no two blocks touch and most cells are empty (TC-01, 2026-10-14)."""
+    from cbj.generate import SPACIOUS_FILL
+    spec = Spec("open", difficulty="easy", style=["spacious"], width=7, height=7, blocks=5).resolved()
+    rng = random.Random(7)
+    n = 0
+    for _ in range(20):
+        b = _board(spec, rng)
+        if b is None:
+            continue
+        lvl = level_from_dict(b.to_dict(), "t")
+        assert not validate(lvl)
+        lk = looks(lvl, spec)
+        assert lk["touching"] == 0 and lk["fill"] <= SPACIOUS_FILL, lk
+        n += 1
+    assert n >= 10
+
+
+def test_free_space_words_make_the_board_spacious():
+    from cbj import planner as P
+    for prompt in ("Keep the board simple, provide enough free space for movement.",
+                   "a roomy board with plenty of empty space", "leave room to move, not too crowded"):
+        b = {"level": {"source": "generate", "style": [], "shipped": None}, "changed": []}
+        P._spacious(b, prompt)
+        assert b["level"]["style"] == ["spacious"] and "level.style" in b["changed"], prompt
+    b = {"level": {"source": "generate", "style": [], "shipped": None}, "changed": []}
+    P._spacious(b, "Leave enough empty cells for the player to reposition a blocking piece.")
+    assert b["level"]["style"] == ["spacious"]
+    for prompt in ("a packed board with little room to move", "no free space at all", "a generous timer",
+                   "the player must clear one side first to create enough space for the other side",
+                   "a compact board with six blocks, several walls and limited empty space for movement"):
+        b = {"level": {"source": "generate", "style": ["packed"], "shipped": None}, "changed": []}
+        P._spacious(b, prompt)
+        assert "spacious" not in b["level"]["style"], prompt
+    b = B.check(raw(level={"style": ["packed", "spacious"]}))
+    assert b["level"]["style"] == ["spacious"]
+
+
+def test_a_short_solve_is_paced_deliberately_not_padded(tmp_path):
+    """studio._short_solve: a 4-drag win in a 30 s ad is paced deliberately; a 10-drag one, a fast
+    tempo, a streak finish or an asked order keep their pace (2026-10-14)."""
+    from cbj import studio
+    from cbj.generate import Spec, generate
+    from cbj.level import level_from_dict
+    small, _, _ = generate(Spec("open", 6, 6, blocks=4, difficulty="easy", style=["spacious"], seed=3))
+    big, _, _ = generate(Spec("open", 8, 9, blocks=10, difficulty="easy", seed=3))
+    ps, pb = tmp_path / "small.json", tmp_path / "big.json"
+    ps.write_text(json.dumps(small)); pb.write_text(json.dumps(big))
+    assert len(level_from_dict(small, "s").blocks) == 4
+    b = B.check(raw(level={"source": "generate", "difficulty": "easy"}, gameplay={"ending": "win"},
+                    pacing={"length_s": 30.0, "tempo": "calm", "curve": "even"}))
+    assert studio._short_solve(b, ps)
+    assert not studio._short_solve(b, pb)
+    b3 = copy.deepcopy(b); b3["gameplay"]["finish"] = "streak"
+    assert studio._short_solve(b3, ps)  # an easy streak has no set-up: the whole solve would race
+    for change in ({"pacing": {"tempo": "fast"}}, {"gameplay": {"ending": "time_out"}}):  # a cliffhanger is paced too (2026-10-14)
+        b2 = copy.deepcopy(b)
+        for k, v in change.items():
+            b2[k].update(v)
+        assert not studio._short_solve(b2, ps), change
+    assert studio._recording_spec(b, ps).get("deliberate", "").startswith(__import__("cbj.play", fromlist=["PACING_VERSION"]).PACING_VERSION + "/")
+    assert "deliberate" not in studio._recording_spec(b, pb)
+
+
+def test_a_pause_between_moves_is_not_a_cascade():
+    from cbj import planner as P
+    b = {"gameplay": {"finish": "streak"}, "changed": ["gameplay.finish"], "assumptions": []}
+    P._paced_moves(b, "Every drag is slow and deliberate with a pause between moves, no mistakes.")
+    assert b["gameplay"]["finish"] == "auto" and "gameplay.finish" not in b["changed"] and b["assumptions"]
+    b = {"gameplay": {"finish": "streak"}, "changed": ["gameplay.finish"], "assumptions": []}
+    P._paced_moves(b, "A satisfying solve: one move frees them all and they leave one after another.")
+    assert b["gameplay"]["finish"] == "streak"
+
+
+def test_dropped_numbers_leave_no_dangling_words():
+    b = B.default_brief()
+    B.control(b, "level")["plan"] = "A new open board of medium size (about 7x7) with four blocks, about 6 cells wide and 7 tall, no walls."
+    b["summary"] = "An open 7x7 board (about ), with four blocks."
+    B.drop_numbers(b, "level.size")
+    plan, summ = B.control(b, "level")["plan"], b["summary"]
+    assert "(about" not in plan and "about cells" not in plan and "( )" not in plan and "()" not in summ and "(about )" not in summ, (plan, summ)
+
+
+def test_no_block_starts_on_its_gate_and_spacious_blocks_travel():
+    """A block standing on its gate needs a step away and back (a pointless move on screen); on a
+    spacious board every block is at least two cells from its gate, so the room is used (2026-10-14)."""
+    from cbj.generate import _travel
+    for style, least in (([], 1), (["spacious"], 2)):
+        spec = Spec("open", difficulty="easy", style=style, width=7, height=7, blocks=5).resolved()
+        rng = random.Random(11)
+        n = 0
+        for _ in range(25):
+            b = _board(spec, rng)
+            if b is None:
+                continue
+            n += 1
+            for i, (_, _, colour) in enumerate(b.blocks):
+                own = [(c, side, win) for c, side, win in b.gates if c == colour]
+                assert own, "every block has a gate of its colour"
+                for _, side, win in own:
+                    assert _travel(b.cells(i), win, side) >= 1, (style, b.cells(i), side, win)
+                assert any(_travel(b.cells(i), win, side) >= least for _, side, win in own), (style, i)
+        assert n >= 10
+
+
+def test_begin_with_and_end_with_are_a_change_of_pace():
+    for text in ("The gameplay should begin with thoughtful rearrangement moves and end with several smooth consecutive clears.",
+                 "deliberate movement followed by a satisfying sequence of clears"):
+        assert B._has_word(text.lower(), B.CURVE_WORDS), text
+
+
+def test_one_colour_blocks_touching_at_a_corner_read_as_one_piece():
+    """A viewer counted four blocks on a five-block board: two red blocks sat corner to corner in the
+    corridor. looks() counts such pairs ("merged"); a spacious board has none (2026-10-15)."""
+    from cbj.generate import SPACIOUS_FILL
+    lv = {"gridWidth": 6, "gridHeight": 6, "timerCount": 60, "inactiveCells": [],
+          "GridBlockDatas": [
+              {"gridPosition": {"x": 2, "y": 2}, "blockColor": 3, "shapeOffsets": [{"x": 0, "y": 0}, {"x": 0, "y": -1}, {"x": 1, "y": -1}]},
+              {"gridPosition": {"x": 3, "y": 3}, "blockColor": 3, "shapeOffsets": [{"x": 0, "y": 0}]},
+              {"gridPosition": {"x": 0, "y": 5}, "blockColor": 0, "shapeOffsets": [{"x": 0, "y": 0}]}],
+          "ExitDatas": [
+              {"exitNumber": 0, "requiredColor": 3, "gridPosition": {"x": 0, "y": 0}, "direction": 2, "shapeOffsets": [{"x": 0, "y": 0}]},
+              {"exitNumber": 0, "requiredColor": 0, "gridPosition": {"x": 5, "y": 5}, "direction": 1, "shapeOffsets": [{"x": 0, "y": 0}]}]}
+    spec = Spec("open", difficulty="medium", style=["spacious"], width=6, height=6, blocks=3).resolved()
+    lk = looks(level_from_dict(lv, "t"), spec)
+    assert lk["touching"] == 0 and lk["merged"] == 1 and lk["spacing"] == 0.0 and lk["contrast"] == 0.0
+    lv["GridBlockDatas"][1]["blockColor"] = 1  # a different colour at the corner: two pieces, plainly
+    lk = looks(level_from_dict(lv, "t"), spec)
+    assert lk["merged"] == 0 and lk["spacing"] == 1.0 and lk["contrast"] == 1.0
+    spec = Spec("open", difficulty="medium", style=["spacious"], width=7, height=7, blocks=6).resolved()
+    rng = random.Random(11)
+    n = 0
+    for _ in range(30):
+        b = _board(spec, rng)
+        if b is None:
+            continue
+        lk = looks(level_from_dict(b.to_dict(), "t"), spec)
+        if lk["touching"] == 0 and lk["fill"] <= SPACIOUS_FILL:
+            n += 1
+    assert n >= 5
+
+
+def test_a_mirrored_board_shows_every_colour_and_puts_the_named_biggest_block_on_the_axis():
+    """"Several small red, blue and green blocks and one larger yellow block ... yellow leaves last":
+    mirror pairs share a colour and a size, so the biggest yellow block sits on the axis, bigger than
+    every pair, and all four colours are on the board (a 5-block version had no yellow, 2026-10-15)."""
+    from cbj.generate import named_superlatives
+    evs = [{"block": {"colour": "Red", "which": "any", "all": True}, "action": "leaves", "when": "next"},
+           {"block": {"colour": "Yellow", "which": "biggest", "all": False}, "action": "leaves", "when": "last"}]
+    spec = Spec("narrow_center", 6, 6, 7, ["Red", "Blue", "Green", "Yellow"], "hard", style=["symmetric"], events=evs).resolved()
+    rng = random.Random(1)
+    boards = [b for b in (_board(spec, rng) for _ in range(30)) if b is not None]
+    assert len(boards) >= 10
+    for b in boards:
+        lvl = level_from_dict(b.to_dict(), "t")
+        assert len({bl.color for bl in lvl.blocks}) == 4
+        assert named_superlatives(lvl, evs) == []
+        assert looks(lvl, spec)["symmetry"] == 1.0

@@ -74,6 +74,7 @@ public class RenderVisuals
     public string grid = ""; // the cells' colour, "" = the game's
     public string background_top = ""; // the ground gradient, "" = the game's
     public string background_bottom = "";
+    public string background_image = ""; // a picture behind the board instead of the ground, "" = none
 }
 
 [Serializable]
@@ -284,6 +285,8 @@ public class CreativeRunner : MonoBehaviour
         foreach (var hex in new[] { j.visuals.grid, j.visuals.background_top, j.visuals.background_bottom })
             if (!string.IsNullOrEmpty(hex) && !ColorUtility.TryParseHtmlString(hex, out Color _))
                 throw new Exception($"visuals: '{hex}' is not a #RRGGBB colour");
+        if (!string.IsNullOrEmpty(j.visuals.background_image) && !File.Exists(j.visuals.background_image))
+            throw new Exception($"visuals: no background picture at '{j.visuals.background_image}'");
         if (j.camera == null) j.camera = new RenderCamera();
         if (!Positive(j.camera.zoom) || !Finite(j.camera.pan_x) || !Finite(j.camera.pan_y))
             throw new Exception("camera zoom must be positive and pans finite");
@@ -412,6 +415,37 @@ public class CreativeRunner : MonoBehaviour
             mat.mainTexture = tex;
             mat.color = Color.white;
         }
+    }
+
+    // A picture behind the board (visuals.background_image): the game's ground is hidden and the
+    // picture covers the frame behind everything (scaled to fill, centred, never stretched). It is
+    // a camera-space canvas at the far end of the view, drawn first, so the board, the blocks and
+    // the HUD, all nearer, draw over it. The puzzle and its look are otherwise the game's own.
+    string AttachBackground()
+    {
+        string path = job.visuals.background_image;
+        if (string.IsNullOrEmpty(path)) return null;
+        var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        if (!tex.LoadImage(File.ReadAllBytes(path))) return $"visuals: '{path}' is not a readable picture";
+        tex.wrapMode = TextureWrapMode.Clamp;
+        var ground = GameObject.Find("Ground");
+        if (ground == null) return "visuals: no Ground object, so the background cannot be set";
+        foreach (var r in ground.GetComponentsInChildren<Renderer>()) r.enabled = false;
+        var go = new GameObject("CbjBackground");
+        var canvas = go.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceCamera;
+        canvas.worldCamera = cam;
+        canvas.planeDistance = cam.farClipPlane * 0.95f;
+        canvas.sortingOrder = -1000;
+        var pic = new GameObject("Picture");
+        pic.transform.SetParent(go.transform, false);
+        var img = pic.AddComponent<RawImage>();
+        img.texture = tex;
+        img.raycastTarget = false;
+        var fit = pic.AddComponent<AspectRatioFitter>();
+        fit.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+        fit.aspectRatio = (float)tex.width / tex.height;
+        return null;
     }
 
     // Safety net: if the capture loop has died, the script still ends with result.json.
@@ -778,6 +812,8 @@ public class CreativeRunner : MonoBehaviour
         if (visualsError != null) return visualsError;
         FitCamera();
         AttachCanvases();
+        string bgError = AttachBackground();
+        if (bgError != null) return bgError;
         SeedParticles();
 
         rt = new RenderTexture(job.width, job.height, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)

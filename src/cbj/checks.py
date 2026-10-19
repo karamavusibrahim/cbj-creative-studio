@@ -105,6 +105,20 @@ def gameplay_checks(brief: dict, rec_dir: Path, level_path: Path) -> list[dict]:
         detail = f"{len(made)} mistake(s) played (asked: {want})"
         if made:
             detail += ": " + "; ".join(f"drag {k + 1}, {beats[k]['note']}" for k in made[:3])
+        way = [e["by"] for e in (gp.get("events") or []) if e.get("action") == "blocks" and e.get("by")]
+        if way and made:
+            from .level import BlockColor as _BC2
+            want = color_name(_BC2[way[0].upper().replace("DARKGREEN", "DARK_GREEN")])
+            hit = any("'s way" in beats[k]["note"] and f"({want})" in beats[k]["note"] for k in made)
+            detail += f" (asked: moved into the {want} block's way" + (")" if hit else "; not shown on this board)")
+            st = st if hit else "adjusted"
+        by = [e["by"] for e in (gp.get("events") or []) if e.get("action") == "stuck" and e.get("by")]
+        if by and made:
+            from .level import BlockColor as _BC  # color_name is this module's (from .describe)
+            want = color_name(_BC[by[0].upper().replace("DARKGREEN", "DARK_GREEN")])
+            hit = any(f"({want})" in beats[k]["note"] for k in made)
+            detail += f" (asked: stopped by a {want} block" + (")" if hit else "; another block stops it on this board)")
+            st = st if hit else "adjusted"
         add("Mistakes", st, detail)
 
     # 4. The requested order of interactions.
@@ -125,6 +139,10 @@ def gameplay_checks(brief: dict, rec_dir: Path, level_path: Path) -> list[dict]:
                 rows.append(f"{e.text}: {'drag ' + str(k + 1) if k is not None else 'NOT DONE'}")
             elif e.action == "stuck":
                 k = next((i for i in made if beats[i]["block"] in e.blocks and "in the way" in beats[i]["note"]), None)
+                all_ok &= k is not None
+                rows.append(f"{e.text}: {'drag ' + str(k + 1) if k is not None else 'NOT SHOWN'}")
+            elif e.action == "blocks":
+                k = next((i for i in made if beats[i]["block"] in e.blocks and "'s way" in beats[i]["note"]), None)
                 all_ok &= k is not None
                 rows.append(f"{e.text}: {'drag ' + str(k + 1) if k is not None else 'NOT SHOWN'}")
             else:
@@ -179,7 +197,7 @@ def _dims(level: Level, i: int) -> tuple[int, int]:
 def level_checks(brief: dict, level_path: Path, meta: dict | None = None) -> list[dict]:
     """Facts about the board, against what the brief asked for."""
     from .difficulty import rate
-    from .generate import BAND_WORDS, Spec, band_of, looks
+    from .generate import BAND_WORDS, SPACIOUS_FILL, Spec, band_of, looks
     level = load_level(level_path)
     lv = brief["level"]
     out = []
@@ -193,13 +211,44 @@ def level_checks(brief: dict, level_path: Path, meta: dict | None = None) -> lis
                     "detail": detail + f" (asked: {lv['difficulty']})", "from": "level"})
     else:
         out.append({"check": "Difficulty", "status": "info", "detail": detail, "from": "level"})
+    named = [e for e in (brief["gameplay"].get("events") or []) if (e.get("block") or {}).get("colour")
+             and (e.get("block") or {}).get("which") in ("biggest", "longest")]
+    if named:
+        from .generate import named_superlatives
+        missing = named_superlatives(level, named)
+        out.append({"check": "Named block", "status": "pass" if not missing else "adjusted",
+                    "detail": ("; ".join(f"the {e['block']['which']} {e['block']['colour'].lower()} block is the {e['block']['which']} on the board" for e in named)
+                               if not missing else "not the one of its kind on this board: " + ", ".join(missing)), "from": "level"})
+    singles = list(dict.fromkeys(e["block"]["colour"] for e in (brief["gameplay"].get("events") or [])
+                                 if (e.get("block") or {}).get("colour") and (e.get("block") or {}).get("which", "any") == "any"
+                                 and not (e.get("block") or {}).get("all")))
+    if singles and "symmetric" not in (lv.get("style") or []):
+        from .level import BlockColor
+        counts = {c: sum(1 for b in level.blocks if BlockColor(b.color).name == c.upper().replace("DARKGREEN", "DARK_GREEN")) for c in singles}
+        ok = all(n == 1 for n in counts.values())
+        out.append({"check": "Named block", "status": "pass" if ok else "adjusted",
+                    "detail": ", ".join(f"{n} {c.lower()} block{'s' if n != 1 else ''}" for c, n in counts.items())
+                              + (" (one each, as the order names them)" if ok else "; a named colour should be one block"), "from": "level"})
+    if lv.get("moves") is not None:
+        ok = abs(r.min_drags - lv["moves"]) <= 2
+        out.append({"check": "Moves", "status": "pass" if ok else "adjusted",
+                    "detail": f"the shortest solution is {r.min_drags} drags, {r.extra_drags} of them repositioning "
+                              f"(asked: about {lv['moves']})" + ("" if ok else "; the generator found no closer board"),
+                    "from": "level"})
     sizes = sorted(b.size for b in level.blocks)
     if lv["blocks"] is not None:
         n = len(level.blocks)
         out.append({"check": "Block count", "status": "pass" if n == lv["blocks"] else "adjusted",
                     "detail": f"{n} blocks (asked: {lv['blocks']})" + ("" if n == lv["blocks"] else
                               "; no more fit with room to move"), "from": "level"})
-    if lv["pieces"] != "mixed":
+    if lv["pieces"] == "varied":
+        from .generate import piece_kinds
+        have = piece_kinds(level)
+        missing = sorted({"small", "long", "corner"} - have)
+        out.append({"check": "Block shapes", "status": "pass" if not missing else "adjusted",
+                    "detail": "the board has " + ", ".join(sorted(have)) + " pieces (asked: small, long and L-shaped together)"
+                              + (f"; no {', '.join(missing)} piece fitted" if missing else ""), "from": "level"})
+    elif lv["pieces"] != "mixed":
         want = {"small": (1, 2), "big": (4, 6), "long": (3, 4)}[lv["pieces"]]
         fit = sum(want[0] <= n <= want[1] for n in sizes)
         long_ok = lv["pieces"] != "long" or all(min(_dims(level, i)) == 1 for i in range(len(level.blocks)))
@@ -221,6 +270,11 @@ def level_checks(brief: dict, level_path: Path, meta: dict | None = None) -> lis
         if "packed" in lv["style"]:
             rows.append(f"{lk['fill']:.0%} of the cells hold blocks (packed: 55 % or more)")
             ok &= lk["fill"] >= 0.55
+        if "spacious" in lv["style"]:
+            rows.append(f"{lk['fill']:.0%} of the cells hold blocks, {lk['touching']} pair(s) of blocks touch, "
+                        f"{lk.get('merged', 0)} pair(s) of one colour touch at a corner "
+                        f"(spacious: {SPACIOUS_FILL:.0%} or less, none touching)")
+            ok &= lk["fill"] <= SPACIOUS_FILL and lk["touching"] == 0 and not lk.get("merged")
         if "colourful" in lv["style"]:
             n_col = len({b.color for b in level.blocks})
             # mirror pairs share a colour, so a symmetric board shows at most one colour per pair

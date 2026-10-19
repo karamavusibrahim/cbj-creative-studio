@@ -1,0 +1,95 @@
+{
+ "file": "soundtrack-aneasycolorb-v3-voice.wav",
+ "path": "uploads/soundtrack-aneasycolorb-v3-voice.wav",
+ "creative_id": "1018-110841-an-easy-color-block-jam",
+ "version": 3,
+ "seconds": 30.0,
+ "concept": {
+  "theme": "game",
+  "mood": "bright",
+  "mode": "major",
+  "root_hz": 261.63,
+  "pad_gain": 0.11,
+  "scale": [
+   0,
+   2,
+   4,
+   7,
+   9
+  ],
+  "tempo": "calm",
+  "bpm": 84,
+  "curve": "even",
+  "bpm_ratio": 1.0,
+  "ending": "win",
+  "duration_s": 30.0,
+  "play": {
+   "from_s": 0.5,
+   "to_s": 11.13
+  },
+  "after": {
+   "from_s": 11.13,
+   "to_s": 21.63
+  },
+  "end_from_s": 21.63,
+  "hook": {
+   "text": "Can you beat it?",
+   "from_s": 0.0,
+   "to_s": 1.6
+  },
+  "exits": [
+   {
+    "at_s": 1.83,
+    "block": "orange"
+   },
+   {
+    "at_s": 5.5,
+    "block": "blue"
+   },
+   {
+    "at_s": 9.17,
+    "block": "green"
+   },
+   {
+    "at_s": 10.63,
+    "block": "red"
+   }
+  ],
+  "hurry_ticks": [],
+  "language": "en"
+ },
+ "voice": {
+  "text": "Can you beat it? / So satisfying! / Play now",
+  "voice": "Magpie-Multilingual.EN-US.Mia",
+  "at_s": 0.15,
+  "seconds": 2.51,
+  "model": "nvidia/magpie-tts-multilingual",
+  "narration": "captions",
+  "lines": [
+   {
+    "layer": "hook",
+    "text": "Can you beat it?",
+    "at_s": 0.15,
+    "seconds": 0.84
+   },
+   {
+    "layer": "cap_cascade",
+    "text": "So satisfying!",
+    "at_s": 4.28,
+    "seconds": 1.07
+   },
+   {
+    "layer": "end_cta",
+    "text": "Play now",
+    "at_s": 24.93,
+    "seconds": 0.6
+   }
+  ]
+ },
+ "voice_skipped": null,
+ "bed": true,
+ "base_music": null,
+ "description": "Bright major pentatonic: a stinger under the hook, a pulse through the play at 84 bpm, a pluck one step higher as each block leaves (4), a resolve chord at the win, a soft pad under the end card. 30 s, synthesised (no licensed music). EN-US.Mia narrates the creative's own captions as they appear: “Can you beat it?” at 0 s; “So satisfying!” at 4 s; “Play now” at 25 s.",
+ "made": "2026-10-19 00:27:23",
+ "took_s": 2.4
+}

@@ -36,6 +36,7 @@ SAFE = {"social": {"top": 250, "bottom": 420, "left": 60, "right": 130},  # Meta
         "network": {"top": 120, "bottom": 160, "left": 0, "right": 0}}
 FIT = {"scale": 0.75, "x": 135, "y": 318}  # HUD from y 481, board to y 1498 (the safe bottom is 1500)
 NATIVE = {"scale": 1.0, "x": 0, "y": 0}  # full size: reads as a zoom-in after the 0.75 fit
+BOARD_PARTS = ("intro", "play", "replay", "teaser", "question", "result_hold")  # the parts that show the board itself
 # The one text band, above the HUD, centred on the board and clear of the platform's right-hand
 # buttons (social safe area x 60-950): at most 820 px wide, so long lines wrap to two.
 BAND = {"y0": 250, "y1": 476, "cx": 540, "cy": 363, "max_w": 820}  # the HUD starts at y 481
@@ -45,14 +46,18 @@ END_CARD_S = (3.0, 5.0)  # shortest and preferred longest end card
 END_CARD_MAX_S = 8.0  # longer than this the ad is mostly a card: refused unless asked for
 REPLAY_MAX_S = 5.0  # the replay is a payoff, not filler: the last one or two beats, at most 5 s
 REPLAY_MAX_BEATS = 2
-INTRO_MAX_S = 2.0  # a frozen first frame under the hook, when the ad has time to spare
+INTRO_MAX_S = 0.5  # a frozen first frame under the hook: the ad must be moving within its first second
+# (the recording itself starts 1 s before the first touch; a 3 s frozen opening lost viewers, 2026-10-14)
 # When the play is short for the asked length (the case asks for 30-60 s), the ad is filled in
 # this order before the end card may grow past END_CARD_MAX_S: a longer replay (more beats), a
 # longer intro hold, the result (or the cliffhanger's question) held longer.
-REPLAY_FILL_S = 8.0
-REPLAY_FILL_BEATS = 4
-INTRO_FILL_S = 3.0
-RESULT_HOLD_S = 4.0
+REPLAY_FILL_S = 16.0  # filling: the replay may show the whole solve at half speed (a labelled screen-time device)
+REPLAY_FILL_BEATS = 8  # a short solve is replayed whole: motion over a held screen (viewer reviews, 2026-10-14)
+END_CARD_FILL_FROM_S = 6.0  # an end card longer than this is filler: the play and the replay get the time first
+INTRO_FILL_S = 0.5  # filling never freezes the opening: a short play is paced deliberately instead (studio._short_solve)
+RESULT_HOLD_S = 2.5  # with the game's own 2.5 s result screen: a 5 s finish, as an ad should
+RESULT_HOLD_MORE_S = 4.0  # once the end card is at its cap
+RESULT_HOLD_MAX_S = 12.0  # a very short play may hold the result this long rather than make no ad (never a frozen opening)
 END_CARD_FILL_MAX_S = 10.0  # after filling, the card may run this long rather than the ad going under its length
 INTRO_FRAME = 9  # the frozen intro shows this frame: after the clock's first tick flash (frames 0-7 are red)
 END_TITLE = "Color Block Jam"
@@ -327,11 +332,18 @@ HOOKS = {"near_fail": "Can you beat the clock?", "time_out": "Can you beat the c
 TEASER_HOOKS = {"near_fail": "How did they make it?", "win": "Can you clear it this fast?",
                 "time_out": "So close! What went wrong?"}
 TEASER_S = 1.5
+CASCADE_CAPTION_S = 4.0  # the key-move caption stays this long (it ran 16 s over a paced run; P7 review, 2026-10-14)
+MUSIC_GAIN = 0.35  # about -9 dB: the music sits under the effects
+MUSIC_FADE_S = 1.0  # the music fades out over the ad's last second (and starts with a 50 ms fade-in)
 # Options a brief can set on the default ad (see build_ad).
-AD_OPTIONS = {"replay": True, "result_screen": True, "teaser": False, "texts": {}, "fill": None, "stroke": None,
-              "colour_names": {}, "logo": None, "hook_icon": None, "end_art": None, "end_background": None,
+AD_OPTIONS = {"replay": True, "result_screen": True, "teaser": False, "texts": {}, "fill": None, "stroke": None, "obstacle": None, "skin": None,
+              "colour_names": {}, "logo": None, "logo2": None, "hook_icon": None, "end_art": None, "end_background": None,
               "end_gradient": None, "cursor": "ring", "cursor_image": None, "sfx": True, "clock_visible": True,
-              "button_image": None}  # hook_icon / end_art "": removed
+              "button_image": None, "music": None,
+              # asked timing and styles: a still opening frame and a held result of set lengths (s),
+              # caption entrances/exits moved ({"layer", "start_s", "end_s"}), one caption's colours
+              # ({layer: {"fill", "stroke"}}), timed camera punch-ins ({"from_s", "to_s", "zoom", "toward"})
+              "intro_s": None, "hold_s": None, "caption_shifts": [], "caption_style": {}, "camera": []}
 # With the HUD's clock hidden, the default copy may not quote it (the viewer never saw it).
 NO_CLOCK = {"hook": "Can you clear it?", "result": {"near_fail": "Phew! Just in time!"},
             "end_fact": {"near_fail": "Cleared just in time!", "win": "Cleared!"}}
@@ -341,6 +353,8 @@ TEXT_LAYERS = {"hook": "hook", "mistake": "cap_mistake", "fix": "cap_fix", "hurr
 LOGO_BOX = 150  # px; a logo in a top corner, inside the safe area, beside a narrowed caption band
 END_FACTS = {"near_fail": "Cleared with {clock_left} left", "time_out": "Out of time with {blocks_left_phrase} left!",
              "win": "Cleared in {time_used_phrase}", "cliffhanger": "Your move: {blocks_left_phrase} to go!"}
+SHORT_WIN_S = 15.0  # a win in fewer seconds than this is not quoted on the end card (it reads as "easy")
+SHORT_WIN_FACT = "Can you do it faster?"
 
 
 def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long_card: bool = False,
@@ -420,8 +434,17 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
                          f"{END_CARD_S[0]:g} s)", "adjusted" if pin is not None else None)
     intro, hold = 0, 0
     if pin is not None:
-        card, intro, hold, total = _pinned_card(card, 0 if teaser else int(pin.get("intro", 0)), int(pin.get("hold", 0)),
-                                                total, note, has_result=bool(after))
+        p_intro, p_hold = 0 if teaser else int(pin.get("intro", 0)), int(pin.get("hold", 0))
+        # an asked length for the still opening frame or the held result: that part changes, the
+        # ad's end moves by the same time, and nothing else moves
+        if o["intro_s"] is not None and not teaser:
+            want = int(round(o["intro_s"] * FPS))
+            total, p_intro = total + want - p_intro, want
+        if o["hold_s"] is not None and after:
+            want = int(round(o["hold_s"] * FPS))
+            total, p_hold = total + want - p_hold, want
+        card, intro, hold, total = _pinned_card(card + (total - int(round(length_s * FPS))), p_intro, p_hold,
+                                                total, note, has_result=bool(after), parent_card=int(pin.get("card") or 0))
     else:
         if card > END_CARD_S[1] * FPS and not teaser:
             intro = min(int(INTRO_MAX_S * FPS), card - int(END_CARD_S[1] * FPS))
@@ -429,29 +452,35 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         if card < END_CARD_S[0] * FPS:
             raise ValueError(f"the recording runs {fixed / FPS:.1f} s, too long for a {length_s:g} s ad with a "
                              f"{END_CARD_S[0]:g} s end card; record a shorter scenario or ask for a longer ad")
-        if card > END_CARD_MAX_S * FPS and not allow_long_card and not teaser:
-            # The play is short for the asked length: fill it with a longer replay, a longer intro
-            # hold and a held result before the end card may grow (the case asks for 30-60 s).
-            limit = int(END_CARD_MAX_S * FPS)
+        if card > END_CARD_FILL_FROM_S * FPS and not allow_long_card:
+            # The play is short for the asked length: fill it with a longer replay first, then a
+            # short held result, before the end card may grow (the case asks for 30-60 s). The
+            # play itself was paced deliberately before recording when it was short (studio).
+            # A result-first ad (teaser) is filled the same way, minus the frozen intro (2026-10-14).
+            limit = int(END_CARD_FILL_FROM_S * FPS)
             filled = []
-            if o["replay"]:
+            if o["replay"] and ending != "cliffhanger":  # a cliffhanger's question follows the live cut, not a replay
                 base = total - fixed  # no replay, no intro
-                best = replay_from
+                best, best_gap = replay_from, None
                 for k in range(len(bf) - 1, max(-1, len(bf) - 1 - REPLAY_FILL_BEATS), -1):
                     r = 2 * (p - bf[k][0])
-                    if r > REPLAY_FILL_S * FPS or base - r < END_CARD_S[0] * FPS:
+                    # the replay grows while the finish (the result held RESULT_HOLD_S) and the shortest end
+                    # card still fit after it; of the replays that fit, the one that leaves the card nearest
+                    # its preferred length wins (a deliberately paced beat is 3-4 s, so one beat more or less
+                    # can swing the card by 7 s: the nearest, not the first under 6 s; P1 review, 2026-10-14)
+                    if r > REPLAY_FILL_S * FPS or base - r < (END_CARD_S[0] + RESULT_HOLD_S) * FPS:
                         break
-                    best = bf[k][0]
-                    if base - r <= limit:
-                        break
+                    gap = abs(base - r - (RESULT_HOLD_S + END_CARD_S[1]) * FPS)
+                    if best_gap is None or gap < best_gap:
+                        best, best_gap = bf[k][0], gap
                 if best is not None and best != replay_from:
                     card += (2 * (p - replay_from) if replay_from is not None else 0) + intro
                     replay_from, intro = best, 0
                     card -= 2 * (p - replay_from)
-                    intro = min(int(INTRO_MAX_S * FPS), max(0, card - int(END_CARD_S[1] * FPS)))
+                    intro = 0 if teaser else min(int(INTRO_MAX_S * FPS), max(0, card - int(END_CARD_S[1] * FPS)))
                     card -= intro
                     filled.append(f"a longer replay ({2 * (p - replay_from) / FPS:.1f} s)")
-            if card > limit:
+            if card > limit and not teaser:
                 more = min(int(INTRO_FILL_S * FPS) - intro, card - limit)
                 if more > 0:
                     intro, card = intro + more, card - more
@@ -460,6 +489,19 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
                 hold = min(int(RESULT_HOLD_S * FPS), card - limit)
                 card -= hold
                 filled.append(f"the {'question' if ending == 'cliffhanger' else 'result'} held {hold / FPS:.1f} s longer")
+            if card > END_CARD_FILL_MAX_S * FPS and after:
+                # the end card carries the button, so it may run to its cap before the result is held longer
+                more = min(int(RESULT_HOLD_MORE_S * FPS) - hold, card - int(END_CARD_FILL_MAX_S * FPS))
+                if more > 0:
+                    hold, card = hold + more, card - more
+                    filled[-1] = f"the {'question' if ending == 'cliffhanger' else 'result'} held {hold / FPS:.1f} s longer"
+            if card > END_CARD_FILL_MAX_S * FPS and after:
+                # a very short play (a 4-block level): the result stays up longer still, rather than no ad
+                extra = min(int(RESULT_HOLD_MAX_S * FPS) - hold, card - int(END_CARD_FILL_MAX_S * FPS))
+                if extra > 0:
+                    hold, card = hold + extra, card - extra
+                    filled.append(f"the {'question' if ending == 'cliffhanger' else 'result'} held "
+                                  f"{hold / FPS:.1f} s in all (a very short play)")
             if filled:
                 note("difficulty_pacing", f"the play is short for {length_s:g} s, so it is filled with "
                                           f"{', '.join(filled)}", None)
@@ -467,6 +509,19 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
                 note("sequence", f"the end card runs {card / FPS:.1f} s (the play is short for {length_s:g} s; a "
                                  f"bigger level or more mistakes would fill more)")
                 allow_long_card = True
+        if o["intro_s"] is not None and not teaser:  # asked: the still opening frame lasts this long
+            want = int(round(o["intro_s"] * FPS))
+            card, intro = card + intro - want, want
+            allow_long_card = True
+        if o["hold_s"] is not None and after:
+            want = int(round(o["hold_s"] * FPS))
+            card, hold = card + hold - want, want
+            allow_long_card = True
+        if card < END_CARD_S[0] * FPS:
+            grow = int(END_CARD_S[0] * FPS) - card
+            total, card = total + grow, card + grow
+            note("difficulty_pacing", f"the ad is {total / FPS:.1f} s: the asked parts need the room, and the end "
+                                      f"card cannot be shorter than {END_CARD_S[0]:g} s")
         if card > END_CARD_MAX_S * FPS and not allow_long_card:
             raise ValueError(f"the recording is too short for a {length_s:g} s ad: the end card would run "
                              f"{card / FPS:.1f} s (at most {END_CARD_MAX_S:g}); record a longer scenario (a bigger "
@@ -511,8 +566,10 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         m = bf[first][0] / FPS
         if m - 0.1 < hook_play_end:
             hook_play_end = max(hook_min - intro_s, m - 0.1, 0.0)
-    if pin is not None and pin.get("hook_at") is not None and first is None:
+    if pin is not None and pin.get("hook_at") is not None:
         # an edit keeps the hook on screen as long as the user saw it, unless the new text needs more
+        # (also when a mistake caption follows: the approved end already sat before it; a shorter
+        # sentence once shortened the hook and moved a keyframe, 2026-10-15)
         hook_play_end = max(hook_play_end, float(pin["hook_at"]))
     if first is not None and abs(hook_play_end - (bf[first][0] / FPS - 0.1)) < 1e-9:
         hook_end = {"seg": "play", "event": f"beat.{first}.start", "offset": -0.1}
@@ -557,7 +614,7 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     if ending == "win" and key is not None and key + 2 < len(bf):
         # A satisfying finish: from the key move, every block leaves one after another.
         layers["cap_cascade"] = _text("One move frees them all!", {"seg": "play", "event": f"beat.{key}.start"},
-                                      end={"seg": "play", "at": "end"}, style="title_l")
+                                      dur=CASCADE_CAPTION_S, style="title_l")  # around the key move, not the whole run
     elif ending == "win" and len(bf) >= 3:
         # The closing cascade is the satisfying part of a clean solve.
         layers["cap_cascade"] = _text("So satisfying!", {"seg": "play", "event": f"beat.{len(bf) - 3}.start"},
@@ -577,6 +634,28 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
         lid = TEXT_LAYERS.get(key)
         if text is None or lid is None or lid.startswith("end_") or lid == "hook":
             continue
+        if lid not in layers and text:
+            # An asked caption whose moment this ad does not have of its own: give it the nearest
+            # moment that exists rather than drop it ("Too easy!" after a clean win went to the result
+            # caption, which only a near-fail drew, and never showed; P1-a, P7-b 2026-10-15).
+            where = None
+            if key == "result" and "result" in seg:
+                layers[lid] = _text(text, {"seg": "result", "at": 0.3}, end={"seg": "result", "at": "end"},
+                                    style="title_l", slot="free", pos=[540, 1418])
+                where = "the game's result screen"
+            elif key == "result" and "result_hold" in seg:
+                layers[lid] = _text(text, {"seg": "result_hold", "at": 0}, end={"seg": "result_hold", "at": "end"}, style="title_l")
+                where = "the held final board"
+            elif key == "fix" and first is not None and first + 1 < len(beats):
+                layers[lid] = _text(text, {"seg": "play", "event": f"beat.{first + 1}.start"}, dur=2.0, style="title_l", beat=first + 1)
+                where = "the move right after the mistake"
+            elif key == "cascade" and len(bf) >= 3:
+                layers[lid] = _text(text, {"seg": "play", "event": f"beat.{len(bf) - 3}.start"}, end={"seg": "play", "at": "end"},
+                                    style="title_xl")
+                where = "the last three drags"
+            if where:
+                note("concept", f"the {key} caption goes on {where} (this {ending.replace('_', '-')} ad has no {key} "
+                                f"moment of its own)", None)
         if lid not in layers:
             note("concept", f"no {key} moment in this {ending.replace('_', '-')} ad, so its text is not used")
         elif text == "":
@@ -600,6 +679,11 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     layers["end_title"] = {"type": "text", "seg": "end", "text": END_TITLE, "style": "hero", "max_h": 150,
                            "pos": [540, 420 if cliff else 520], "anim": "pop"}
     end_fact = END_FACTS[ending] if o["clock_visible"] else NO_CLOCK["end_fact"].get(ending, END_FACTS[ending])
+    if ending == "win" and o["clock_visible"]:
+        if rec.result.get("timer_end", 99) < SHORT_WIN_S:
+            end_fact = END_FACTS["near_fail"]  # a tight clock: the seconds left are the story
+        elif float(rec.facts(None).get("time_used") or 0) < SHORT_WIN_S:
+            end_fact = SHORT_WIN_FACT  # a quick solve: its seconds would make the level sound easy
     layers["end_fact"] = {"type": "text", "seg": "end", "text": end_fact, "style": "title_m",
                           "max_h": 120, "pos": [540, 560 if cliff else 700], "anim": "pop"}
     art_box = None
@@ -644,22 +728,70 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
                 lay["fill"] = o["fill"]
             if o["stroke"]:
                 lay["stroke"] = o["stroke"]
+    for lid, st in (o["caption_style"] or {}).items():  # one caption's own colours
+        if lid in layers and layers[lid]["type"] in ("text", "button"):
+            layers[lid].update({k: v for k, v in st.items() if k in ("fill", "stroke") and v})
+        elif lid not in layers:
+            note("visuals", f"no {lid.replace('_', ' ')} in this ad to colour")
     band = None
+    # every part that shows the board itself: a picture on the walls or a texture on a block is on all of them, so the
+    # object never "turns back" on the frozen question or the held result (E2 viewer, 2026-10-19); the end card's
+    # board picture (a cliffhanger's thumb) gets them in compose.card_base
+    board_parts = [sid for sid in order if sid in BOARD_PARTS]
+    if o.get("obstacle"):
+        # "Use this object instead of the current obstacle": the picture is drawn on the board's walls
+        # (the game's holes) in every gameplay part, in perspective, from the recorded camera (compose
+        # fits the cells to the screen from the recorded block positions); the game itself is untouched
+        if rec.level is not None and rec.level.inactive:
+            first_fit = next(sid for sid in order if sid in ("intro", "play"))
+            layers["obstacle"] = {"type": "object", "image": o["obstacle"], "cells": "holes", "anim": "none",
+                                  "segments": board_parts,
+                                  "start": {"seg": first_fit, "at": 0}, "end": {"seg": board_parts[-1], "at": "end"}}
+        else:
+            note("assets", "the board has no walls or obstacles to put the picture on, so it goes beside the hook")
+            if "hook" in layers and not o["hook_icon"]:
+                layers["hook"]["icon"] = o["obstacle"]
+    if o.get("skin") and o["skin"].get("file"):
+        # "Apply this texture to the blue block": the picture is drawn on that block's cells on every
+        # gameplay frame, following the recorded block (the game, the block's shape and its moves stay)
+        from .events import resolve
+        sk = o["skin"]
+        ids, _ = resolve(rec.level, sk.get("colour"), sk.get("which") or "any", False) if rec.level is not None else (frozenset(), None)
+        if ids:
+            bid = min(ids)
+            first_fit = next(sid for sid in order if sid in ("intro", "play"))
+            layers["skin"] = {"type": "skin", "image": sk["file"], "block": bid, "blend": "multiply", "anim": "none",
+                              "segments": board_parts,
+                              "start": {"seg": first_fit, "at": 0}, "end": {"seg": board_parts[-1], "at": "end"}}
+            if len(ids) > 1:
+                note("assets", f"{len(ids)} {str(sk.get('colour') or '').lower()} blocks: the texture goes on the first of them")
+        else:
+            note("assets", f"no {str(sk.get('colour') or '').lower()} block on this board to put the texture on; it is left out")
+    corners = []  # (layer id, picture, corner): a logo or sticker in a top corner, a second one in the other
     if o["logo"]:
-        # A logo in a top corner, inside the safe area, for the gameplay and the end card; the
+        corners.append(("logo", o["logo"], o["logo"].get("where", "top_left")))
+    if o.get("logo2"):
+        corners.append(("logo2", o["logo2"], "top_right" if not corners or corners[0][2] != "top_right" else "top_left"))
+    for lid, pic, where in corners:
+        # A picture in a top corner, inside the safe area, for the gameplay and the end card; the
         # caption band narrows to make room. It steps aside during the full-size replay and result
         # screens, where the HUD sits in that corner.
-        where = o["logo"].get("where", "top_left")
         x = SAFE["social"]["left"] + LOGO_BOX // 2 if where != "top_right" else W - SAFE["social"]["right"] - LOGO_BOX // 2
         y = SAFE["social"]["top"] + LOGO_BOX // 2
-        logo = {"type": "image", "image": o["logo"]["file"], "box": [LOGO_BOX, LOGO_BOX], "pos": [x, y], "anim": "none"}
+        logo = {"type": "image", "image": pic["file"], "box": [LOGO_BOX, LOGO_BOX], "pos": [x, y], "anim": "none"}
         first_fit = next(sid for sid in order if sid in ("intro", "play"))
-        layers["logo"] = {**logo, "start": {"seg": first_fit, "at": 0}, "end": {"seg": "play", "at": "end"}}
-        layers["logo_end"] = {**logo, "seg": "end"}
+        layers[lid] = {**logo, "start": {"seg": first_fit, "at": 0}, "end": {"seg": "play", "at": "end"}}
+        layers[lid + "_end"] = {**logo, "seg": "end"}
+    if corners:
         shift = (LOGO_BOX + 20) // 2
-        band = {"cx": BAND["cx"] + (shift if where != "top_right" else -shift), "max_w": BAND["max_w"] - 2 * shift}
+        sides = {where for _, _, where in corners}
+        if len(sides) == 2:
+            band = {"cx": BAND["cx"], "max_w": BAND["max_w"] - 4 * shift}
+        else:
+            band = {"cx": BAND["cx"] + (shift if "top_right" not in sides else -shift), "max_w": BAND["max_w"] - 2 * shift}
 
-    audio = {"music": None, "events": {
+    audio = {"music": {"file": o["music"], "gain": MUSIC_GAIN, "fade_out_s": MUSIC_FADE_S} if o["music"] else None,
+             "events": {
         "taps": {"sound": "click", "event": "drag.*.start", "gain": 0.25},
         "pops": {"sound": "pop", "event": "drag.*.exit", "gain": 0.5, "pitch": "cascade"},
         "ticks": {"sound": "tick", "event": "clock_second<=10", "gain": 0.3, "pitch": "ticktock", "slowmo": False},
@@ -686,9 +818,38 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
             if "{clock_left}" in (o["texts"].get(key) or "") or "{time_used}" in (o["texts"].get(key) or ""):
                 note("concept", f"the {key.replace('_', ' ')} quotes the clock, which is hidden in this ad")
 
+    for sh in o["caption_shifts"] or []:
+        # an asked entrance or exit: the caption's own anchors move, nothing else does
+        lid, ds, de = sh["layer"], float(sh.get("start_s") or 0), float(sh.get("end_s") or 0)
+        lay = layers.get(lid)
+        if lay is None:
+            note("sequence", f"no {lid.replace('_', ' ')} in this ad to move")
+            continue
+        sid = lay.get("seg") or lay["start"]["seg"]
+        if ds:
+            start = dict(lay.get("start") or {"seg": sid, "at": 0})
+            start["offset"] = round(start.get("offset", 0) + ds, 4)
+            start.setdefault("seg", sid)
+            lay["start"] = start
+        if "end" in lay:
+            if de:
+                lay["end"] = {**lay["end"], "offset": round(lay["end"].get("offset", 0) + de, 4)}
+        elif "dur" in lay:
+            lay["dur"] = round(lay["dur"] + de - ds, 4)
+        elif de:
+            lay["end"] = {"seg": sid, "at": "end", "offset": de}
+        lay["asked_timing"] = True
+        if lid == "hook" and ds > 0:
+            note("sequence", f"the hook now appears {ds:g} s in, so the first frame (the thumbnail a feed shows) "
+                             f"has no hook", None)
+    camera = []
+    for c in o["camera"] or []:
+        camera.append({"from_s": float(c["from_s"]), "to_s": float(c["to_s"]), "zoom": float(c["zoom"]),
+                       "toward": c.get("toward")})
     ad = {
         "version": 1,
         "concept": ending,
+        **({"camera": camera} if camera else {}),
         **({"band": band} if band else {}),
         **({"colour_names": names} if names else {}),
         "brief_notes": brief_notes,
@@ -720,13 +881,17 @@ def drawn_box(sprite_name: str, scale: float) -> list[int]:
 MIN_AD_S = 30.0  # the case's shortest creative (brief.LENGTH_RANGE_S[0]); an edit never goes under it
 
 
-def _pinned_card(card: int, intro: int, hold: int, total: int, note, has_result: bool = True) -> tuple[int, int, int, int]:
+def _pinned_card(card: int, intro: int, hold: int, total: int, note, has_result: bool = True,
+                 parent_card: int = 0) -> tuple[int, int, int, int]:
     """End card, intro, held result and total frames for an edit that keeps the parent's structure:
     the end card takes what the edit freed or needs; past its limits the held result and the
     intro give way first (or grow first), and only then does the ad's end move, never under
-    MIN_AD_S. The gameplay never moves."""
+    MIN_AD_S. The gameplay never moves. parent_card: the end card the user saw, in frames; a card
+    no longer than that is not freed time (2026-10-18: a picture edit on a version whose card ran
+    10.7 s grew the held result by 1.5 s and moved the end card, an unasked timing change)."""
     card -= intro + hold
     lo, pref, hi = int(END_CARD_S[0] * FPS), int(END_CARD_S[1] * FPS), int(PINNED_CARD_MAX_S * FPS)
+    hi, pref = max(hi, parent_card), max(pref, min(parent_card, int(PINNED_CARD_MAX_S * FPS)))
     if card < lo and hold:
         cut = min(hold, lo - card)
         hold, card = hold - cut, card + cut
@@ -851,5 +1016,5 @@ def check_ad(ad: dict) -> None:
                     and fit["scale"] > 0):
                 raise ValueError(f"segment {sid!r}: needs a fit {{scale, x, y}} (scale above 0)")
     for lid, layer in ad["layers"].items():
-        if layer.get("type") not in ("text", "tag", "image", "button", "cursor", "vignette"):
+        if layer.get("type") not in ("text", "tag", "image", "button", "cursor", "vignette", "object", "skin"):
             raise ValueError(f"layer {lid!r}: unknown type {layer.get('type')!r}")

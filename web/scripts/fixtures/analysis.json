@@ -1,0 +1,18 @@
+{
+  "record": "fb-qa-inline-fixture",
+  "step": "proof",
+  "item": "Other assets",
+  "what_happened": "The edit replaced the obstacle picture with the attached object and kept every other layer; the report lists Composition and Other assets as changed, as asked, and the captions, the sound and the gameplay as kept.",
+  "why": "The request named one picture (\"this object instead of the current obstacle\"), so the route was a direct picture edit drawn in the replaced picture's box; the designer expected the object larger than that box.",
+  "verdict": "taste",
+  "evidence": [
+    "Only what was asked changed (Composition, Other assets); everything else is identical.",
+    "all 5 texts word for word"
+  ],
+  "unbacked": ["the object was scaled down to half its size"],
+  "suggested_change": "In the edit route, let a replacement picture ask for its size (\"as large as the board\") instead of always taking the replaced picture's box.",
+  "confidence": "strong",
+  "model": "claude-cli/opus",
+  "seconds": 14.2,
+  "created": "2026-10-19 15:12:40"
+}

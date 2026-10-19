@@ -31,7 +31,7 @@ from PIL import Image, ImageDraw, ImageFilter
 from . import __version__ as CBJ_VERSION
 from .ad import (BAND, FPS, SAFE, STYLES, TWO_LINE_SIZE, END_CARD_S, Recording, check_ad, copy_problems, fill,
                  layer_window, reading_s, resolve_time, seg_frames, source_frame, timeline, to_output)
-from .draw import (PURPLE, WHITE, blend, clamp01, cover, ease_in_out, ease_out_back, ease_out_cubic, fit_text,
+from .draw import (PURPLE, WHITE, blend, clamp01, cover, cutout, ease_in_out, ease_out_back, ease_out_cubic, fit_text,
                    scaled, sprite, text_image, wrap)
 from .sound import RATE, render_track, write_wav
 from .video import FrameWriter, ffmpeg_bin, mux, read_frames
@@ -73,6 +73,150 @@ class Placer:
 
 
 # ---------- the cursor ----------
+
+def cell_homography(rec: Recording) -> np.ndarray | None:
+    """The 3x3 map from a board cell (x, y) to recording pixels, fitted on the first frame's logged
+    block positions (each block's transform sits on its pivot cell); None without a level or enough
+    blocks. The camera is fixed during a recording, so one map serves every frame."""
+    if rec.level is None or not rec.frames:
+        return None
+    pts = rec.frames[0].get("blocks") or []
+    cells = [b.pivot for b in rec.level.blocks]
+    rows = []
+    for i, (cx, cy) in enumerate(cells):
+        if 2 * i + 1 >= len(pts) or pts[2 * i] < 0:
+            continue
+        sx, sy = pts[2 * i], pts[2 * i + 1]
+        rows.append([cx, cy, 1, 0, 0, 0, -sx * cx, -sx * cy, -sx])
+        rows.append([0, 0, 0, cx, cy, 1, -sy * cx, -sy * cy, -sy])
+    if len(rows) < 8:
+        return None
+    _, _, vt = np.linalg.svd(np.array(rows, dtype=np.float64))
+    return vt[-1].reshape(3, 3)
+
+
+def cell_quads(rec: Recording, which: str = "holes") -> list[list[tuple[float, float]]]:
+    """The screen quads (recording pixels, 4 corners each) of the board's inactive cells (the walls)."""
+    H = cell_homography(rec)
+    if H is None or which != "holes":
+        return []
+
+    def proj(x, y):
+        v = H @ np.array([x, y, 1.0])
+        return float(v[0] / v[2]), float(v[1] / v[2])
+    quads = []
+    for x0, y0, x1, y1 in wall_rects(set(rec.level.inactive)):
+        # one picture per rectangular wall (a 2x2 pillar is one object, not four), per cell otherwise
+        quads.append([proj(x0 - 0.5, y1 + 0.5), proj(x1 + 0.5, y1 + 0.5), proj(x1 + 0.5, y0 - 0.5), proj(x0 - 0.5, y0 - 0.5)])
+    return quads
+
+
+def texture_for_multiply(img: Image.Image, target: float = 0.82, strength: float = 0.55) -> Image.Image:
+    """A texture prepared for a multiply blend on a shaded brick: its mean brightness is raised to
+    `target` (of white) and its darks are lifted (a multiply keeps black black, so `strength` is how
+    much of the texture's darkening is kept: 0.55 turns black lines into mid-grey ones), so the
+    brick keeps its lightness and its colour identity under the pattern (a crate texture made a
+    blue block read as black, viewer review 2026-10-15)."""
+    arr = np.asarray(img, dtype=np.float64)
+    rgb, a = arr[..., :3], arr[..., 3:4]
+    w = a / 255.0
+    mean = float((rgb * w).sum() / max(1.0, 3 * w.sum())) / 255.0
+    out = arr.copy()
+    if 0 < mean < target:
+        rgb = np.clip(rgb * (target / mean), 0, 255)
+    out[..., :3] = 255 - (255 - rgb) * strength
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
+
+
+def block_quads(rec: Recording, block_id: int, frame: int, shrink: float = 0.84) -> list[list[tuple[float, float]]]:
+    """The screen quads (recording pixels) of one block's cells on a recorded frame: the block's
+    logged transform position is mapped back to board cell coordinates through the inverse of the
+    cell homography (so a lifted, mid-drag block lands where it is drawn), and each cell of its
+    shape is projected forward, shrunk a little to stay on the brick's flat top. [] once the block
+    has left or when the frame has no record of it. A texture drawn on these follows the block
+    exactly, frame by frame (case p.6 "use this object"; research note of 2026-10-15)."""
+    H = cell_homography(rec)
+    if H is None or rec.level is None or block_id >= len(rec.level.blocks) or frame >= len(rec.frames):
+        return []
+    pts = rec.frames[frame].get("blocks") or []
+    if 2 * block_id + 1 >= len(pts) or pts[2 * block_id] < 0:
+        return []
+    sx, sy = pts[2 * block_id], pts[2 * block_id + 1]
+    inv = np.linalg.inv(H)
+    v = inv @ np.array([sx, sy, 1.0])
+    cx, cy = float(v[0] / v[2]), float(v[1] / v[2])
+
+    def proj(x, y):
+        w = H @ np.array([x, y, 1.0])
+        return float(w[0] / w[2]), float(w[1] / w[2])
+    h = shrink / 2
+    quads = []
+    for ox, oy in rec.level.blocks[block_id].offsets:
+        x, y = cx + ox, cy + oy
+        quads.append([proj(x - h, y + h), proj(x + h, y + h), proj(x + h, y - h), proj(x - h, y - h)])
+    return quads
+
+
+def wall_rects(cells: set) -> list[tuple[int, int, int, int]]:
+    """Connected groups of wall cells as (x0, y0, x1, y1) inclusive rectangles when a group fills
+    its bounding box, else one rectangle per cell of that group."""
+    left, out = set(cells), []
+    while left:
+        start = min(left)
+        group, todo = {start}, [start]
+        while todo:
+            x, y = todo.pop()
+            for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if n in left and n not in group:
+                    group.add(n)
+                    todo.append(n)
+        left -= group
+        xs, ys = [c[0] for c in group], [c[1] for c in group]
+        x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
+        if len(group) == (x1 - x0 + 1) * (y1 - y0 + 1):
+            out.append((x0, y0, x1, y1))
+        else:
+            out += [(x, y, x, y) for x, y in sorted(group)]
+    return sorted(out)
+
+
+def _perspective_coeffs(dst, src):
+    """PIL PERSPECTIVE coefficients mapping output points dst (4) to source points src (4)."""
+    rows = []
+    for (X, Y), (x, y) in zip(dst, src):
+        rows.append([X, Y, 1, 0, 0, 0, -x * X, -x * Y])
+        rows.append([0, 0, 0, X, Y, 1, -y * X, -y * Y])
+    A = np.array(rows, dtype=np.float64)
+    b = np.array([c for xy in src for c in xy], dtype=np.float64)
+    return tuple(np.linalg.solve(A, b))
+
+
+def draw_on_quad(frame: np.ndarray, img: Image.Image, quad: list[tuple[float, float]], mode: str = "normal"):
+    """Warp an RGBA picture onto a screen quad (top-left, top-right, bottom-right, bottom-left) and
+    blend it in place. mode "multiply" darkens the frame by the picture (a texture on a shaded
+    brick keeps the brick's studs and light). Returns the changed box or None."""
+    xs, ys = [p[0] for p in quad], [p[1] for p in quad]
+    x0, y0 = int(np.floor(min(xs))), int(np.floor(min(ys)))
+    x1, y1 = int(np.ceil(max(xs))) + 1, int(np.ceil(max(ys))) + 1
+    fh, fw = frame.shape[:2]
+    if x1 <= 0 or y1 <= 0 or x0 >= fw or y0 >= fh or x1 - x0 < 2 or y1 - y0 < 2:
+        return None
+    local = [(x - x0, y - y0) for x, y in quad]
+    w, h = img.width, img.height
+    coeffs = _perspective_coeffs(local, [(0, 0), (w, 0), (w, h), (0, h)])
+    warped = img.convert("RGBA").transform((x1 - x0, y1 - y0), Image.Transform.PERSPECTIVE, coeffs, Image.Resampling.BICUBIC)
+    if mode != "multiply":
+        return blend(frame, warped, x0 + (x1 - x0) / 2, y0 + (y1 - y0) / 2, 1.0)
+    cx0, cy0, cx1, cy1 = max(0, x0), max(0, y0), min(fw, x1), min(fh, y1)
+    src = np.asarray(warped, dtype=np.uint16)[cy0 - y0:cy1 - y0, cx0 - x0:cx1 - x0]
+    a = src[..., 3:4]
+    region = frame[cy0:cy1, cx0:cx1].astype(np.uint32)
+    # frame * (1 - a * (1 - rgb/255)): integer maths, exact and repeatable like draw.blend
+    darken = a.astype(np.uint32) * (255 - src[..., :3].astype(np.uint32))  # 0..255*255
+    out = region * (255 * 255 - darken) // (255 * 255)
+    frame[cy0:cy1, cx0:cx1] = out.astype(np.uint8)
+    return (cx0, cy0, cx1, cy1)
+
 
 def cursor_track(rec: Recording) -> list[dict]:
     """Per recording frame: where the tap ring is, whether the finger is down, and how long since
@@ -187,7 +331,7 @@ def layer_image(layer: dict, text: str, band: dict | None = None) -> Image.Image
         pill.alpha_composite(label, ((w - label.width) // 2, (h - label.height) // 2))
         return pill
     if kind == "button":
-        im = sprite(layer.get("image", "ContinueButtonEmpty.png"))
+        im = cutout(sprite(layer.get("image", "ContinueButtonEmpty.png")))  # a generated button on a plain background
         if layer.get("box"):  # a replacement button, fitted in the game button's box
             bw, bh = layer["box"]
             btn = scaled(im, min(bw / im.width, bh / im.height)).copy()
@@ -209,7 +353,8 @@ def layer_image(layer: dict, text: str, band: dict | None = None) -> Image.Image
         # Placed texts (the end card) fit the safe width too, in one or two lines.
         img = fit_text(text, size, int(BAND["max_w"] / 1.05), layer.get("max_h", 260), **style)
     if icon:
-        ic = scaled(sprite(icon), 110 / max(sprite(icon).width, sprite(icon).height))  # inside 110x110
+        ico = cutout(sprite(icon))
+        ic = scaled(ico, 110 / max(ico.width, ico.height))  # inside 110x110
         out = Image.new("RGBA", (ic.width + 16 + img.width, max(ic.height, img.height)), (0, 0, 0, 0))
         out.alpha_composite(ic, (0, (out.height - ic.height) // 2))
         out.alpha_composite(img, (ic.width + 16, (out.height - img.height) // 2))
@@ -249,7 +394,30 @@ def vignette_image(size: tuple[int, int], color) -> Image.Image:
 
 # ---------- rendering ----------
 
-ORDER_Z = {"vignette": 0, "cursor": 1, "image": 2, "button": 3, "text": 4, "tag": 5}
+ORDER_Z = {"object": 0, "skin": 0, "vignette": 0, "cursor": 1, "image": 2, "button": 3, "text": 4, "tag": 5}
+
+
+class _Zoomed:
+    """A placer seen through a camera punch-in: points scale about the anchor."""
+
+    def __init__(self, pl, z: float, ax: float, ay: float):
+        self.pl, self.z, self.ax, self.ay = pl, z, ax, ay
+        self.fit = {**pl.fit, "scale": pl.fit["scale"] * z}
+
+    def point(self, x: float, y: float) -> tuple[float, float]:
+        px, py = self.pl.point(x, y)
+        return self.ax + (px - self.ax) * self.z, self.ay + (py - self.ay) * self.z
+
+
+def zoom_frame(frame: np.ndarray, z: float, ax: float, ay: float) -> np.ndarray:
+    """The frame seen `z` times closer, about (ax, ay)."""
+    im = Image.fromarray(frame)
+    k = 1.0 / z
+    return np.array(im.transform(im.size, Image.AFFINE, (k, 0, ax - ax * k, 0, k, ay - ay * k),
+                                 resample=Image.BICUBIC))  # a copy: layers are drawn into it
+
+
+PLAYFIELD = (0, 217, 1080, 1574)  # the HUD and the board in a recorded frame (see formats.py)
 
 
 class Prepared:
@@ -277,6 +445,69 @@ class Prepared:
             self.qa["failures"].append(f"audio: {e}")
         self.draw_order = sorted(self.layers, key=lambda k: ORDER_Z[self.layers[k]["layer"]["type"]])
         self._placers, self._firsts = {}, {}
+        self.camera = self._resolve_camera()
+
+    def _resolve_camera(self) -> list[dict]:
+        """Timed punch-ins (ad["camera"]): frames, zoom and the anchor on the canvas, the asked block
+        (the one of its colour nearest the board's middle) at the window's middle frame. The zoom is
+        capped so the HUD and the whole board stay in the frame."""
+        out = []
+        for c in self.ad.get("camera", []):
+            f0, f1 = int(round(c["from_s"] * FPS)), int(round(c["to_s"] * FPS))
+            f0, f1 = max(0, f0), min(self.total, f1)
+            if f1 - f0 < 6:
+                self.qa["warnings"].append(f"camera punch-in {c['from_s']}-{c['to_s']} s is too short or outside the ad")
+                continue
+            tm = (f0 + f1) // 2
+            sid = next((k for k, (a, b) in self.tl.items() if a <= tm < b), None)
+            seg = self.ad["segments"].get(sid) if sid else None
+            if not seg or seg["kind"] not in ("clip", "hold"):
+                self.qa["warnings"].append(f"camera punch-in {c['from_s']}-{c['to_s']} s is not on the gameplay")
+                continue
+            rec, pl = self.recs[seg["src"]], self.placer(seg["src"], seg["fit"])
+            rf = source_frame(seg, tm - self.tl[sid][0]) if seg["kind"] == "clip" else seg["frame"]
+            pos = (rec.frames[min(rf, rec.n - 1)].get("blocks") or [])
+            pts = [(i, pos[2 * i], pos[2 * i + 1]) for i in range(len(pos) // 2) if pos[2 * i] >= 0]
+            x0, y0, x1, y1 = (pl.point(PLAYFIELD[0], PLAYFIELD[1]) + pl.point(PLAYFIELD[2], PLAYFIELD[3]))
+            mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+            want = c.get("toward")
+            if want and rec.level is not None:
+                from .level import BlockColor
+                slot = {"DarkGreen": "DARK_GREEN"}.get(want, want.upper())
+                pts = [q for q in pts if rec.level.blocks[q[0]].color == BlockColor[slot]]
+            if pts:
+                cands = [pl.point(x, y) for _, x, y in pts]
+                ax, ay = min(cands, key=lambda q: (q[0] - mx) ** 2 + (q[1] - my) ** 2)
+            else:
+                ax, ay = mx, my
+                if want:
+                    self.qa["warnings"].append(f"camera punch-in: no {want} block on screen then; it zooms on the board's middle")
+            W, H = self.size
+            caps = [c["zoom"]]
+            for e, a in ((x0, ax), (y0, ay)):  # the left and top edges stay at or after 0
+                if e < a:
+                    caps.append(a / (a - e))
+            for e, a, lim in ((x1, ax, W), (y1, ay, H)):  # the right and bottom edges stay inside
+                if e > a:
+                    caps.append((lim - a) / (e - a))
+            z = max(1.0, min(caps))
+            if z < c["zoom"] - 1e-6:
+                self.qa["warnings"].append(f"camera punch-in capped at {z:.3f} so the HUD and the board stay in the frame")
+            out.append({"f0": f0, "f1": f1, "zoom": round(z, 4), "anchor": [round(ax, 1), round(ay, 1)],
+                        "toward": want})
+        return out
+
+    def zoom_at(self, t: int):
+        """(z, ax, ay) of the camera at output frame t, or None: eased in over the first 30% of
+        the window, held, eased back out over the last 30%."""
+        for c in self.camera:
+            if c["f0"] <= t < c["f1"]:
+                n = c["f1"] - c["f0"]
+                ramp = max(1, int(n * 0.3))
+                k = t - c["f0"]
+                e = 1.0 if ramp <= k < n - ramp else ease_in_out(min(k, n - 1 - k) / ramp)
+                return 1.0 + (c["zoom"] - 1.0) * e, c["anchor"][0], c["anchor"][1]
+        return None
 
     def _check_locked(self):
         """`locked` parts must match the digests written when the ad was made (case p.3: elements
@@ -333,13 +564,24 @@ class Prepared:
                 entry["image"] = layer_image(layer, text, self.band)
                 if layer.get("slot") == "top" and entry["image"].height > self.band["y1"] - self.band["y0"]:
                     self.qa["failures"].append(f"layer {lid!r}: too long for the text band even at the smallest size")
+                elif layer.get("pos") and layer["type"] == "text" and not layer.get("safe_exempt"):
+                    # a placed caption that wraps to two lines (custom copy) stays inside the safe area:
+                    # it is moved up as far as it needs, and the ad says so
+                    safe = SAFE[ad["output"].get("safe", "social")]
+                    bottom = ad["output"]["h"] - safe["bottom"]
+                    over = int(layer["pos"][1] + entry["image"].height * 1.05 / 2 - bottom) + 2  # pop-in overshoot
+                    if over > 0:
+                        layer["pos"] = [layer["pos"][0], layer["pos"][1] - over]
+                        self.qa["warnings"].append(f"layer {lid!r}: moved up {over} px to stay inside the safe area "
+                                                   f"(its words wrap to two lines)")
                 if layer["type"] == "text":
                     need = reading_s(text)  # time to read it
                     if (f1 - f0) / FPS < need - 1e-6:
-                        self.qa["failures"].append(f"layer {lid!r}: on screen {(f1 - f0) / FPS:.2f} s; "
-                                                   f"its words need {need:.1f} s")
+                        # an entrance or exit the user moved is theirs to choose: said, not refused
+                        (self.qa["warnings"] if layer.get("asked_timing") else self.qa["failures"]).append(
+                            f"layer {lid!r}: on screen {(f1 - f0) / FPS:.2f} s; its words need {need:.1f} s")
             elif layer["type"] == "image":
-                im = sprite(layer["image"])
+                im = cutout(sprite(layer["image"]))  # a picture on a plain background becomes a sticker
                 if layer.get("box"):  # fit inside a box (an uploaded picture of any size)
                     bw, bh = layer["box"]
                     entry["image"] = scaled(im, min(bw / im.width, bh / im.height))
@@ -351,13 +593,22 @@ class Prepared:
                 seg = ad["segments"][sid]
                 pulses = [to_output(seg, tl[sid][0], f) for f in recs[seg["src"]].event(layer.get("pulse_on", ""))]
                 entry["pulses"] = sorted(p for p in pulses if p is not None)
+            elif layer["type"] == "object":
+                # a picture on the board's cells (the walls): the cells are fitted to the screen from the
+                # recorded block positions (an exact homography: the board is a plane under a fixed camera)
+                entry["image"] = sprite(layer["image"])
+                entry["quads"] = {sid: cell_quads(r, layer.get("cells", "holes")) for sid, r in recs.items()}
+            elif layer["type"] == "skin":
+                # a texture on one block: drawn on the block's cells on every gameplay frame, following the
+                # recorded block position (the game itself is untouched; the block's shape and moves stay)
+                entry["image"] = texture_for_multiply(sprite(layer["image"]).convert("RGBA"))
             elif layer["type"] == "cursor":
                 img = layer.get("image")
                 if img == "builtin:hand":
                     from .draw import hand_image
                     entry["image"] = hand_image(int(layer.get("size", 96) * 1.9))
                 elif img:
-                    im = sprite(img)
+                    im = cutout(sprite(img))
                     entry["image"] = scaled(im, layer.get("size", 96) * 1.9 / max(im.width, im.height))
                 else:
                     entry["image"] = None
@@ -383,13 +634,44 @@ class Prepared:
             base = cover(sprite(seg.get("background", "StartBACKGROUND.png")), self.size)
         th = seg.get("thumb")
         if th:
-            f = next(read_frames(self.recs[th["src"]].video, self.size, th["frame"], 1))
+            f = next(read_frames(self.recs[th["src"]].video, self.size, th["frame"], 1)).copy()
+            drawn = self._board_layers(f, th["src"], th["frame"])  # the walls' picture, a block's texture: on the thumb too
             y0, y1 = th.get("crop_y", [0, f.shape[0]])
-            im = scaled(Image.fromarray(f[y0:y1]).convert("RGBA"), th.get("scale", 0.5))
+            sc = th.get("scale", 0.5)
+            im = scaled(Image.fromarray(f[y0:y1]).convert("RGBA"), sc)
             framed = Image.new("RGBA", (im.width + 16, im.height + 16), (*WHITE, 255))
             framed.alpha_composite(im, (8, 8))
-            blend(base, framed, *th.get("pos", [540, 960]))
+            pos = th.get("pos", [540, 960])
+            blend(base, framed, *pos)
+            ox, oy = int(round(pos[0] - framed.width / 2)) + 8, int(round(pos[1] - framed.height / 2)) + 8
+            for lid, b in drawn:  # where it landed on the card, so the frame diff stays inside the layer's boxes
+                self.layers[lid]["boxes"].append([int(ox + b[0] * sc) - 2, int(oy + (b[1] - y0) * sc) - 2,
+                                                  int(math.ceil(ox + b[2] * sc)) + 2, int(math.ceil(oy + (b[3] - y0) * sc)) + 2])
         return base
+
+    def _board_layers(self, frame: np.ndarray, src: str, fi: int) -> list[tuple[str, tuple]]:
+        """The object (walls) and skin (one block) layers drawn on a native recording frame `fi` of `src`, for the
+        end card's board picture: a cliffhanger's unsolved board must show the asked picture there too (the viewer
+        of E2, 2026-10-19: "the obstacle suddenly changing look at the end feels like a glitch"). Returns the boxes."""
+        out = []
+        for lid in self.draw_order:
+            e = self.layers[lid]
+            lay = e["layer"]
+            if lay["type"] not in ("object", "skin") or e.get("image") is None:
+                continue
+            pl = self.placer(src, {"scale": 1.0, "x": 0, "y": 0})
+            if lay["type"] == "object":
+                quads = e["quads"].get(src, [])
+                for quad in quads:
+                    b = draw_on_quad(frame, e["image"], [pl.point(x, y) for x, y in quad])
+                    if b:
+                        out.append((lid, b))
+            else:
+                for quad in block_quads(self.recs[src], lay["block"], fi):
+                    b = draw_on_quad(frame, e["image"], [pl.point(x, y) for x, y in quad], mode=lay.get("blend", "multiply"))
+                    if b:
+                        out.append((lid, b))
+        return out
 
     def keyframes(self) -> list[int]:
         """Every segment and layer boundary starts a GOP, so a change inside one span cannot touch
@@ -425,7 +707,8 @@ class Prepared:
                 t = s0 + k
                 if want is not None and t not in want:
                     continue
-                frame = base.copy()
+                cam = self.zoom_at(t) if seg["kind"] != "card" else None
+                frame = zoom_frame(base, *cam) if cam else base.copy()
                 for lid in self.draw_order:
                     self._draw(lid, frame, t, sid, seg, k, W, H)
                 yield t, np.ascontiguousarray(frame)
@@ -433,11 +716,33 @@ class Prepared:
     def _draw(self, lid, frame, t, sid, seg, k, W, H):
         e = self.layers[lid]
         lay = e["layer"]
+        if lay["type"] == "object":
+            if seg["kind"] != "card" and sid in lay.get("segments", []) and e.get("image") is not None:
+                pl = self.placer(seg["src"], seg["fit"])
+                cam = self.zoom_at(t)
+                pl = _Zoomed(pl, *cam) if cam else pl
+                for quad in e["quads"].get(seg["src"], []):
+                    b = draw_on_quad(frame, e["image"], [pl.point(x, y) for x, y in quad])
+                    if b:
+                        e["boxes"].append(b)
+            return
+        if lay["type"] == "skin":
+            if seg["kind"] != "card" and sid in lay.get("segments", []) and e.get("image") is not None:
+                pl = self.placer(seg["src"], seg["fit"])
+                cam = self.zoom_at(t)
+                pl = _Zoomed(pl, *cam) if cam else pl
+                for quad in block_quads(self.recs[seg["src"]], lay["block"], source_frame(seg, k)):
+                    b = draw_on_quad(frame, e["image"], [pl.point(x, y) for x, y in quad], mode=lay.get("blend", "multiply"))
+                    if b:
+                        e["boxes"].append(b)
+            return
         if lay["type"] == "cursor":
             if seg["kind"] == "clip" and sid in lay.get("segments", []):
                 st = e["tracks"][seg["src"]][source_frame(seg, k)]
                 hot = lay.get("hotspot") or ((0.36, 0.05) if lay.get("image") == "builtin:hand" else (0.5, 0.5))
-                e["boxes"] += draw_cursor(frame, st, self.placer(seg["src"], seg["fit"]), lay.get("size", 96),
+                pl = self.placer(seg["src"], seg["fit"])
+                cam = self.zoom_at(t)
+                e["boxes"] += draw_cursor(frame, st, _Zoomed(pl, *cam) if cam else pl, lay.get("size", 96),
                                           seg.get("speed", 1), e["image"], hot)
             return
         if not e["f0"] <= t < e["f1"]:
@@ -460,7 +765,132 @@ class Prepared:
             e["boxes"].append(b)
 
 
-def render(ad: dict, out_dir: str | Path, draft: bool = False) -> dict:
+def patch_plan(ad: dict, prep: "Prepared", prev_dir: Path) -> dict | None:
+    """When `ad` differs from the finished ad in prev_dir only in layers that keep their frame
+    windows (a caption's words or colours, a picture swapped in its slot, a layer added or removed
+    inside existing boundaries), the GOPs of the approved MP4 that hold no changed frame can be
+    copied byte for byte and only the others rendered and encoded again. Returns the plan, or None
+    when the edit is not of that kind (then the ad is rendered in full)."""
+    try:
+        prev = json.loads((prev_dir / "compose.json").read_text())
+        prev_ad = json.loads((prev_dir / "ad.json").read_text())
+    except (OSError, ValueError):
+        return None
+    if not prev.get("rendered") or prev.get("draft") or not (prev_dir / "ad.mp4").is_file():
+        return None
+    if prev.get("frames") != prep.total or prev.get("keyframes") != prep.keyframes():
+        return None
+    for key in ("order", "segments", "sources", "output", "camera"):
+        if prev_ad.get(key) != ad.get(key):
+            return None
+    if prev_ad["layers"].get("cursor") != ad["layers"].get("cursor"):
+        return None  # the cursor runs through every gameplay frame
+    changed = sorted(lid for lid in set(prev_ad["layers"]) | set(ad["layers"])
+                     if prev_ad["layers"].get(lid) != ad["layers"].get(lid))
+    spans = []
+    thumb_segs = [sid for sid in ad["order"] if ad["segments"][sid].get("thumb")]
+    for lid in changed:
+        if lid in prep.layers:
+            spans.append((prep.layers[lid]["f0"], prep.layers[lid]["f1"]))
+        if lid in prev.get("layers", {}):
+            spans.append(tuple(prev["layers"][lid]["frames"]))
+        if (ad["layers"].get(lid) or prev_ad["layers"].get(lid) or {}).get("type") in ("object", "skin"):
+            for sid in thumb_segs:  # the end card's board picture carries the walls' picture and a block's texture
+                spans.append(tuple(prep.tl[sid]))  # (card_base): its GOP is drawn again, never copied (E2, 2026-10-19)
+    ks = sorted(set(prev["keyframes"]) | {0, prep.total})
+    gops = [(ks[i], ks[i + 1]) for i in range(len(ks) - 1) if ks[i] < ks[i + 1]]
+    dirty = [(a, b) for a, b in gops if any(a < s1 and s0 < b for s0, s1 in spans)]
+    return {"gops": gops, "dirty": dirty, "changed_layers": changed, "prev": prev, "prev_dir": prev_dir}
+
+
+def _runs(gops: list, dirty: set) -> list[tuple[int, int, bool]]:
+    """Contiguous runs of GOPs, each (start, end, dirty)."""
+    out = []
+    for a, b in gops:
+        d = (a, b) in dirty
+        if out and out[-1][2] == d and out[-1][1] == a:
+            out[-1] = (out[-1][0], b, d)
+        else:
+            out.append((a, b, d))
+    return out
+
+
+def _patched_video(ad: dict, prep: "Prepared", plan: dict, out: Path, draft: bool) -> tuple[dict, np.ndarray | None]:
+    """The video of a patched render: dirty runs drawn and encoded again (the same encoder, the same
+    keyframes), clean runs cut from the approved MP4 without decoding, all joined without
+    re-encoding. Returns {frame index: hash} for the rendered frames and the poster if frame 0 was drawn."""
+    runs = _runs(plan["gops"], set(plan["dirty"]))
+    prev_mp4 = plan["prev_dir"] / "ad.mp4"
+    ks = set(plan["prev"]["keyframes"])
+    hashes, poster, parts = {}, None, []
+    tmp = out / "_patch"
+    tmp.mkdir(exist_ok=True)
+    for i, (a, b, dirty) in enumerate(runs):
+        piece = tmp / f"{i:03d}.mp4"
+        if dirty:
+            writer = FrameWriter(piece, prep.size, FPS, ad["output"].get("crf", 16), draft=draft,
+                                 keyframes=[k - a for k in ks if a <= k < b])
+            try:
+                for t, frame in prep.frames(want=set(range(a, b))):
+                    hashes[t] = hashlib.sha256(frame.data).hexdigest()[:32]
+                    if t == 0:
+                        poster = frame.copy()
+                    writer.write(frame)
+                writer.close()
+            except BaseException:
+                writer.proc.kill()
+                raise
+        else:
+            # -ss just past the keyframe's own time: the copy starts on that keyframe, never the one before
+            r = subprocess.run([ffmpeg_bin(), "-v", "error", "-y", "-ss", f"{(a + 0.25) / FPS:.6f}", "-i", str(prev_mp4),
+                                "-frames:v", str(b - a), "-c:v", "copy", "-an", "-avoid_negative_ts", "make_zero",
+                                str(piece)], capture_output=True, text=True)
+            if r.returncode != 0:
+                raise ValueError(f"could not copy frames {a}-{b} of the approved ad: {r.stderr.strip()[-200:]}")
+        parts.append(piece)
+    lst = tmp / "list.txt"
+    lst.write_text("".join(f"file '{p.name}'\n" for p in parts))
+    r = subprocess.run([ffmpeg_bin(), "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy",
+                        "-movflags", "+faststart", str(out / "video.mp4")], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise ValueError(f"could not join the patched video: {r.stderr.strip()[-200:]}")
+    n = _frame_count(out / "video.mp4")
+    if n != prep.total:
+        raise ValueError(f"the patched video has {n} frames, not {prep.total}")
+    for p_ in parts:
+        p_.unlink(missing_ok=True)
+    lst.unlink(missing_ok=True)
+    tmp.rmdir()
+    return hashes, poster
+
+
+def _frame_count(video: Path) -> int:
+    r = subprocess.run([ffmpeg_bin().replace("ffmpeg", "ffprobe"), "-v", "error", "-count_packets", "-select_streams", "v:0",
+                        "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", str(video)], capture_output=True, text=True)
+    try:
+        return int(r.stdout.strip().split(",")[0])
+    except ValueError:
+        return -1
+
+
+def _runs_cover(f0: int, f1: int, runs: list[tuple[int, int]]) -> bool:
+    """Whether the half-open frame runs cover every frame of [f0, f1)."""
+    t = f0
+    for a, b in sorted(runs):
+        if a > t:
+            break
+        if b > t:
+            t = b
+        if t >= f1:
+            return True
+    return t >= f1
+
+
+def render(ad: dict, out_dir: str | Path, draft: bool = False, patch_from: str | Path | None = None) -> dict:
+    """Render an ad. patch_from: the folder of the finished ad this one edits; when the edit only
+    changes layers inside the same frame windows, the approved MP4's untouched GOPs are copied byte
+    for byte and only the changed ones are rendered (the result decodes identically to a full render,
+    which the encoder's bit-exact settings make checkable)."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     for stale in ("ad.mp4", "ad.FAILED.mp4", "poster.png", "audio.wav", "compose.json"):
@@ -474,22 +904,48 @@ def render(ad: dict, out_dir: str | Path, draft: bool = False) -> dict:
                   "timeline": {}, "layers": {}, "qa": qa}
         (out / "compose.json").write_text(json.dumps(result, indent=1))
         return result
-    writer = FrameWriter(out / "video.mp4", prep.size, FPS, ad["output"].get("crf", 16), draft=draft,
-                         keyframes=prep.keyframes())
+    patched = None
+    plan = patch_plan(ad, prep, Path(patch_from)) if patch_from and not draft else None
     hashes, poster = [], None
-    try:
-        for t, frame in prep.frames():
-            hashes.append(hashlib.sha256(frame.data).hexdigest()[:32])
-            if t == 0:
-                poster = frame.copy()
-            writer.write(frame)
-        writer.close()
-    except BaseException:
-        writer.proc.kill()
-        raise
-    track = render_track(prep.events, total / FPS)
+    if plan is not None:
+        try:
+            got, poster = _patched_video(ad, prep, plan, out, draft)
+            prev_h = plan["prev"]["frame_sha256"]
+            hashes = [got.get(t, prev_h[t]) for t in range(total)]
+            if poster is None and (plan["prev_dir"] / "poster.png").is_file():
+                poster = np.asarray(Image.open(plan["prev_dir"] / "poster.png").convert("RGB")).copy()
+            copied = sum(b - a for a, b in plan["gops"] if (a, b) not in set(plan["dirty"]))
+            patched = {"from": str(plan["prev_dir"]), "changed_layers": plan["changed_layers"], "gops": len(plan["gops"]),
+                       "gops_rendered": len(plan["dirty"]), "frames_rendered": total - copied, "frames_copied": copied}
+        except Exception as e:  # anything odd: the full render is always right
+            patched = {"from": str(plan["prev_dir"]), "note": f"not patched ({str(e)[:160]}); rendered in full"}
+            for stale in ("video.mp4",):
+                (out / stale).unlink(missing_ok=True)
+            hashes, poster = [], None
+            plan = None
+    if plan is None:
+        writer = FrameWriter(out / "video.mp4", prep.size, FPS, ad["output"].get("crf", 16), draft=draft,
+                             keyframes=prep.keyframes())
+        try:
+            for t, frame in prep.frames():
+                hashes.append(hashlib.sha256(frame.data).hexdigest()[:32])
+                if t == 0:
+                    poster = frame.copy()
+                writer.write(frame)
+            writer.close()
+        except BaseException:
+            writer.proc.kill()
+            raise
+    effects = render_track(prep.events, total / FPS)
+    music = (ad.get("audio") or {}).get("music")
+    track = mix_music(effects, music) if music else effects
     write_wav(track, out / "audio.wav")
-    mux(out / "video.mp4", out / "audio.wav", out / "ad.mp4")
+    audio_from = None
+    if plan is not None and patched.get("frames_copied") and (plan["prev_dir"] / "ad.mp4").is_file() and \
+            plan["prev"].get("wav_sha256") == hashlib.sha256((out / "audio.wav").read_bytes()).hexdigest():
+        audio_from = plan["prev_dir"] / "ad.mp4"  # the same mix: the approved audio stream, byte for byte
+        patched["audio_copied"] = True
+    mux(out / "video.mp4", out / "audio.wav", out / "ad.mp4", audio_from=audio_from)
     (out / "video.mp4").unlink()
     if poster is not None:
         Image.fromarray(poster).save(out / "poster.png")
@@ -510,14 +966,37 @@ def render(ad: dict, out_dir: str | Path, draft: bool = False) -> dict:
         "layers": {lid: {"type": e["layer"]["type"], "frames": [e["f0"], e["f1"]], "text": e.get("text"),
                          "box": _union(e["boxes"])} for lid, e in prep.layers.items()},
         "keyframes": prep.keyframes(),
+        **({"patched": patched} if patched else {}),
         "audio_events": prep.events,
+        **({"camera": prep.camera} if prep.camera else {}),
         "frame_sha256": hashes,  # first 128 bits of each composited RGB frame's SHA-256
         "wav_sha256": hashlib.sha256((out / "audio.wav").read_bytes()).hexdigest(),
+        # the stems apart, so an edit report can say which one changed
+        "sfx_sha256": hashlib.sha256(np.round(effects * 32767).astype("<i2").tobytes()).hexdigest(),
+        "music": ({"file": Path(music["file"]).name, "sha256": hashlib.sha256(Path(music["file"]).read_bytes()).hexdigest(),
+                   "gain": music["gain"], "fade_out_s": music["fade_out_s"]} if music else None),
         "mp4_sha256": hashlib.sha256(((out / "ad.mp4") if (out / "ad.mp4").exists()
                                       else (out / "ad.FAILED.mp4")).read_bytes()).hexdigest(),
         "draft": draft,
         "qa": qa,
     }
+    if plan is not None and patched and patched.get("frames_copied"):
+        # a layer with frames outside the rendered GOPs has a partial box here: for those frames the
+        # approved render's box is exact (its bytes were copied), so the two are joined; a layer that
+        # lies whole inside the rendered GOPs keeps its new box (it may have been drawn differently as
+        # a side effect, e.g. a wider caption band once a logo left, 2026-10-15)
+        rendered = [(a, b) for a, b in plan["dirty"]]
+        for lid, info in result["layers"].items():
+            if lid in plan["changed_layers"]:
+                continue
+            f0, f1 = info["frames"]
+            # every frame of the layer must lie in a rendered run, not only its first and last (2026-10-18:
+            # the cursor spans the whole ad; a hook edit and an end-card edit rendered its first and last
+            # GOPs, the play in between was copied, and its box shrank to the rendered frames' spots, a
+            # false "placed differently" in the edit report)
+            inside = _runs_cover(f0, max(f0 + 1, f1), rendered)
+            if not inside:
+                info["box"] = _union([b for b in (plan["prev"]["layers"].get(lid, {}).get("box"), info["box"]) if b])
     (out / "compose.json").write_text(json.dumps(result, indent=1))
     return result
 
@@ -534,6 +1013,60 @@ def _clip_frames(reader, seg: dict, pl: Placer, n_out: int):
             if cur_idx == want:
                 cur = pl.place(raw)
         yield cur
+
+
+def music_seconds(data: bytes, ext: str) -> float | None:
+    """The length of an uploaded sound file in seconds, or None if ffprobe finds no audio in it."""
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=ext) as f:
+        f.write(data)
+        f.flush()
+        import shutil
+        probe = shutil.which("ffprobe")
+        if not probe:
+            raise ValueError("ffprobe not found on PATH")
+        r = subprocess.run([probe, "-v", "error", "-select_streams", "a:0",
+                            "-show_entries", "stream=codec_type:format=duration", "-of", "json", f.name],
+                           capture_output=True, text=True)
+    try:
+        j = json.loads(r.stdout)
+        if not j.get("streams"):
+            return None
+        return float(j["format"]["duration"])
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def load_music(path: str | Path, seconds: float) -> np.ndarray:
+    """A sound file as a mono float track at the ad's rate, exactly `seconds` long: trimmed, or
+    looped when shorter."""
+    r = subprocess.run([ffmpeg_bin(), "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(RATE), "-f", "f32le", "-"],
+                       capture_output=True)
+    if r.returncode != 0:
+        raise ValueError(f"the music {Path(path).name} could not be read: {r.stderr.decode()[:200]}")
+    x = np.frombuffer(r.stdout, dtype="<f4").astype(np.float64)
+    n = int(round(seconds * RATE)) + 1
+    if len(x) == 0:
+        raise ValueError(f"the music {Path(path).name} is empty")
+    if len(x) < n:
+        x = np.tile(x, n // len(x) + 1)
+    return x[:n]
+
+
+def mix_music(effects: np.ndarray, music: dict) -> np.ndarray:
+    """The effects with the music under them: the music at its gain, a 50 ms fade-in and a fade-out
+    over the last `fade_out_s`; the sum limited to -1 dBFS like the effects alone."""
+    m = load_music(music["file"], (len(effects) - 1) / RATE) * music["gain"]
+    fi, fo = int(0.05 * RATE), int(music["fade_out_s"] * RATE)
+    m[:fi] *= np.linspace(0, 1, fi)
+    if fo:
+        m[-fo:] *= np.linspace(1, 0, fo)
+    track = effects + m
+    peak = np.abs(track).max()
+    limit = 10 ** (-1 / 20)
+    if peak > limit:
+        track *= limit / peak
+    return track
 
 
 def audio_events(ad: dict, recs: dict, tl: dict, total: int) -> list[dict]:
@@ -618,7 +1151,9 @@ def _qa(ad, prep, track, hashes):
         if b0 < a1:
             qa["failures"].append(f"layers {a!r} and {b!r} overlap in the text band ({b0 / FPS:.2f}-{a1 / FPS:.2f} s)")
     if "hook" in layers and layers["hook"]["f0"] != 0:
-        qa["failures"].append("the hook does not start on frame 0 (the poster)")
+        # the user may move it later on purpose; then the poster simply has no hook, and it is said
+        (qa["warnings"] if layers["hook"]["layer"].get("asked_timing") else qa["failures"]).append(
+            "the hook does not start on frame 0 (the poster)")
     if "hook" not in layers:
         qa["warnings"].append("no hook layer")
     cta = [lid for lid, e in layers.items() if e["layer"]["type"] == "button"]
@@ -682,6 +1217,11 @@ def diff(a_dir: str | Path, b_dir: str | Path, decode: bool = False, boxes: bool
         return out
     changed = [i for i, (x, y) in enumerate(zip(ca["frame_sha256"], cb["frame_sha256"])) if x != y]
     out["changed_frames"] = _ranges(changed)
+    if ca.get("camera") != cb.get("camera"):
+        # a camera move changes whole frames inside its window: those are the camera's, not a layer's
+        cam = {f for c in (ca.get("camera") or []) + (cb.get("camera") or []) for f in range(c["f0"], c["f1"])}
+        out["camera_frames"] = _ranges(sorted(cam & set(changed)))
+        changed = [i for i in changed if i not in cam]
     predicted = [ca["layers"][k]["box"] for k in out["layers_changed"] if k in ca["layers"] and ca["layers"][k]["box"]]
     predicted += [cb["layers"][k]["box"] for k in out["layers_changed"] if k in cb["layers"] and cb["layers"][k]["box"]]
     out["predicted_box"] = _union(predicted)

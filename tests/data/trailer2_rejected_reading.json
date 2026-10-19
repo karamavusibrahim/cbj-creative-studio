@@ -1,0 +1,94 @@
+{
+ "file": "cbj_trailer_2.mp4",
+ "facts": {
+  "duration_s": 28.86,
+  "width": 1920,
+  "height": 1080
+ },
+ "rejected_notes": {
+  "what_it_shows": "A puzzle game level being played with sliding blocks of various colors.",
+  "game_or_product": "Color Block Jam",
+  "concept_in_one_line": "Slide colored blocks to match their corresponding exit gates before time runs out.",
+  "how_to_adapt": "Keep the grid board, block sliding mechanic, and colored gates matching the gameplay of Color Block Jam.",
+  "hook": "The timer ticking down and a block being moved immediately to set the challenge.",
+  "captions_seen": [],
+  "screen_text": [
+   "LEVEL 25",
+   "TIME 01:05"
+  ],
+  "ending": "win",
+  "pacing": "normal",
+  "pace_change": "even",
+  "moves_by_third": [
+   3,
+   3,
+   3
+  ],
+  "mood": "fast-paced puzzle solving",
+  "visual_style": "clean 3D cartoon puzzle board",
+  "dominant_colours": [
+   "#800080",
+   "#00FF00",
+   "#0000FF",
+   "#808080"
+  ],
+  "cta": "",
+  "mistakes": [],
+  "mistakes_shown": false,
+  "structure": [
+   {
+    "from_s": 0,
+    "to_s": 28.86,
+    "purpose": "gameplay",
+    "what": "Player solves the block puzzle level 25 within the time limit",
+    "captions": [],
+    "emphasis": "",
+    "evidence_s": [
+     0,
+     14,
+     28.86
+    ],
+    "confidence": 1
+   }
+  ],
+  "roles": [
+   "board",
+   "concept",
+   "structure"
+  ],
+  "board": {
+   "columns": 5,
+   "rows": 8,
+   "shape": "open",
+   "blocks": 7,
+   "colours": [
+    "purple",
+    "green",
+    "blue"
+   ],
+   "pieces": "varied",
+   "gates_sides": 2,
+   "obstacles": [],
+   "busy": "medium"
+  },
+  "mechanics_seen": [
+   "dragging blocks on a grid",
+   "sliding blocks out through matching colored gates"
+  ],
+  "adaptation": {
+   "transferable": [
+    "Timer countdown",
+    "Color-matched exit gates",
+    "Grid-based puzzle layout"
+   ],
+   "translation": [
+    "Map source block shapes to standard Color Block Jam pieces"
+   ],
+   "do_not_copy": [
+    "Non-game UI elements"
+   ]
+  },
+  "confidence": 0.95
+ },
+ "error": "the reading failed the checks twice: the seconds are not on the clip's clock: the parts before the last part cover 0 s of 28.86 s, and the last part runs 28.86 s (give every part's seconds on the clip's own clock, 0-28.86 s)"
+}

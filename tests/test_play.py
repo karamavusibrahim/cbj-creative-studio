@@ -53,7 +53,7 @@ def test_the_pause_table_is_human():
     for name, (lo, base, hi) in PAUSES.items():
         assert lo <= base <= hi
         if name != "start":
-            assert lo >= MIN_PAUSE_F and hi <= 75  # nothing longer than 2.5 s
+            assert lo >= MIN_PAUSE_F and hi <= (84 if name == "calm" else 75)  # nothing longer than 2.5 s, 2.8 s at a calm tempo
     assert PAUSES["start"] == (0, 0, 0)
 
 
@@ -468,3 +468,55 @@ def test_cli_render_dry_run_films_nothing(monkeypatch, capsys):
     assert cli.main(["render", level3, "--dry-run", "-o", "/tmp/cbj-dry-test"]) == 0
     assert seen["capture"] is False
     assert "Dry run" in capsys.readouterr().out
+
+
+def test_deliberate_pacing_slows_a_short_solve_but_keeps_the_closing_cascade():
+    """A 4-drag easy win is all cascade (about 7 s): paced deliberately it thinks before every other drag
+    and keeps the last two quick, so a 30 s ad opens on motion instead of a frozen frame (2026-10-14)."""
+    from cbj.play import CONFIDENT, PAUSES, PICKUP_CAREFUL, TENTATIVE, Beat, deliberate
+    from cbj.solver import Drag
+    d = Drag(0, ((0, 0), (0, 1)), True)
+    beats = [Beat("solve", d, "start", 0, 3, CONFIDENT, "first"),
+             Beat("solve", d, "cascade", 11, 3, CONFIDENT, ""),
+             Beat("mistake", d, "before_mistake", 24, 3, CONFIDENT, ""),
+             Beat("solve", d, "confident", 14, 3, CONFIDENT, ""),
+             Beat("solve", d, "cascade", 11, 3, CONFIDENT, ""),
+             Beat("solve", d, "cascade", 11, 3, CONFIDENT, "")]
+    out = deliberate(beats)
+    assert out[0].pause == "start"  # the first drag still starts at once
+    assert out[1].pause == "deliberate" and out[1].pause_f == PAUSES["deliberate"][1]  # a long look, 1.6-2.2 s
+    assert out[1].frames_per_cell == TENTATIVE and out[1].pickup_f == PICKUP_CAREFUL  # the slowest finger
+    assert out[2].pause == "before_mistake"  # a mistake keeps its own pause
+    assert out[3].pause == "confident"  # every other drag: look, drag, drag (uniform long gaps read as dull)
+    assert out[4].pause == "cascade" and out[5].pause == "cascade"  # the closing cascade lands the win
+    assert sum(b.pause_f for b in out) > sum(b.pause_f for b in beats) + 40
+
+
+def test_calm_tempo_breathes_between_moves_and_a_short_solve_keeps_one_closing_drag():
+    from cbj.play import GLIDE, CONFIDENT, PAUSES, Beat, deliberate
+    from cbj.solver import Drag
+    d = Drag(0, ((0, 0), (0, 1)), True)
+    beats = [Beat("solve", d, "start", 0, 3, CONFIDENT, ""), Beat("solve", d, "cascade", 11, 3, CONFIDENT, ""),
+             Beat("solve", d, "cascade", 11, 3, CONFIDENT, ""), Beat("solve", d, "cascade", 11, 3, CONFIDENT, "")]
+    out = deliberate(beats, tempo="calm")
+    assert [b.pause for b in out] == ["start", "calm", "calm", "cascade"]  # 4 drags: one quick closing drag
+    assert out[1].pause_f == PAUSES["calm"][1] and out[1].frames_per_cell == GLIDE
+    out = deliberate(beats + beats[1:], tempo="normal")  # 7 drags: two closing drags, a look before every other drag
+    assert [b.pause for b in out] == ["start", "deliberate", "cascade", "deliberate", "cascade", "cascade", "cascade"]
+
+
+def test_an_asked_clock_is_used_as_asked(narrow, plans):
+    """A request's clock value is not raised for the HUD's colour (2026-10-16): a 60 s clock on a
+    20 s play runs as 60 s and the fit says the HUD shows red for part of it; a clock shorter than
+    the play itself becomes the smallest clock the play fits in."""
+    from cbj.play import ASKED_CLOCK_MARGIN_S
+    script = replace(plans["win"], timer_s=60)
+    stop = 30 + 20 * FPS  # the clock stops 20 s after the first touch
+    beats, timer, fit = fit_clock(script, narrow, script.beats, {"clock_stopped_frame": stop}, dry_frames(stop + 100))
+    assert timer == 60 and fit["asked"] and "red" in fit["why"]
+    script = replace(plans["win"], timer_s=120)
+    beats, timer, fit = fit_clock(script, narrow, script.beats, {"clock_stopped_frame": stop}, dry_frames(stop + 100))
+    assert timer == 120 and fit["asked"] and "why" not in fit
+    script = replace(plans["win"], timer_s=15)
+    beats, timer, fit = fit_clock(script, narrow, script.beats, {"clock_stopped_frame": stop}, dry_frames(stop + 100))
+    assert timer == 20 + ASKED_CLOCK_MARGIN_S and "shorter than the play" in fit["why"]

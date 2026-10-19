@@ -54,11 +54,16 @@ PAUSES = {
     "after_mistake": (36, 48, 60),  # 1.2-2.0 s: noticing it did not help
     "cascade": (9, 11, 14),  # 0.3-0.45 s: the quick closing drags of a win
     "hesitate": (11, 14, 18),  # reaching for a block the player then doubts
+    "deliberate": (48, 57, 66),  # 1.6-2.2 s: a long look before a drag, when a short solve carries a long ad
+    "calm": (54, 66, 84),  # 1.8-2.8 s: the same at a calm tempo (a viewer's review read 3-4 s pauses as stalls, 2026-10-14)
 }
+GLIDE = 12  # 2.5 cells per second: the finger of a relaxing ad
+PLAY_VERSION = "mistake-hold-v2"  # in every recording's key: a change to how a play script is built never reuses an older film
+PACING_VERSION = "order-v8"  # v8 (2026-10-16): the asked order is kept on a time-out (deeper search, the last named step cut short); in a recording's key: a change to deliberate pacing or its pauses never reuses an older film
 MIN_PAUSE_F = 5  # shorter than this and two drags read as one
 TRAVEL_CELLS_PER_F = 2  # a pause grows a frame per two cells the finger travels to the next block
 HESITATE_HOLD_F = 21  # lift, hold 0.7 s, put down
-MISTAKE_PUSH_CELLS, MISTAKE_HOLD_F = 0.3, 8  # a blocked attempt presses into the blocker
+MISTAKE_PUSH_CELLS, MISTAKE_HOLD_F = 0.3, 18  # a blocked attempt presses into the blocker for 0.6 s (a 0.27 s bump was not seen as a stop; P7 review, 2026-10-14)
 BUMP_PUSH_CELLS, BUMP_HOLD_F = 0.35, 24  # the cliffhanger's last beat: 0.8 s against the blocker
 TIME_OUT_TOUCH_F = 45  # a time-out's last block is grabbed this many frames before the clock hits zero
 CASCADE_DRAGS = 3
@@ -79,6 +84,8 @@ def near_fail_window(seconds: int = 1) -> tuple[float, tuple[float, float]]:
 CLIFF_LEFT_S = 8  # clock left at a cliffhanger's cut: the HUD shows 00:08
 CLIFF_RANGE_S = (5, 12)
 CALM_MARGIN_S = 55  # a plain win keeps the clock above 0:50, where the HUD flashes red
+ASKED_CLOCK_MARGIN_S = 3  # a clock the request names is used as named, as long as the play ends this long before 0:00
+TIGHT_LEFT_S = 8  # a hard level's win lands with this many seconds showing: low, red, not a near-fail
 CALM_FLOOR_S = 50
 END_HOLD_S = {"win": 2.5, "near_fail": 2.5, "cliffhanger": 1.0, "time_out": 2.5}
 START_HOLD_S = 1.0
@@ -129,6 +136,7 @@ class PlayScript:
     events: list[str] = field(default_factory=list)  # the requested order of interactions, in words
     finish: str = "auto"
     curve: str = "even"
+    clock: str = "calm"  # a win's clock: "calm" stays above 0:50; "tight" lands with TIGHT_LEFT_S left (a hard level)
 
     @property
     def drags(self) -> list[Drag]:
@@ -150,6 +158,7 @@ class PlayScript:
             "events": self.events,
             "finish": self.finish,
             "curve": self.curve,
+            "clock": self.clock,
             "difficulty": self.difficulty,
             "beats": [
                 {
@@ -185,7 +194,7 @@ class PlayScript:
         return PlayScript(d["level"], d["ending"], d["seed"], beats, d["left"], d["timer_s"], d.get("fit", {}),
                           d.get("measured", {}), d.get("difficulty"), d.get("hud_label"), d.get("notes", []),
                           d.get("clock_left", 1), d.get("events", []), d.get("finish", "auto"),
-                          d.get("curve", "even"))
+                          d.get("curve", "even"), d.get("clock", "calm"))
 
 
 # ---------- mistakes ----------
@@ -340,6 +349,55 @@ def mistake_options(level: Level, state: State, allow_fidget: bool = True) -> li
     return options
 
 
+def _in_the_way(level: Level, state: State, mover: int, victim: int, sol=None) -> bool:
+    """After a move: the victim cannot leave now, and could if the mover were not there; or, on a
+    crowded board where other blocks hem the victim in too, the best solution from here has to
+    move the mover again before the victim can leave (the mover sits on its route)."""
+    occ = occupancy(level, state)
+    if state[victim] is None or _can_exit_now(level, state, victim, occ):
+        return False
+    without = tuple(None if i == mover else p for i, p in enumerate(state))
+    if _can_exit_now(level, without, victim, occupancy(level, without)):
+        return True
+    if sol is not None:
+        first_move = next((k for k, d in enumerate(sol.drags) if d.block == mover), None)
+        exit_at = next((k for k, d in enumerate(sol.drags) if d.block == victim and d.exits), None)
+        return first_move is not None and exit_at is not None and first_move < exit_at
+    return False
+
+
+def blocking_moves(level: Level, state: State, movers, victims=frozenset()) -> list[Mistake]:
+    """Wrong moves of the kind "the yellow block is moved into a position that blocks the green
+    block's route": legal, non-exiting drags of a mover after which a victim (one of `victims`, or
+    any other block) can no longer leave, and could without the mover; most believable first."""
+    base = solve(level, start=state)
+    if base is None:
+        return []
+    occ = occupancy(level, state)
+    out = []
+    for bid in sorted(movers):
+        if state[bid] is None:
+            continue
+        for o in drag_outcomes(level, state, bid, occ, paths=True):
+            if o.exits or not 1 <= o.cells_moved <= MISTAKE_MAX_CELLS:
+                continue
+            after = apply_drag(state, o)
+            sol = solve(level, start=after)
+            if sol is None:
+                continue
+            c = sol.min_drags + 1 - base.min_drags
+            if not 1 <= c <= MAX_MISTAKE_COST:
+                continue  # a move that costs nothing is not in anyone's way
+            cand = [v for v in (sorted(victims) if victims else range(len(state)))
+                    if v != bid and _in_the_way(level, after, bid, v, sol)]
+            if not cand:
+                continue
+            out.append(Mistake("wrong_way", o, c, 2.5 - 0.3 * o.cells_moved - 0.2 * abs(c - 1),
+                               f"{_name(level, bid)} moves into {_name(level, cand[0])}'s way"))
+    out.sort(key=lambda m: (-m.score, m.drag.block, m.drag.path))
+    return out
+
+
 def pick_mistake(level: Level, state: State, rng: random.Random, allow_fidget: bool = True,
                  kinds: tuple[str, ...] | None = None) -> Mistake | None:
     """One of the three most believable mistakes, chosen with the seed (only of the given kinds,
@@ -464,16 +522,36 @@ def _beat(kind: str, drag: Drag, pause: str, speed: int, pickup: int, note: str,
     return Beat(kind, drag, pause, PAUSES[pause][1], pickup, speed, note, **kw)
 
 
+def _solve_order(level: Level, events: list[Event], start: State, left: int):
+    """The asked order from `start`: the usual search first, then one deeper try before giving up
+    (2026-10-16: a 6x8 time-out order that fits at 200k states was dropped at 50k)."""
+    from .events import MAX_STATES, impossible, solve_events
+    from .solver import SolverLimitError
+    if impossible(events):
+        return None
+    for cap in (MAX_STATES, 8 * MAX_STATES):
+        try:
+            return solve_events(level, events, start, left, cap)
+        except SolverLimitError:
+            continue
+    return None
+
+
 def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, left: int | None = None,
          hesitations: int | None = None, kinds: tuple[str, ...] | None = None, clock_left: int = 1,
-         events: list[Event] | None = None, finish: str = "auto", curve: str = "even") -> PlayScript:
+         events: list[Event] | None = None, finish: str = "auto", curve: str = "even",
+         prefix: list[tuple] | None = None) -> PlayScript:
     """Beats for the requested ending, before the clock and length are fitted.
 
     Defaults (from what the winning ads show):
     - win: no mistakes, no hesitation, a quick closing cascade;
     - near_fail: 1 mistake, 2 hesitations (one on the last block before its final drag);
     - cliffhanger: 2 blocks left; the last beat pushes a trapped block into its blocker;
-    - time_out: 1 mistake; the last block's final drag stops one cell short of its gate."""
+    - time_out: 1 mistake; the last block's final drag stops one cell short of its gate.
+
+    prefix: steps (kind, drag, role, note) kept from an earlier play, played first as they were;
+    the plan continues from the position they leave (an edit of the board keeps the moves that
+    are still legal on it and re-plans only the rest)."""
     if ending not in ENDINGS:
         raise ValueError(f"ending must be one of {', '.join(ENDINGS)}, got {ending!r}")
     n_blocks = len(level.blocks)
@@ -512,9 +590,9 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
         raise ValueError(f"curve must be one of {', '.join(CURVES)}, got {curve!r}")
     events = list(events or [])
     solver_evs = [e for e in events if e.action in SOLVER_ACTIONS]
-    n_stuck = sum(e.action == "stuck" for e in events)
+    n_stuck = sum(e.action in ("stuck", "blocks") for e in events)
     bumped = max(0, n_stuck - mistakes)
-    mistakes += bumped  # a requested "gets stuck" is a mistake
+    mistakes += bumped  # a requested "gets stuck" or "moved into another block's way" is a mistake
     hesitations = max(0, hesitations - sum(e.action == "hesitates" for e in events))  # and a hesitation, one
     end_left = left if ending == "cliffhanger" else 0
     if ending in ("time_out", "cliffhanger") and any(e.when == "last" for e in solver_evs):
@@ -544,7 +622,7 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
         if rem:
             if steps:  # "first" is about the video's first drag, already played
                 rem = [replace(e, when="next") if e.when == "first" else e for e in rem]
-            sol = try_solve_events(level, rem, start=s, left=end_left)
+            sol = _solve_order(level, rem, s, end_left)
             return None if sol is None else sol.drags
         if ending == "cliffhanger":
             drags = to_cliffhanger(level, s, left)
@@ -557,16 +635,35 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
     def feasible(m_drag: Drag) -> bool:
         return not solver_evs[sk:] or replan(apply_drag(state, m_drag)) is not None
 
+    for kind, d, role, note in prefix or []:
+        steps.append((kind, d, role, note))
+        if kind == "mistake" and pend and pend[0].action == "stuck":
+            pend.pop(0)
+        if solver_evs and kind == "solve":
+            nk = advance(solver_evs, sk, state, d, len(steps) == 1)
+            if nk is None:
+                raise ValueError(f"{level.name}: the kept moves break the event order")
+            for _ in range(nk - sk):
+                if pend:
+                    pend.pop(0)
+            sk = nk
+        state = apply_drag(state, d)
     todo = replan(state)
+    if todo is None and ending == "time_out" and solver_evs and solver_evs[-1].final_only:
+        # the asked order works, but only with a named block last: keep the order and let the time-out cut
+        # that block short, rather than drop the whole order (2026-10-16)
+        solver_evs = solver_evs[:-1]
+        notes.append("the asked order leaves no unnamed block for the time-out's cut, so the last named step is the one cut short")
+        todo = replan(state)
     if todo is None:
         raise ValueError(f"{level.name}: these events cannot all happen in this order on this level: "
                          + "; ".join(e.text for e in solver_evs))
-    made, fidget_used, realize = 0, False, False
+    made, fidget_used, realize = sum(s_[0] == "mistake" for s_ in steps), False, False
     next_slot = rng.choice((0, 1, 2)) if mistakes - n_stuck > 0 else 0  # the first mistake is drag 1, 2 or 3
     if events and events[0].when == "first":
         next_slot = max(next_slot, 1)  # the first drag is the requested event
     while todo:
-        due = pend[0] if pend and pend[0].action in ("stuck", "hesitates") else None
+        due = pend[0] if pend and pend[0].action in ("stuck", "hesitates", "blocks") else None
         if due is not None and due.action == "hesitates":
             bid = next((b for b in sorted(due.blocks) if state[b] is not None), None)
             pend.pop(0)
@@ -576,7 +673,28 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
                 steps.append(("hesitate", hesitation(state, bid), "hesitate",
                               f"{_name(level, bid)} is picked up, then put back: not yet"))
             continue
-        if due is not None:  # stuck: a blocked attempt by that block, where the board offers one
+        if due is not None and due.action == "blocks":  # moved into another block's way, where the board offers it
+            m = None
+            if len(todo) >= 3 and _left(state) >= 2 and (due.when != "first" or not steps):
+                opts = [o for o in blocking_moves(level, state, due.blocks, due.by) if feasible(o.drag)]
+                m = rng.choice(opts[:3]) if opts else None
+            if m is not None:
+                pend.pop(0)
+                steps.append(("mistake", m.drag, "wrong_way", m.note))
+                state = apply_drag(state, m.drag)
+                made += 1
+                todo = replan(state)
+                realize = True
+                next_slot = len(steps) + 2
+                continue
+            nxt = advance(solver_evs, sk, state, todo[0], not steps)
+            if len(todo) < 3 or (nxt is not None and nxt > sk):
+                pend.pop(0)
+                notes.append(f"'{due.text}': the board never lets that block get in the way at that point, so it is not shown")
+                if bumped:
+                    mistakes, bumped = mistakes - 1, bumped - 1
+                continue
+        elif due is not None:  # stuck: a blocked attempt by that block, where the board offers one
             m = None
             if len(todo) >= 3 and _left(state) >= 2 and (due.when != "first" or not steps):
                 opts = [o for o in mistake_options(level, state, allow_fidget=False)
@@ -586,6 +704,13 @@ def plan(level: Level, ending: str, mistakes: int | None = None, seed: int = 0, 
                                     f"{_name(level, b_)} is in the way")
                             for d_, b_ in blocked_attempts(level, state) if d_.block in due.blocks and feasible(d_)
                             and _attempt_cost(level, state, d_) is not None]
+                if due.by and opts:  # "a red block blocks the route": the attempt a red block stops, when there is one
+                    wanted = {(d_.block, d_.end) for d_, b_ in blocked_attempts(level, state) if b_ in due.by}
+                    named = [o for o in opts if (o.drag.block, o.drag.end) in wanted]
+                    if named:
+                        opts = named
+                    else:
+                        notes.append(f"'{due.text}': here no such block is in its way, so the block that is stops it")
                 m = rng.choice(opts[:3]) if opts else None
             if m is not None:
                 pend.pop(0)
@@ -798,6 +923,41 @@ def _with_curve(beats: list[Beat], curve: str, keep_from: int | None = None) -> 
     return out
 
 
+def deliberate(beats: list[Beat], keep_last: int | None = None, tempo: str = "normal",
+               grade: str = "deliberate") -> list[Beat]:
+    """A short solve carrying a long ad: the player takes a long look before every other drag (the
+    "deliberate" pause, 1.6-2.2 s) and moves with the slowest finger instead of racing through a cascade, so the play, not a
+    held screen, carries the ad. The last `keep_last` drags keep the closing cascade so the
+    win still lands; mistakes, reactions, hesitations and the ending keep their own pauses."""
+    n = len(beats)
+    if keep_last is None:
+        keep_last = 1 if n <= 4 or tempo == "calm" else 2  # a 3-4 drag solve (or a calm one) keeps one quick closing drag
+    pause, speed = (("calm", GLIDE) if tempo == "calm" else ("thinking", CAREFUL) if grade == "thinking"
+                    else ("deliberate", TENTATIVE))  # "thinking": a lighter grade when less time needs filling
+    out = []
+    k = 0  # every other drag gets the look: look, drag, drag, look ... (uniform 3-4 s gaps read as dull, 2026-10-14)
+    for i, b in enumerate(beats):
+        if b.kind == "solve" and b.pause in ("confident", "thinking", "cascade") and i < n - keep_last:
+            k += 1
+            if k % 2 == 0 and (tempo != "calm" or grade == "thinking"):  # calm breathes before every drag when it fits
+                if grade == "slow":
+                    # "slow" (v7, 2026-10-15): a short solve in a long ad; the in-between drags get a thought
+                    # too (0.9-1.6 s), so the play, not the replay and the holds, carries more of the ad
+                    out.append(replace(b, pause="thinking", pause_f=PAUSES["thinking"][1], frames_per_cell=CAREFUL,
+                                       pickup_f=PICKUP_CAREFUL))
+                    continue
+                out.append(b)
+                continue
+            # the longest human pause and the slowest finger: real time, the clock stays true
+            out.append(replace(b, pause=pause, pause_f=PAUSES[pause][1], frames_per_cell=speed,
+                               pickup_f=PICKUP_CAREFUL))
+        elif b.pause in ("after_mistake", "stuck"):
+            out.append(replace(b, pause_f=PAUSES[b.pause][2]))  # the stuck moment gets its longest look too
+        else:
+            out.append(b)
+    return out
+
+
 def _cliffhanger_end(level: Level, steps, states, left: int, rng: random.Random):
     """Cut where `left` blocks remain and one of them is trapped; end with that block pushed
     toward its gate into its blocker. Without such a moment, end on a hesitation instead."""
@@ -838,7 +998,7 @@ def _with_travel(level: Level, beats: list[Beat]) -> list[Beat]:
 
 # ---------- fitting: pauses only ----------
 
-FIT_ORDER = ("thinking", "stuck", "after_mistake", "before_mistake", "confident", "hesitate", "cascade")
+FIT_ORDER = ("calm", "deliberate", "thinking", "stuck", "after_mistake", "before_mistake", "confident", "hesitate", "cascade")
 
 
 def spread(beats: list[Beat], delta: int, indices: list[int], proportional: bool = True) -> list[Beat]:
@@ -919,7 +1079,27 @@ def fit_clock(script: PlayScript, level: Level, dry_beats: list[Beat], dry: dict
             raise ValueError("the dry run never stopped the clock; the script does not clear the board")
         e = elapsed(dry["clock_stopped_frame"]) + _shift(dry_beats, beats, last) / FPS
         if script.ending == "win":
-            if level.timer <= 0 or level.timer >= e + CALM_MARGIN_S:
+            asked = script.timer_s
+            if asked is None and script.clock == "tight":
+                timer = math.ceil(e + TIGHT_LEFT_S)
+                return beats, timer, {"clock_left_s": round(timer - e, 3), "why": "a tight clock: the win lands "
+                                                                                f"with about {TIGHT_LEFT_S} s left"}
+            if asked is not None and asked >= e + CALM_MARGIN_S:
+                return beats, asked, {"clock_left_s": round(asked - e, 3), "asked": True}  # the clock asked for, and it stays calm
+            if asked is not None and asked >= e + ASKED_CLOCK_MARGIN_S:
+                # the clock asked for is used as asked (2026-10-16: a request's number is not raised for the
+                # HUD's colour); the HUD shows red under 0:50 while it runs down, which is noted
+                return beats, asked, {"clock_left_s": round(asked - e, 3), "asked": True,
+                                      "why": f"the clock asked for, {asked} s; the game's HUD turns red under 0:50, "
+                                             f"so it shows red for part of the play"}
+            own_ok = level.timer <= 0 or level.timer >= e + CALM_MARGIN_S
+            if asked is not None:
+                timer = math.ceil(e + ASKED_CLOCK_MARGIN_S)
+                return beats, timer, {
+                    "clock_left_s": round(timer - e, 3), "asked": True,
+                    "why": f"a clock of {asked} s is shorter than the play itself ({e:.0f} s), so the smallest clock the "
+                           f"play fits in, {timer} s, is used"}
+            if own_ok:
                 return beats, None, {"clock_left_s": round(level.timer - e, 3) if level.timer > 0 else None}
             timer = math.ceil(e + CALM_MARGIN_S)
             return beats, timer, {"clock_left_s": round(timer - e, 3),
@@ -943,6 +1123,10 @@ def fit_clock(script: PlayScript, level: Level, dry_beats: list[Beat], dry: dict
 
     if script.ending == "cliffhanger":
         e = elapsed(len(frames) - 1) + _shift(dry_beats, beats, last) / FPS
+        if script.timer_s is not None and script.timer_s >= e + ASKED_CLOCK_MARGIN_S:
+            # the clock asked for (a reference's 01:05, "keep its clock"; 2026-10-19): the cut comes wherever it stands
+            return beats, int(script.timer_s), {"clock_left_s": round(script.timer_s - e, 3), "asked": True,
+                                                "why": f"the clock asked for, {script.timer_s} s; the cut leaves {script.timer_s - e:.0f} s on it"}
         timer = math.ceil(e + CLIFF_LEFT_S)
         return beats, timer, {"clock_left_s": round(timer - e, 3)}
 
@@ -1012,9 +1196,12 @@ def check_ending(script: PlayScript, result: dict, n_blocks: int, predicted: lis
         if not lo - 0.5 / FPS <= rem <= hi + 0.5 / FPS:  # half a frame for float noise (1.2999 is 1.30)
             problems.append(f"near-fail: the clock stopped with {rem:.2f} s left; it must be {lo:g}-{hi:g} s "
                             f"(00:0{script.clock_left})")
-    if script.ending == "win" and script.timer_s is not None and rem < CALM_FLOOR_S:
+    if script.ending == "win" and script.timer_s is not None and script.clock == "tight":
+        if not TIGHT_LEFT_S - 2 <= rem <= TIGHT_LEFT_S + 2:
+            problems.append(f"win: a tight clock should land with about {TIGHT_LEFT_S} s left, not {rem:.1f} s")
+    elif script.ending == "win" and script.timer_s is not None and rem < CALM_FLOOR_S and not (script.fit or {}).get("asked"):
         problems.append(f"win: the clock fell to {rem:.1f} s, below 0:50 where it flashes red")
-    if script.ending == "cliffhanger":
+    if script.ending == "cliffhanger" and not (script.fit or {}).get("asked"):
         lo, hi = CLIFF_RANGE_S
         if not lo <= rem <= hi:
             problems.append(f"cliffhanger: {rem:.1f} s on the clock at the cut, expected {lo}-{hi}")

@@ -1,0 +1,310 @@
+{
+  "gridWidth": 7,
+  "gridHeight": 9,
+  "timerCount": 60,
+  "inactiveCells": [],
+  "GridBlockDatas": [
+    {
+      "gridPosition": {
+        "x": 4,
+        "y": 2
+      },
+      "blockColor": 3,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": -1
+        },
+        {
+          "x": 1,
+          "y": -1
+        },
+        {
+          "x": 1,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "gridPosition": {
+        "x": 3,
+        "y": 6
+      },
+      "blockColor": 2,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": -1
+        },
+        {
+          "x": 0,
+          "y": -2
+        }
+      ]
+    },
+    {
+      "gridPosition": {
+        "x": 0,
+        "y": 3
+      },
+      "blockColor": 3,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "gridPosition": {
+        "x": 5,
+        "y": 6
+      },
+      "blockColor": 2,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": -1
+        }
+      ]
+    },
+    {
+      "gridPosition": {
+        "x": 1,
+        "y": 7
+      },
+      "blockColor": 2,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "gridPosition": {
+        "x": 2,
+        "y": 2
+      },
+      "blockColor": 2,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "gridPosition": {
+        "x": 0,
+        "y": 6
+      },
+      "blockColor": 3,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": -1
+        }
+      ]
+    },
+    {
+      "gridPosition": {
+        "x": 0,
+        "y": 0
+      },
+      "blockColor": 3,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 0
+        },
+        {
+          "x": 2,
+          "y": 0
+        }
+      ]
+    }
+  ],
+  "ExitDatas": [
+    {
+      "exitNumber": 0,
+      "requiredColor": 3,
+      "gridPosition": {
+        "x": 6,
+        "y": 4
+      },
+      "direction": 1,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": 1
+        }
+      ]
+    },
+    {
+      "exitNumber": 0,
+      "requiredColor": 2,
+      "gridPosition": {
+        "x": 0,
+        "y": 1
+      },
+      "direction": 0,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": 1
+        },
+        {
+          "x": 0,
+          "y": 2
+        }
+      ]
+    },
+    {
+      "exitNumber": 0,
+      "requiredColor": 3,
+      "gridPosition": {
+        "x": 0,
+        "y": 7
+      },
+      "direction": 0,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "exitNumber": 0,
+      "requiredColor": 2,
+      "gridPosition": {
+        "x": 6,
+        "y": 7
+      },
+      "direction": 1,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": 1
+        }
+      ]
+    },
+    {
+      "exitNumber": 0,
+      "requiredColor": 2,
+      "gridPosition": {
+        "x": 0,
+        "y": 4
+      },
+      "direction": 0,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "exitNumber": 0,
+      "requiredColor": 2,
+      "gridPosition": {
+        "x": 1,
+        "y": 0
+      },
+      "direction": 3,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "exitNumber": 0,
+      "requiredColor": 3,
+      "gridPosition": {
+        "x": 6,
+        "y": 8
+      },
+      "direction": 2,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "exitNumber": 0,
+      "requiredColor": 3,
+      "gridPosition": {
+        "x": 3,
+        "y": 0
+      },
+      "direction": 3,
+      "shapeOffsets": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 0
+        },
+        {
+          "x": 2,
+          "y": 0
+        }
+      ]
+    }
+  ]
+}

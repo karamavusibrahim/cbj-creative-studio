@@ -362,6 +362,92 @@ def _print_brief(b: dict) -> None:
     print(f"Planner: {p.get('model')}, {p.get('seconds')} s")
 
 
+def _cmd_enhance(args) -> None:
+    from . import enhance, planner
+    planner.load_env()
+    r = enhance.enhance(args.prompt, args.upload or [], args.edit, args.base, log=lambda m: print(f"  {m}", file=sys.stderr))
+    if args.json:
+        Path(args.json).write_text(json.dumps(r, indent=1))
+    print(enhance.text(r))
+
+
+def _cmd_trends(args) -> None:
+    from . import planner, trends
+    planner.load_env()
+    say = lambda m: print(f"  {m}", file=sys.stderr)  # noqa: E731
+    if args.link:
+        r = trends.from_link(args.link, args.theme, min(args.n, 3), refresh=args.refresh, log=say)
+    else:
+        r = trends.discover(args.theme, args.region, args.n, refresh=args.refresh, log=say)
+    if args.json:
+        Path(args.json).write_text(json.dumps(r, indent=1))
+    print(trends.text(r))
+
+
+def _cmd_feedback(args) -> None:
+    from . import feedback
+    r = feedback.listing(args.creative, args.designer, args.area, args.kind, args.limit)
+    if args.md:
+        print(feedback.markdown(r["records"]))
+        return
+    print(f"{r['count']} of {r['total']} records · designers: {', '.join(r['designers']) or '-'}")
+    for x in r["records"]:
+        s = x.get("scene") or {}
+        where = f"{s['creative_id']} v{s['version']}" if s.get("creative_id") else x["page"]
+        print(f"  {x['id']}  {x['designer']:<14} {x['kind']:<7} {x['area']:<13} {where}\n      {x['wrong']}" +
+              (f"\n      expected: {x['expected']}" if x.get("expected") else ""))
+
+
+def _cmd_setup_check(args) -> None:
+    from . import setup_check
+    rows = setup_check.checks(live=args.live)
+    print(setup_check.text(rows))
+    if not setup_check.ok(rows):
+        sys.exit(1)
+
+
+def _cmd_report(args) -> None:
+    from . import report
+    text, _ = report.report(args.creative_id, args.base, args.format)
+    if args.out:
+        Path(args.out).write_text(text)
+        print(args.out)
+    else:
+        print(text)
+
+
+def _cmd_analyze(args) -> None:
+    from . import feedback, planner
+    planner.load_env()
+    an = feedback.analyze(args.record, log=lambda m: print(f"  {m}", file=sys.stderr))
+    print(f"{an['verdict']} ({an['confidence']}) · {an['what_happened']}\nwhy: {an['why']}\nchange: {an['suggested_change']}")
+    for e in an["evidence"]:
+        print(f"  evidence: {e}")
+
+
+def _cmd_lessons(args) -> None:
+    from . import lessons, planner
+    planner.load_env()
+    say = lambda m: print(f"  {m}", file=sys.stderr)  # noqa: E731
+    if args.correct:
+        pkg = lessons.correct(args.correct, log=say)
+    elif args.rollback is not None:
+        pkg = lessons.rollback(args.rollback)
+    elif args.distill:
+        pkg = lessons.distill(log=say)
+    else:
+        pkg = lessons.load(args.version)
+    print(lessons.text(pkg))
+
+
+def _cmd_soundtrack(args) -> None:
+    from . import planner, soundtrack
+    planner.load_env()
+    say = lambda m: print(f"  {m}", file=sys.stderr)  # noqa: E731
+    r = soundtrack.make(args.creative_id, args.base, args.voice, args.voice_name, args.line, log=say, narration=args.narration)
+    print(soundtrack.text(r))
+
+
 def _cmd_plan(args) -> int:
     from . import planner, studio
     current, inv = _edit_context(args)
@@ -385,7 +471,12 @@ def _cmd_make(args) -> int:
         b = planner.plan(args.prompt, uploads=ups, sprites=studio.sprite_names(), current=current,
                          available=studio.uploads(), inventory=inv)
     _print_brief(b)
-    v = studio.make(args.prompt, b, args.edit, draft=args.draft, base=args.base)
+    v = studio.make(args.prompt, b, args.edit, draft=args.draft, base=args.base, allow_missing=args.without_files)
+    if getattr(args, "audio", None):
+        from . import soundtrack
+        parts = {x.strip() for x in args.audio.split(",")}
+        v = soundtrack.add_audio(studio.Log(lambda l: print(f"  {l['text']}", file=sys.stderr)), v,
+                                 {"bed": "bed" in parts, "voice": "voice" in parts, "line": args.line})
     print(f"Version: studio/{v['id']}/v{v['n']} ({v['length_s']:.2f} s, made in {v['seconds']:.0f} s)")
     print(f"Video: studio/{v['video']}")
     if v.get("proof"):
@@ -417,6 +508,25 @@ def _print_report(r: dict) -> None:
               + ("" if px.get("contained") is not False else " (SOME PIXELS OUTSIDE THE CHANGED LAYERS)"))
     elif px.get("note"):
         print(f"  frames: {px['note']}")
+
+
+def _cmd_review(args) -> int:
+    from . import review, studio
+    v = studio.parent(args.creative, args.n)
+    if v is None or (args.n is not None and v.get("n") != args.n):
+        print(f"no version {args.n} of {args.creative}")
+        return 1
+    r = review.review(v, v["prompt"], studio.STUDIO, log=lambda m: print("  " + m), edit_of=v.get("proof"))
+    print(f"Review of v{v['n']} ({r['model']}, {r['seconds']} s): {review.summary(r)}")
+    for m in r["match"]:
+        print(f"  {m['verdict']:9} {m['control']}: {m['seen']}")
+    print(f"  Would download: {r['would_download']}: {r['why']}")
+    for i, fx in enumerate(r["fixes"], 1):
+        print(f"  Fix {i}: {fx}")
+    if r["suggested_edit"]:
+        print(f"  Suggested edit: {r['suggested_edit']}")
+    print(f"  Written: studio/{v['id']}/v{v['n']}/review.json (sheet: {r['sheet']})")
+    return 0
 
 
 def _cmd_edit_report(args) -> int:
@@ -674,6 +784,55 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--json", help="also write the brief to this file")
     s.set_defaults(func=_cmd_plan)
 
+    s = sub.add_parser("enhance", help="rewrite a prompt in the planner's words, adding nothing (questions for the rest)")
+    s.add_argument("prompt")
+    s.add_argument("--edit", metavar="CREATIVE", help="the prompt is an edit of this creative's latest version")
+    s.add_argument("--base", type=int, metavar="N", help="edit version N instead of the latest")
+    s.add_argument("--upload", action="append", metavar="NAME", help="an uploaded file (studio/uploads) the prompt attaches")
+    s.add_argument("--json", help="also write the result to this file")
+    s.set_defaults(func=_cmd_enhance)
+
+    s = sub.add_parser("trends", help="ideas from what is trending now, as prompts the engine can make (needs TAVILY_API_KEY)")
+    s.add_argument("--theme", help="prefer trends that fit this theme (e.g. 'halloween', 'football')")
+    s.add_argument("--region", default="US", help="Google Trends region code (default US)")
+    s.add_argument("-n", type=int, default=4, help="how many ideas (1-6)")
+    s.add_argument("--refresh", action="store_true", help="ignore the cache")
+    s.add_argument("--link", metavar="URL", help="ideas from one public link instead of the trend feeds (the page is the only signal)")
+    s.add_argument("--json", help="also write the result to this file")
+    s.set_defaults(func=_cmd_trends)
+
+    s = sub.add_parser("feedback", help="designers' feedback records (feedback.py): list or export")
+    s.add_argument("--creative"); s.add_argument("--designer"); s.add_argument("--area"); s.add_argument("--kind")
+    s.add_argument("--limit", type=int, default=100); s.add_argument("--md", action="store_true", help="print as Markdown")
+    s.set_defaults(func=_cmd_feedback)
+
+    s = sub.add_parser("setup-check", help="is this machine ready to run the studio on its own accounts? (Claude CLI login, Gemini key, ffmpeg, the player)")
+    s.add_argument("--live", action="store_true", help="also make one tiny call to the planner and to Gemini")
+    s.set_defaults(func=_cmd_setup_check)
+    s = sub.add_parser("report", help="the report of one version: the request, how it was read, every step, the checks, the edit report (report.py)")
+    s.add_argument("creative_id")
+    s.add_argument("--base", type=int, default=None, help="the version (default: the latest)")
+    s.add_argument("--format", choices=("md", "html"), default="md")
+    s.add_argument("--out", default=None, help="write the report to this file instead of stdout")
+    s.set_defaults(func=_cmd_report)
+    s = sub.add_parser("analyze-feedback", help="what happened behind one feedback record, from the version's own process (feedback.analyze)")
+    s.add_argument("record", help="the record id (fb-...)")
+    s.set_defaults(func=_cmd_analyze)
+    s = sub.add_parser("lessons", help="the feedback distilled into a versioned LESSONS.md (lessons.py)")
+    s.add_argument("--distill", action="store_true", help="distil a new version from the records")
+    s.add_argument("--correct", metavar="TEXT", help="record a correction in your words and distil again")
+    s.add_argument("--rollback", type=int, metavar="N", help="make version N the current one")
+    s.add_argument("--version", type=int, help="print version N instead of the current one")
+    s.set_defaults(func=_cmd_lessons)
+
+    s = sub.add_parser("soundtrack", help="optional: a music bed from a version's own concept (+ the hook spoken by NVIDIA Magpie)")
+    s.add_argument("creative_id"); s.add_argument("--base", type=int, help="the version (default: the latest)")
+    s.add_argument("--voice", action="store_true", help="speak the hook (needs `uv sync --extra voice` and NVIDIA_API_KEY)")
+    s.add_argument("--voice-name", help="a Magpie voice, e.g. Magpie-Multilingual.EN-US.Jason.Happy")
+    s.add_argument("--line", help="the words to speak instead of the hook caption")
+    s.add_argument("--narration", choices=("captions", "hook"), default="captions", help="every caption as it appears (default) or the hook alone")
+    s.set_defaults(func=_cmd_soundtrack)
+
     s = sub.add_parser("make", help="plan a prompt and make the creative (or edit one with --edit)")
     s.add_argument("prompt")
     s.add_argument("--edit", metavar="CREATIVE", help="make a new version of this creative")
@@ -681,6 +840,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--upload", action="append", metavar="NAME")
     s.add_argument("--brief", help="use this brief.json instead of planning (no LLM call)")
     s.add_argument("--draft", action="store_true")
+    s.add_argument("--without-files", action="store_true", help="make it although the prompt names files that are not attached")
+    s.add_argument("--audio", metavar="bed,voice", help="optional: add a soundtrack after the make ('bed', 'voice' or 'bed,voice'; the hook spoken by NVIDIA Magpie)")
+    s.add_argument("--line", help="with --audio voice: the words to speak instead of the hook caption")
     s.set_defaults(func=_cmd_make)
 
     s = sub.add_parser("edit-report", help="what changed between two versions of a creative, item by item")
@@ -688,6 +850,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("a", type=int, help="the earlier version (number)")
     s.add_argument("b", type=int, help="the later version")
     s.set_defaults(func=_cmd_edit_report)
+
+    s = sub.add_parser("review", help="the viewer's review of a version: does it match the prompt, would a viewer tap")
+    s.add_argument("creative")
+    s.add_argument("n", type=int, nargs="?", help="the version (default: the latest)")
+    s.set_defaults(func=_cmd_review)
 
     s = sub.add_parser("ui", help="the test UI: prompts in, creatives out (http://127.0.0.1:8765)")
     s.add_argument("--port", type=int, default=8765)

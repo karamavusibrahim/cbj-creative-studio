@@ -129,10 +129,15 @@ class FrameWriter:
             self.log.close()
 
 
-def mux(video: str | Path, audio_wav: str | Path | None, out: str | Path) -> None:
-    """Put a video and a WAV together into an MP4 (video copied, audio AAC 192k)."""
+def mux(video: str | Path, audio_wav: str | Path | None, out: str | Path, audio_from: str | Path | None = None) -> None:
+    """Put a video and a WAV together into an MP4 (video copied, audio AAC 192k). audio_from: an
+    MP4 whose audio stream is copied as it is instead of encoding the WAV (an edit whose mix is
+    identical to the approved video's keeps its audio bytes, 2026-10-15)."""
     cmd = [ffmpeg_bin(), "-v", "error", "-y", "-i", str(video)]
-    if audio_wav is not None:
+    if audio_from is not None:
+        # no -shortest: the copied AAC stream's priming/padding must not trim the video by a frame
+        cmd += ["-i", str(audio_from), "-map", "0:v", "-map", "1:a", "-c:a", "copy"]
+    elif audio_wav is not None:
         cmd += ["-i", str(audio_wav), "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "192k", "-shortest"]
     cmd += ["-c:v", "copy", "-flags", "+bitexact", "-fflags", "+bitexact", "-movflags", "+faststart", str(out)]
     proc = subprocess.run(cmd, capture_output=True, text=True)

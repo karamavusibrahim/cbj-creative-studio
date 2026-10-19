@@ -17,3 +17,19 @@ ads/
 # local secrets and the UI's creatives
 .env
 studio/
+
+# the public engine (scripts/engine-online.sh) and the web app
+logs/
+.engine-token
+web/node_modules/
+web/.next/
+web/.vercel/
+web/.env*.local
+web/qa/
+.site-passcode
+
+# macOS
+.DS_Store
+
+# finished creatives are published in the app (the deployed static showcase and the R2 catalogue), not in git
+web/public/showcase/

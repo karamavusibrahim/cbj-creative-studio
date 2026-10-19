@@ -34,7 +34,7 @@ from .level import MAX_GRID, BlockColor, Level
 from .rules import State, initial_state, occupancy
 from .solver import Drag, SolverLimitError, _with_full_path, apply_drag, drag_outcomes
 
-ACTIONS = ("leaves", "moves", "stuck", "hesitates")
+ACTIONS = ("leaves", "moves", "stuck", "hesitates", "blocks")
 SOLVER_ACTIONS = ("leaves", "moves")
 WHEN = ("first", "next", "last")
 WHICH = ("any", "biggest", "smallest", "longest")
@@ -51,6 +51,7 @@ class Event:
     when: str = "next"
     text: str = ""  # in words, for notes and checks
     final_only: bool = False  # only says which blocks may make the final exit (a time-out's cut-short block)
+    by: frozenset[int] = frozenset()  # stuck: the blocks that may be the one in the way; blocks: the blocks it may get in the way of
 
     def __post_init__(self):
         if self.action not in ACTIONS:
@@ -80,9 +81,15 @@ def describe(raw: dict) -> str:
     all_ = bool(b.get("all")) and raw["action"] == "leaves"
     who = describe_block(b.get("colour"), b.get("which", "any"), all_)
     verb = {"leaves": "leave" if all_ else "leaves", "moves": "moves out of the way",
-            "stuck": "gets stuck", "hesitates": "is picked up and put back"}[raw["action"]]
+            "stuck": "gets stuck", "hesitates": "is picked up and put back",
+            "blocks": "is moved into another block's way"}[raw["action"]]
     when = {"first": " first", "last": " last", "next": ""}[raw.get("when", "next")]
-    return f"{who} {verb}{when}"
+    by = ""
+    if raw.get("by") in SLOT and raw["action"] == "stuck":
+        by = f" (stopped by a {color_name(SLOT[raw['by']])} block)"
+    elif raw.get("by") in SLOT and raw["action"] == "blocks":
+        verb = f"is moved into the {color_name(SLOT[raw['by']])} block's way"
+    return f"{who} {verb}{when}{by}"
 
 
 def resolve(level: Level, colour: str | None, which: str = "any", all_: bool = False) -> tuple[frozenset[int], str | None]:
@@ -132,8 +139,14 @@ def from_brief(level: Level, raw_events: list[dict]) -> tuple[list[Event], list[
             continue
         if assumption:
             notes.append(f"'{text}': {assumption}")
+        by = frozenset()
+        if raw["action"] in ("stuck", "blocks") and raw.get("by") in SLOT:
+            by, _ = resolve(level, raw["by"], "any", True)
+            if not by:
+                notes.append(f"'{text}': this level has no {color_name(SLOT[raw['by']])} block "
+                             + ("to stop it, so any block may" if raw["action"] == "stuck" else "to get in the way of, so any block may be"))
         out.append(Event(raw["action"], blocks, bool(b.get("all")) and raw["action"] == "leaves", when,
-                         describe({**raw, "when": when})))
+                         describe({**raw, "when": when}), by=by))
     return out, notes
 
 
@@ -183,7 +196,11 @@ def advance(events: list[Event], k: int, state: State, d: Drag, first: bool) -> 
         elif cur.action == "moves" and not d.exits and d.block in cur.blocks and d.end != d.start:
             nk = k + 1
     if first and events and events[0].when == "first" and nk == 0:
-        return None  # the first drag has to be the first event
+        # the first drag has to be the first event; for "all of them leave first" it has to be
+        # the first of those exits (the rest follow, nothing else leaves in between)
+        ev0 = events[0]
+        if not (ev0.all and ev0.action == "leaves" and d.exits and d.block in ev0.blocks):
+            return None
     if d.exits:
         # An exit may not take away a block that a later event still needs.
         for j in range(nk, len(events)):

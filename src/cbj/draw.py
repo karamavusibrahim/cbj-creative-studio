@@ -56,6 +56,57 @@ def sprite(name: str) -> Image.Image:
         raise ValueError(f"{p.name} is not a readable image (upload a PNG, JPG or WebP again)") from e
 
 
+CUTOUT_TOLERANCE = 28  # how far (per channel) a pixel may stray from the corner colour and still be background
+
+
+def cutout(img: Image.Image, tolerance: int = CUTOUT_TOLERANCE) -> Image.Image:
+    """A generated or scanned picture on a plain background (white, or any flat colour) as a
+    sticker: the background connected to the corners becomes transparent, deterministically (a
+    flood fill from the four corners, no model). An image that already has transparency, or whose
+    corners do not agree on one colour, is returned unchanged."""
+    import numpy as np
+    rgba = img.convert("RGBA")
+    a = np.asarray(rgba)
+    if (a[:, :, 3] < 255).any():
+        return rgba
+    h, w = a.shape[:2]
+    corners = np.array([a[0, 0, :3], a[0, w - 1, :3], a[h - 1, 0, :3], a[h - 1, w - 1, :3]], dtype=np.int16)
+    if (corners.max(0) - corners.min(0)).max() > tolerance:
+        return rgba
+    bg = corners.mean(0)
+    near = (np.abs(a[:, :, :3].astype(np.int16) - bg).max(2) <= tolerance)
+    # flood from the corners over `near` pixels (4-connected), scanline by scanline
+    mask = np.zeros((h, w), dtype=bool)
+    stack = [(0, 0), (0, w - 1), (h - 1, 0), (h - 1, w - 1)]
+    while stack:
+        y, x = stack.pop()
+        if mask[y, x] or not near[y, x]:
+            continue
+        x0 = x
+        while x0 > 0 and near[y, x0 - 1] and not mask[y, x0 - 1]:
+            x0 -= 1
+        x1 = x
+        while x1 < w - 1 and near[y, x1 + 1] and not mask[y, x1 + 1]:
+            x1 += 1
+        mask[y, x0:x1 + 1] = True
+        for yy in (y - 1, y + 1):
+            if 0 <= yy < h:
+                run = near[yy, x0:x1 + 1] & ~mask[yy, x0:x1 + 1]
+                if run.any():
+                    xs = np.flatnonzero(run) + x0
+                    stack.append((yy, int(xs[0])))
+                    # one seed per run start keeps the stack short
+                    starts = xs[np.r_[True, np.diff(xs) > 1]]
+                    stack.extend((yy, int(sx)) for sx in starts[1:])
+    if not mask.any() or mask.mean() > 0.98:
+        return rgba
+    out = a.copy()
+    out[:, :, 3] = np.where(mask, 0, 255)
+    # trim to the sticker so slots size it by what is drawn
+    ys, xs = np.where(~mask)
+    return Image.fromarray(out[ys.min():ys.max() + 1, xs.min():xs.max() + 1])
+
+
 def wrap(text: str, size: int, max_width: int) -> list[str]:
     """Lines for a text. Explicit newlines are kept; words split on plain spaces only, so a
     non-breaking space keeps a fact like "dark green" on one line. A paragraph that needs two

@@ -472,3 +472,248 @@ def test_removal_reads_lists_and_phrasings():
     assert B.asks_removal("take the logo out", "logo") and B.asks_removal("i don't want the logo anymore", "logo")
     assert not B.asks_removal("keep the logo and remove the hook icon", "logo")
     assert B.relative_difficulty("the end card looks too hard on the eyes, soften it") is None
+
+
+def test_two_corner_stickers_fill_both_top_corners():
+    """"The attached toy pictures as stickers in the two top corners": a second corner is its own
+    slot, so the second sticker never overwrites the first (2026-10-14, found by the viewer's review)."""
+    from cbj import edits
+    from cbj.ad import AD_OPTIONS, BAND
+    assert B.asset_slot({"role": "sticker", "when": "whole", "where": "top_left"}) == "logo"
+    assert B.asset_slot({"role": "sticker", "when": "whole", "where": "top_right"}) == "logo2"
+    assert B.asset_slot({"role": "logo", "when": "whole", "where": "top_right"}) == "logo"
+    b = B.check(raw_brief(assets=[{"file": "teddy.png", "role": "sticker", "when": "whole", "where": "top_left"},
+                                  {"file": "bricks.png", "role": "sticker", "when": "whole", "where": "top_right"}]),
+                uploads={"teddy.png": Path("teddy.png"), "bricks.png": Path("bricks.png")})
+    assert sorted(B.asset_slot(a) for a in b["assets"]) == ["logo", "logo2"]
+    assert edits.PICTURES["logo2"]["name"].startswith("the sticker")
+
+
+def test_coloured_blocks_is_talk_about_colours():
+    """"Five colored blocks" in an edit of a red/green/blue creative: the prompt speaks of the blocks'
+    colours, so the planner's palette (any colours) is taken and the old three-colour limit goes;
+    the block count is five blocks, not five colours (2026-10-15)."""
+    p = "Create a medium Color Block Jam level with five colored blocks and a narrow central corridor."
+    assert B._evidence("level.colours", p, B.default_brief()) is None
+    assert B._evidence("level.blocks", p, B.default_brief()) is None
+    assert B._evidence("level.colours", "Create a medium level with five blocks.", B.default_brief()) is not None
+    cur = B.check(B.default_brief()); cur["level"]["colours"] = ["Red", "Green", "Blue"]
+    new = B.check(B.default_brief()); new["level"]["blocks"] = 5
+    new["changed"] = ["level.blocks", "level.colours"]
+    new["controls"] = [{"control": "level", "asked": "five colored blocks", "plan": "", "status": "applied", "why": None, "engine": []}]
+    merged, dropped = B.merge(cur, new, p)
+    assert merged["level"]["colours"] == [] and "level.colours" in merged["changed"] and merged["level"]["blocks"] == 5
+    assert not any(d.startswith("level.colours") for d in dropped)
+
+
+# ---------- the preservation checklist, the timeline numbers and a chain of edits (2026-10-15) ----------
+
+@pytest.fixture(scope="module")
+def chain(tmp_path_factory):
+    """Four versions, each one edit on the previous (compose only, the same recording): the hook,
+    then the button text, then the result caption."""
+    root = tmp_path_factory.mktemp("studio")
+    rec_dir = make_recording(root / "recordings" / "r1")
+    rec = Recording.load(rec_dir)
+    sha = hashlib.sha256((rec_dir / "level.json").read_bytes()).hexdigest()
+    texts, out = {}, {}
+    steps = [(1, None, None), (2, "hook", "Beat this clock?"), (3, "cta", "GO"), (4, "result", "Phew! Just made it")]
+    for n, key, text in steps:
+        if key:
+            texts[key] = text
+        ad = build_ad(rec, LENGTH, options={"texts": dict(texts)} if texts else {})
+        d = root / "c" / f"v{n}" / "ad"
+        render(ad, d, draft=True)
+        out[n] = {"n": n, "brief": B.check(B.default_brief()), "level": {"sha": sha}, "recording": {"dir": "recordings/r1"},
+                  "ad_dir": f"c/v{n}/ad"}
+    return root, out
+
+
+def test_a_chain_of_edits_does_not_accumulate_unrelated_changes(chain):
+    """Three edits in a row: every step changes only its caption, and v1 to v4 differ only in the
+    three captions asked along the way (the designer chain v1-v11 of 2026-10-15, as a test)."""
+    root, v = chain
+    groups = {2: ["concept.hook"], 3: ["concept.cta"], 4: ["concept.result"]}
+    for n in (2, 3, 4):
+        r = E.report(v[n - 1], v[n], root, groups=groups[n])
+        by = {x["item"]: x for x in r["rows"]}
+        assert by["copy"]["status"] == "asked", (n, by["copy"])
+        # a caption's band resizes with its words: Composition may be "asked", never "not asked"
+        assert all(x["status"] == "kept" or (k == "composition" and x["status"] == "asked") for k, x in by.items() if k != "copy"), \
+            (n, [(k, x["status"]) for k, x in by.items()])
+        assert r["ok"] and "Only what was asked changed" in r["verdict"]
+    r = E.report(v[1], v[4], root, groups=["concept.hook", "concept.cta", "concept.result"])
+    by = {x["item"]: x for x in r["rows"]}
+    assert by["copy"]["status"] == "asked" and all(x["status"] == "kept" or (k == "composition" and x["status"] == "asked")
+                                                   for k, x in by.items() if k != "copy")
+    assert "Beat this clock?" in by["copy"]["detail"] and "GO" in by["copy"]["detail"] and "Phew! Just made it" in by["copy"]["detail"]
+
+
+def test_the_report_carries_a_preservation_checklist_and_timeline_numbers(chain):
+    root, v = chain
+    r = E.report(v[1], v[2], root, groups=["concept.hook"])
+    c = r["checklist"]
+    assert set(c) == {"level_unchanged", "moves_unchanged", "move_timing_unchanged", "gameplay_render_reused", "duration_unchanged",
+                      "camera_unchanged", "hud_unchanged", "captions_unchanged", "pictures_unchanged", "audio_unchanged"}
+    assert all(c[k]["ok"] for k in c if k != "captions_unchanged") and not c["captions_unchanged"]["ok"]
+    assert "recording r1" in c["gameplay_render_reused"]["evidence"]
+    assert r["changes"] == ["the hook"] and "Gameplay" in r["preserves"] and "Captions" not in r["preserves"]
+    t = next(x for x in r["rows"] if x["item"] == "timing")
+    assert t["numbers"]["before"] == t["numbers"]["after"] and t["numbers"]["after"]["fps"] == 30
+    assert t["numbers"]["after"]["drags"] == 4 and "fps" in t["detail"] and "play 0.00-" in t["detail"]
+    same = E.report(v[1], v[1], root, groups=[])
+    assert all(x["ok"] for x in same["checklist"].values())
+
+
+# ---------- 2026-10-18: the edit scenarios on the ten text creatives ----------
+
+def test_a_pinned_edit_keeps_the_parents_long_end_card():
+    """A picture edit on a version whose end card already ran 10.7 s grew the held result by 1.5 s and
+    moved the end card (T7 v4); on a 60 s ad with a 25.8 s card it cut the ad to 39.7 s (T10 v4).
+    The parent's own card is never freed time."""
+    from cbj.ad import FPS, _pinned_card
+    notes = []
+    note = lambda ctl, text, status=None: notes.append(text)  # noqa: E731
+    card, intro, hold, total = _pinned_card(320 + 15 + 30, 15, 30, 900, note, True, parent_card=320)
+    assert (card, intro, hold, total) == (320, 15, 30, 900)
+    assert not any("freed" in n for n in notes)
+    card, intro, hold, total = _pinned_card(774 + 15 + 60, 15, 60, 60 * FPS, note, True, parent_card=774)
+    assert (card, hold, total) == (774, 60, 60 * FPS)
+    # without the parent's card the old behaviour: the hold grows and the ad is cut
+    card, intro, hold, total = _pinned_card(774 + 15 + 60, 15, 60, 60 * FPS, note, True)
+    assert hold > 60 and total < 60 * FPS
+    # time an edit really freed still goes to the held result first
+    card, intro, hold, total = _pinned_card(320 + 45 + 15 + 30, 15, 30, 900, note, True, parent_card=320)
+    assert hold == 75 and card == 320 and total == 900
+
+
+def test_a_revision_may_change_only_what_the_edit_asked():
+    """On an open board, 'use this object instead of the current obstacle' was revised by adding a wall
+    (a level change) because the viewer saw no obstacle. A revision keeps to the asked groups, except
+    to put a group back to what the base version had."""
+    from cbj.workflows.edit import keep_to_asked
+    base = B.check(B.default_brief())
+    v = copy.deepcopy(base)
+    v["assets"] = [{"file": "boulder.png", "role": "obstacle", "when": "whole", "where": "auto"}]
+    v["changed"] = ["assets"]
+    rev = copy.deepcopy(v)
+    rev["level"]["changes"] = [{"kind": "wall", "where": "center"}] if "changes" in rev["level"] else rev["level"].get("changes")
+    rev["level"]["shape"] = "holes"
+    rev["concept"]["hook"] = "Beat this!"
+    rev["changed"] = ["level.changes", "level.shape", "concept.hook"]
+    widened = set(B.changed_groups(v, rev))
+    assert "concept.hook" in widened and "level.shape" in widened
+    held = keep_to_asked(rev, v, base, {"assets"})
+    assert set(held) == widened
+    assert rev["level"] == v["level"] and rev["concept"]["hook"] == v["concept"]["hook"]
+    assert "level.shape" not in rev["changed"] and "concept.hook" not in rev["changed"]
+    # putting a group back to the base's value is allowed
+    v2 = copy.deepcopy(v)
+    v2["concept"]["hook"] = "Wrong hook"
+    rev2 = copy.deepcopy(v2)
+    rev2["concept"]["hook"] = base["concept"]["hook"]
+    rev2["changed"] = ["concept.hook"]
+    assert keep_to_asked(rev2, v2, base, {"assets"}) == []
+    assert rev2["concept"]["hook"] == base["concept"]["hook"]
+
+
+def test_a_patched_layer_keeps_the_approved_box_unless_every_frame_was_rendered():
+    """The cursor spans the whole ad; a hook edit plus an end-card edit render its first and last GOPs
+    only, so its box must be joined with the approved render's (the play in between was copied)."""
+    from cbj.compose import _runs_cover
+    assert _runs_cover(0, 1200, [(0, 90), (90, 1200)])
+    assert _runs_cover(100, 200, [(0, 150), (150, 300)])
+    assert not _runs_cover(0, 1200, [(0, 90), (1110, 1200)])  # first and last frames rendered, the middle copied
+    assert not _runs_cover(100, 200, [(0, 150), (160, 300)])  # a gap
+    assert _runs_cover(5, 6, [(0, 10)])
+
+
+def test_the_obstacle_picture_on_a_board_without_walls_is_an_asked_change(tmp_path):
+    """'Use this object instead of the current obstacle' on an open board: the compositor puts the
+    picture beside the hook and says so; the report counts that slot as the asked one (T7 v4 reported
+    it as changed without being asked)."""
+    import shutil
+    from PIL import Image
+    root = tmp_path / "studio"
+    rec_dir = make_recording(root / "recordings" / "r1")
+    shutil.copy(Path(__file__).parent.parent / "data/levels/Level_06.json", rec_dir / "level.json")  # 8 blocks, no walls
+    rec = Recording.load(rec_dir)
+    png = root / "stone.png"
+    Image.new("RGBA", (64, 64), (120, 110, 100, 255)).save(png)
+    sha = hashlib.sha256((rec_dir / "level.json").read_bytes()).hexdigest()
+    out = {}
+    for n, opts in ((1, {}), (2, {"obstacle": str(png)})):
+        ad = build_ad(rec, LENGTH, options=opts)
+        d = root / "c" / f"v{n}" / "ad"
+        render(ad, d, draft=True)
+        b = B.check(B.default_brief())
+        if n == 2:
+            b["assets"] = [{"file": "stone.png", "role": "obstacle", "when": "whole", "where": "auto"}]
+        out[n] = {"n": n, "brief": b, "level": {"sha": sha}, "recording": {"dir": "recordings/r1"}, "ad_dir": f"c/v{n}/ad"}
+    assert "obstacle" not in out and any("beside the hook" in x["text"] for x in ad["brief_notes"])
+    r = E.report(out[1], out[2], root, groups=["assets"])
+    by = {x["item"]: x for x in r["rows"]}
+    assert by["assets"]["status"] == "asked" and "beside the hook" in by["assets"]["detail"]
+    assert by["composition"]["status"] in ("kept", "asked", "side_effect"), by["composition"]
+    assert r["ok"], r["verdict"]
+
+
+def test_the_closest_play_must_do_the_asked_order_first(tmp_path):
+    """'Keep everything, but the purple block should leave first' (T3, 2026-10-18): the planner falls back to
+    no events on a seed that cannot do them, and the closest of those plays won on similarity while dark
+    green left first. A play that does the asked order beats a closer one that does not."""
+    from dataclasses import replace
+    from cbj.events import SOLVER_ACTIONS, check_events, from_brief
+    level = load_level(LEVEL)
+    b = B.check(B.default_brief())
+    prev = studio._plan(b, level, 0)
+    rec = tmp_path / "rec"
+    rec.mkdir()
+    (rec / "play.json").write_text(json.dumps({"beats": prev.to_dict(level)["beats"]}))
+    nb = copy.deepcopy(b)
+    nb["gameplay"]["events"] = [{"block": {"colour": "Purple", "which": "any", "all": False}, "action": "leaves", "when": "first"}]
+    studio.closest_seed(nb, LEVEL, rec, 1, studio.Log(lambda line: None), seeds=8, budget_s=10)
+    evs, _ = from_brief(level, nb["gameplay"]["events"])
+    solver = [e for e in evs if e.action in SOLVER_ACTIONS]
+
+    def meets(script):
+        sd = script.to_dict(level)
+        return not any("cannot happen" in n for n in script.notes) and \
+            check_events(level, solver, script.drags, [x["kind"] for x in sd["beats"]]).ok
+    chosen = studio._plan(nb, level, nb["gameplay"]["seed"] or 0)
+    note = B.control(nb, "gameplay")["engine"][-1]
+    if any(meets(studio._plan(nb, level, s)) for s in range(8)):
+        assert meets(chosen), note
+        assert "none of them" not in note
+    else:
+        assert "none of them does the asked order" in note
+
+
+def test_a_style_image_is_not_also_placed_as_a_picture():
+    """'Keep this creative exactly the same, but take the colours from this image' (T7, 2026-10-18): the model read
+    the picture into the look, and the unplaced-attachment rule then also put it on the end card."""
+    current = B.check(B.default_brief())
+    b = copy.deepcopy(current)
+    b["visuals"]["blocks"] = [{"slot": "Red", "hex": "#FF7F50", "name": "coral"}]
+    b["changed"] = ["visuals.colours"]
+    planner._place_unplaced(b, "Keep this creative exactly the same, but take the colours from this image.", ["ocean.png"], current)
+    assert not any(a["file"] == "ocean.png" for a in b["assets"]) and "assets" not in b["changed"]
+    b2 = copy.deepcopy(current)
+    b2["changed"] = []
+    planner._place_unplaced(b2, "Keep this creative exactly the same, but replace this object with the attached asset.", ["star.png"], current)
+    assert any(a["file"] == "star.png" for a in b2["assets"])  # the p.4 sentence still places it, with an assumption
+    assert any("star.png" in a for a in b2["assumptions"])
+
+
+def test_a_slot_the_model_guessed_for_this_object_is_written_as_an_assumption():
+    current = B.check(B.default_brief())
+    b = copy.deepcopy(current)
+    b["assets"] = [a for a in b["assets"]] + [{"file": "gold_star.png", "role": "button", "when": "end_card", "where": "auto"}]
+    b["changed"] = ["assets"]
+    planner._note_guessed_slot(b, "Keep this creative exactly the same, but replace this object with the attached asset.", ["gold_star.png"], current)
+    assert any("gold_star.png" in a and "PLAY NOW button" in a and "could also be" in a for a in b["assumptions"]), b["assumptions"]
+    b3 = copy.deepcopy(current)
+    b3["assets"] = b3["assets"] + [{"file": "gold_star.png", "role": "button", "when": "end_card", "where": "auto"}]
+    b3["changed"] = ["assets"]
+    planner._note_guessed_slot(b3, "Use gold_star.png as the button.", ["gold_star.png"], current)
+    assert not b3["assumptions"]  # the request names the thing

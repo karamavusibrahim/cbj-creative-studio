@@ -1,0 +1,169 @@
+{
+ "generated": "2026-10-19 18:00:00",
+ "creatives": [
+  {
+   "id": "1015-074810-create-a-hard-color-block",
+   "title": "CATALOGUE COPY (the static one must win)",
+   "kind": "edit-ladder",
+   "tagline": "This entry is also curated: the gallery shows the static copy, never this one.",
+   "prompt": "Create a hard Color Block Jam level on a crowded board with several walls and red, blue, green and yellow blocks. The player makes one wrong move, then clears the board with one second left on the clock. A 30-second portrait creative with our logo asset_a_logo.png in the top-left corner and the stopwatch icon beside the hook. Keep the game's own look.",
+   "versions": [
+    {
+     "n": 1,
+     "from": null,
+     "edit": false,
+     "prompt": "Create a hard Color Block Jam level on a crowded board with several walls and red, blue, green and yellow blocks. The player makes one wrong move, then clears the board with one second left on the clock. A 30-second portrait creative with our logo asset_a_logo.png in the top-left corner and the stopwatch icon beside the hook. Keep the game's own look.",
+     "length_s": 30.0,
+     "workflow": "create",
+     "video": "1015-074810-create-a-hard-color-block/v1/ad/ad.mp4",
+     "poster": "1015-074810-create-a-hard-color-block/v1/ad/poster.png",
+     "summary": "A 30-second portrait ad of a hard, crowded level with several walls and red, blue, green and yellow blocks: the player makes one wrong move, then clears the board with one second left, with our logo in the top-left corner and the stopwatch beside the hook.",
+     "review_overall": "ship",
+     "would_download": "maybe",
+     "video_mb": 1.44
+    },
+    {
+     "n": 12,
+     "from": 1,
+     "edit": true,
+     "prompt": "I like this creative. Keep everything exactly the same, but replace this asset.",
+     "length_s": 30.0,
+     "workflow": "edit",
+     "video": "1015-074810-create-a-hard-color-block/v12/ad/ad.mp4",
+     "poster": "1015-074810-create-a-hard-color-block/v12/ad/poster.png",
+     "summary": "The same hard, crowded near-fail ad, with the uploaded brick mascot now beside the opening caption where the stopwatch was. Everything else stays as it is.",
+     "review_overall": "ship",
+     "would_download": "maybe",
+     "video_mb": 1.44
+    },
+    {
+     "n": 13,
+     "from": 12,
+     "edit": true,
+     "prompt": "Make the blocks pastel, keep everything else.",
+     "length_s": 30.0,
+     "workflow": "edit",
+     "video": "1015-074810-create-a-hard-color-block/v13/ad/ad.mp4",
+     "poster": "1015-074810-create-a-hard-color-block/v13/ad/poster.png",
+     "summary": "The same hard, crowded level-127 near-fail ad, now with the blocks in soft pastel colours; everything else stays as it is.",
+     "review_overall": "ship",
+     "would_download": "maybe",
+     "video_mb": 1.36
+    },
+    {
+     "n": 14,
+     "from": 13,
+     "edit": true,
+     "prompt": "Same ad, but add a second mistake before the solve.",
+     "length_s": 31.0,
+     "workflow": "edit",
+     "video": "1015-074810-create-a-hard-color-block/v14/ad/ad.mp4",
+     "poster": "1015-074810-create-a-hard-color-block/v14/ad/poster.png",
+     "summary": "The same pastel near-fail ad on the hard, crowded level 127, now with two wrong moves before the solve, finishing with one second left on the clock.",
+     "review_overall": "ship",
+     "would_download": "maybe",
+     "video_mb": 1.36
+    },
+    {
+     "n": 15,
+     "from": 14,
+     "edit": true,
+     "prompt": "Make the blue blocks red, keep everything else.",
+     "length_s": 31.0,
+     "workflow": "edit",
+     "video": "1015-074810-create-a-hard-color-block/v15/ad/ad.mp4",
+     "poster": "1015-074810-create-a-hard-color-block/v15/ad/poster.png",
+     "summary": "The same hard, crowded level-127 near-fail ad with two mistakes and pastel colours, except the blue blocks and their doors are now painted red.",
+     "review_overall": "ship",
+     "would_download": "maybe",
+     "video_mb": 1.36
+    },
+    {
+     "n": 16,
+     "from": 15,
+     "edit": true,
+     "prompt": "Revise this version so the edit request is met and nothing else changes; change only what these points need. The edit request was: \"Make the blue blocks red, keep everything else.\". What the made version missed: the viewer saw: visual elements: No blue is left. The old blue pieces are now a dark brick red (the big piece bottom-left, 0 to 19 s), next to the existing pink-red pieces. The board now has two reds in different shades, and the dark one reads closer to brown than to the soft pastel red that was planned.; the creative concept: The hook 'Can you beat the clock?' (0 to 2 s), 'Hurry!' (21 to 22 s) and the result lines are unchanged. 'I can't reach red!' (2 to 4 s) is now unclear because two kinds of red block sit on the board. | suggested fix: Make the repainted blocks a clear bright red and the old red blocks stay pink, so the two colours are easy to tell apart.",
+     "length_s": 31.0,
+     "workflow": "edit",
+     "video": "1015-074810-create-a-hard-color-block/v16/ad/ad.mp4",
+     "poster": "1015-074810-create-a-hard-color-block/v16/ad/poster.png",
+     "summary": "The same hard, crowded level 127 near-fail ad. The old blue blocks are now a clear bright red, and the original red blocks are now pink so the two are easy to tell apart. Everything else stays the same.",
+     "review_overall": "ship",
+     "would_download": "maybe",
+     "video_mb": 1.37
+    },
+    {
+     "n": 17,
+     "from": 16,
+     "edit": true,
+     "prompt": "Keep everything, but make the level harder.",
+     "length_s": 30.0,
+     "workflow": "edit",
+     "video": "1015-074810-create-a-hard-color-block/v17/ad/ad.mp4",
+     "poster": "1015-074810-create-a-hard-color-block/v17/ad/poster.png",
+     "summary": "The same pastel near-fail ad on Level 127, with a tougher board that has walls and red, blue, green and yellow blocks. It is still solved with one second left after two wrong moves, and every caption, picture, sound and timing stays the same.",
+     "review_overall": "ship",
+     "would_download": "maybe",
+     "video_mb": 1.36
+    }
+   ]
+  },
+  {
+   "id": "1017-232148-a-cross-shaped-board-8x8",
+   "title": "Cross board, then a palette from a picture",
+   "kind": "create",
+   "tagline": "A text prompt builds a cross-shaped board in orange and blue; a later edit takes the background and caption colours from an attached picture and keeps everything else.",
+   "prompt": "A cross-shaped board 8x8 with 8 blocks in orange and blue only, a mint background fading to white and dark blue captions. The clock runs out with one block still on the board. 35 seconds.",
+   "versions": [
+    {
+     "n": 1,
+     "from": null,
+     "edit": false,
+     "prompt": "A cross-shaped board 8x8 with 8 blocks in orange and blue only, a mint background fading to white and dark blue captions. The clock runs out with one block still on the board. 35 seconds.",
+     "length_s": 35.0,
+     "workflow": "create",
+     "video": "1017-232148-a-cross-shaped-board-8x8/v1/ad/ad.mp4",
+     "poster": "1017-232148-a-cross-shaped-board-8x8/v1/ad/poster.png",
+     "summary": null,
+     "review_overall": null,
+     "would_download": null
+    },
+    {
+     "n": 8,
+     "from": 3,
+     "edit": true,
+     "prompt": "Keep this creative exactly the same, but take the background and the caption colours from this picture.",
+     "length_s": 35.0,
+     "workflow": "edit",
+     "video": "1017-232148-a-cross-shaped-board-8x8/v8/ad/ad.mp4",
+     "poster": "1017-232148-a-cross-shaped-board-8x8/v8/ad/poster.png",
+     "summary": null,
+     "review_overall": null,
+     "would_download": null
+    }
+   ]
+  },
+  {
+   "id": "1020-101500-qa-catalogue-video-only",
+   "title": "A video-guided ad only in the catalogue",
+   "kind": "guided",
+   "tagline": "Listed in the catalogue index, but its showcase.json was never uploaded: its page says \"Not in the catalogue\".",
+   "prompt": "Rebuild this ad in Color Block Jam.",
+   "versions": [
+    {
+     "n": 1,
+     "from": null,
+     "edit": false,
+     "prompt": "Rebuild this ad in Color Block Jam.",
+     "length_s": 32.0,
+     "workflow": "guided",
+     "video": "1017-232501-rebuild-this-ad-in-color/v1/ad/ad.mp4",
+     "poster": "1017-232501-rebuild-this-ad-in-color/v1/ad/poster.png",
+     "summary": "qa",
+     "review_overall": "ship",
+     "would_download": "yes"
+    }
+   ]
+  }
+ ]
+}

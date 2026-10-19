@@ -281,6 +281,56 @@ def validate(level: Level) -> list[str]:
     return problems
 
 
+def _slides(level: "Level", cells) -> list[frozenset]:
+    """Every placement a block can slide to on the empty board (other blocks ignored)."""
+    start = frozenset(cells)
+    seen, todo = {start}, [start]
+    while todo:
+        cur = todo.pop()
+        for dx, dy in DIRECTION_VECTOR.values():
+            nxt = frozenset((x + dx, y + dy) for x, y in cur)
+            if nxt not in seen and all(level.is_active(c) for c in nxt):
+                seen.add(nxt)
+                todo.append(nxt)
+    return list(seen)
+
+
+def fits_door(level: "Level", block: "BlockSpec", door: "ExitSpec") -> bool:
+    """Can this block ever leave through this door on the empty board: from some placement it can slide to, it covers a
+    door cell and every one of its cells is in the door's columns (a top or bottom door) or rows (a left or right door),
+    as ExitService.IsPathClear demands; a block that cannot move at all never leaves (the exit check runs on entering a
+    cell). Other blocks are ignored: this is the shape question, not the solution."""
+    horizontal = door.direction in (ExitDirection.LEFT, ExitDirection.RIGHT)
+    axis = 1 if horizontal else 0
+    lanes = {c[axis] for c in door.cells}
+    placements = _slides(level, block.cells_at(block.pivot))
+    return len(placements) > 1 and any(pl & door.cells and all(c[axis] in lanes for c in pl) for pl in placements)
+
+
+def door_problems(level: "Level") -> list[str]:
+    """The game's own design rules for doors and colours, which validate() (Unity's crashes) does not cover and the six
+    shipped levels all keep: every block colour has a door of its colour; every door's colour has a block (no door that
+    nothing can ever use); every block fits through at least one door of its colour (a 2-wide block needs a 2-wide door
+    on a top or bottom edge, or a door it can reach sideways). Returned as sentences for the plan and the rows."""
+    out: list[str] = []
+    words = {c: c.name.replace("_", " ").lower() for c in BlockColor}
+    block_colours = {b.color for b in level.blocks}
+    door_colours = {e.color for e in level.exits}
+    for c in sorted(block_colours - door_colours):
+        n = sum(1 for b in level.blocks if b.color == c)
+        out.append(f"the {words[c]} block{'s have' if n > 1 else ' has'} no door of {'their' if n > 1 else 'its'} colour")
+    for c in sorted(door_colours - block_colours):
+        out.append(f"a {words[c]} door with no {words[c]} block on the board")
+    for i, b in enumerate(level.blocks):
+        doors = [e for e in level.exits if e.color == b.color]
+        if doors and not any(fits_door(level, b, e) for e in doors):
+            cells = b.cells_at(b.pivot)
+            w = len({x for x, _ in cells}); h = len({y for _, y in cells})
+            spans = ", ".join(f"{len(e.cells)} cell{'s' if len(e.cells) > 1 else ''} on the {e.direction.name.lower()}" for e in doors)
+            out.append(f"block {i + 1} ({words[b.color]}, {w}x{h}) fits through no {words[b.color]} door ({spans})")
+    return out
+
+
 def load_level(path: str | Path, strict: bool = True) -> Level:
     """Read a level file. Every problem is raised as ValueError starting with the file name."""
     path = Path(path)

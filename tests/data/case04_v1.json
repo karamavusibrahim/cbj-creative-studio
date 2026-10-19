@@ -1,0 +1,1180 @@
+{
+ "prompt": "Make a Color Block Jam ad on the same board as this video, with the same size, layout and colours, but let the player clear it with 3 seconds left.",
+ "brief": {
+  "summary": "A Color Block Jam ad played on the same board as the reference video (4 columns by 7 rows, nine blocks, one hole, four colours). The player hits a snag, then clears the board with 3 seconds left on the clock.",
+  "controls": [
+   {
+    "control": "level",
+    "asked": "on the same board as this video, with the same size, layout and colours",
+    "plan": "The board is rebuilt from the reference video (cbj_trailer_2.mp4): 4 columns by 7 rows, nine blocks of mixed shapes, one hole and four colours. Its cyan, magenta, purple and green map onto the game's own colours. From the reference video cbj_trailer_2.mp4: an open 5x7 board with 9 blocks in 4 colours (varied pieces); a new board of this type is generated and solved, its cells are not copied. From the reference video cbj_trailer_2.mp4: the HUD shows Level 25, as in the reference.",
+    "status": "adjusted",
+    "why": null,
+    "engine": [
+     "9 blocks in 4 colours would repeat colours a lot; blocks share the requested colours."
+    ]
+   },
+   {
+    "control": "gameplay",
+    "asked": "let the player clear it with 3 seconds left",
+    "plan": "A near-fail: the player makes a believable mistake, recovers, and the last block leaves with 3 seconds left on the clock.",
+    "status": "applied",
+    "why": null,
+    "engine": []
+   },
+   {
+    "control": "difficulty_pacing",
+    "asked": null,
+    "plan": "A 30-second ad at a normal, even pace.",
+    "status": "default",
+    "why": null,
+    "engine": [
+     "no difficulty was asked: the level is hard (a near-fail needs a board where a wrong move is possible)."
+    ]
+   },
+   {
+    "control": "visuals",
+    "asked": null,
+    "plan": "The game's own look, with a tap ring as the cursor.",
+    "status": "default",
+    "why": null,
+    "engine": []
+   },
+   {
+    "control": "concept",
+    "asked": null,
+    "plan": "The tool's standard captions for a near-fail, including the measured time left.",
+    "status": "default",
+    "why": null,
+    "engine": []
+   },
+   {
+    "control": "sequence",
+    "asked": null,
+    "plan": "The standard order: hook, gameplay, slow-motion replay, the game's result screen, then the end card.",
+    "status": "default",
+    "why": null,
+    "engine": []
+   },
+   {
+    "control": "assets",
+    "asked": null,
+    "plan": "No pictures were uploaded, so the game's own pictures are used. Sound effects are on and there is no music.",
+    "status": "default",
+    "why": null,
+    "engine": []
+   },
+   {
+    "control": "unchanged",
+    "asked": null,
+    "plan": "This is a new ad, so there is nothing earlier to keep.",
+    "status": "default",
+    "why": null,
+    "engine": []
+   }
+  ],
+  "assumptions": [
+   "'Clear it with 3 seconds left' read as a near-fail, a mistake followed by a recovery that finishes with 3 seconds on the clock. It could also mean a clean solve that happens to end at 3 seconds.",
+   "The video's cyan and magenta are not game colours, so they are matched to the nearest game colours. The block colours are not repainted.",
+   "Read from cbj_trailer_2.mp4: Clear the board of coloured blocks through matching gates before time runs out.; ending stopped, pacing normal; read in full, applied: the board (targeted).",
+   "the reference shows 1 wall cell inside the board; an open board (no walls) is the closest the generator builds",
+   "cyan -> blue: the game has no cyan",
+   "magenta -> red: the game has no magenta, purple is taken by purple",
+   "the reference's clock (01:05 at the start) is not used: a near-fail sets the clock itself (it lands on a planned second)",
+   "sliding coloured block puzzles become the game's own drags",
+   "gate exits matching block colours: the game's own gates of the block's colour",
+   "booster buttons: not used: not in Color Block Jam; the ad keeps the game's own near-fail",
+   "cbj_trailer_2.mp4 is a reference video read for the board (targeted): adapted the board (an open 5x7 board with 9 blocks in 4 colours (varied pieces)); the HUD's Level 25 (the reference is Color Block Jam itself); not copied: the reference's gameplay, its characters and assets, its exact frames, its caption text, its exact layout, its booster buttons"
+  ],
+  "channel": "network",
+  "language": "en",
+  "format": "9:16",
+  "level": {
+   "source": "generate",
+   "shipped": null,
+   "shape": "open",
+   "width": 5,
+   "height": 7,
+   "blocks": 9,
+   "colours": [
+    "Blue",
+    "Red",
+    "Purple",
+    "Green"
+   ],
+   "difficulty": "any",
+   "label": 25,
+   "moves": null,
+   "changes": [],
+   "pieces": "varied",
+   "style": [],
+   "edit": null
+  },
+  "gameplay": {
+   "ending": "near_fail",
+   "mistakes": null,
+   "mistake_kinds": [],
+   "hesitations": null,
+   "timer_s": null,
+   "seed": null,
+   "events": [],
+   "finish": "auto",
+   "clock_left_s": 3,
+   "blocks_left": null
+  },
+  "pacing": {
+   "length_s": 30.0,
+   "tempo": "normal",
+   "curve": "even"
+  },
+  "visuals": {
+   "theme": "game",
+   "blocks": [],
+   "background": [],
+   "background_image": null,
+   "board": null,
+   "caption_fill": null,
+   "caption_outline": null,
+   "camera_zoom": null,
+   "punch_ins": [],
+   "caption_colours": [],
+   "cursor": "ring",
+   "hud_timer": true,
+   "hud_level": true,
+   "names": {},
+   "names_src": {}
+  },
+  "concept": {
+   "angle": "Same board as the reference video, cleared with only 3 seconds to spare.",
+   "hook": null,
+   "mistake": null,
+   "fix": null,
+   "hurry": null,
+   "cascade": null,
+   "result": null,
+   "end_title": null,
+   "end_fact": null,
+   "cta": null
+  },
+  "sequence": {
+   "style": "standard",
+   "replay": true,
+   "result_screen": true,
+   "end_card": true,
+   "intro_s": null,
+   "hold_s": null,
+   "caption_times": []
+  },
+  "assets": [],
+  "audio": {
+   "sfx": true,
+   "music": null
+  },
+  "keep": [],
+  "changed": [
+   "level.source",
+   "gameplay.clock_left",
+   "level.shape",
+   "level.size",
+   "level.pieces",
+   "level.blocks",
+   "level.colours",
+   "level.label"
+  ],
+  "reference": {
+   "file": "cbj_trailer_2.mp4",
+   "focus": [
+    "board"
+   ],
+   "level": "targeted",
+   "analysed_s": 28.86,
+   "adapted": [
+    "the board (an open 5x7 board with 9 blocks in 4 colours (varied pieces))",
+    "the HUD's Level 25 (the reference is Color Block Jam itself)"
+   ],
+   "set": [
+    "level.shape",
+    "level.size",
+    "level.pieces",
+    "level.blocks",
+    "level.colours",
+    "level.source",
+    "level.style",
+    "level.label"
+   ],
+   "not_copied": [
+    "the reference's gameplay",
+    "its characters and assets",
+    "its exact frames",
+    "its caption text",
+    "its exact layout",
+    "its booster buttons"
+   ],
+   "confidence": 0.95,
+   "stated": [
+    "ending"
+   ],
+   "board_walls": "the reference shows 1 wall cell inside the board; an open board (no walls) is the closest the generator builds",
+   "board": {
+    "read": {
+     "columns": 4,
+     "rows": 7,
+     "shape": "holes",
+     "shape_read": "holes",
+     "walls_named": [],
+     "blocks": 9,
+     "colours": [
+      "Blue",
+      "Red",
+      "Purple",
+      "Green"
+     ],
+     "colours_read": [
+      "cyan",
+      "magenta",
+      "purple",
+      "green"
+     ],
+     "colour_map": [
+      {
+       "read": "cyan",
+       "slot": "Blue",
+       "note": "cyan -> blue: the game has no cyan"
+      },
+      {
+       "read": "magenta",
+       "slot": "Red",
+       "note": "magenta -> red: the game has no magenta, purple is taken by purple"
+      },
+      {
+       "read": "purple",
+       "slot": "Purple",
+       "note": null
+      },
+      {
+       "read": "green",
+       "slot": "Green",
+       "note": null
+      }
+     ],
+     "colours_unmapped": [],
+     "pieces": "varied",
+     "gates_sides": 2,
+     "obstacles": [],
+     "busy": "busy",
+     "symmetric": false,
+     "wall_cells": 1,
+     "colour_count": 4,
+     "occupancy": 0.57
+    },
+    "text": "a walled (several separate walls) 4x7 board, 9 blocks in 4 colours (blue, red, purple, green), varied pieces, gates on 2 sides, looks busy; colours: cyan -> blue: the game has no cyan; magenta -> red: the game has no magenta, purple is taken by purple",
+    "took": [
+     "shape",
+     "size",
+     "pieces",
+     "blocks",
+     "colours"
+    ],
+    "busy": "busy",
+    "fit": null,
+    "kept": []
+   },
+   "hud": {
+    "level": 25,
+    "clock_s": 65,
+    "cbj": true,
+    "took": [
+     "the HUD's Level 25"
+    ]
+   },
+   "mechanics": [
+    "sliding coloured block puzzles become the game's own drags",
+    "gate exits matching block colours: the game's own gates of the block's colour"
+   ],
+   "not_used": [
+    "booster buttons: not used: not in Color Block Jam; the ad keeps the game's own near-fail"
+   ]
+  },
+  "planner": {
+   "model": "claude-cli/opus",
+   "seconds": 16.8,
+   "prompt": "Make a Color Block Jam ad on the same board as this video, with the same size, layout and colours, but let the player clear it with 3 seconds left.",
+   "edit": false,
+   "restored": [],
+   "references": [
+    {
+     "file": "cbj_trailer_2.mp4",
+     "kind": "video",
+     "facts": {
+      "duration_s": 28.86,
+      "width": 1920,
+      "height": 1080,
+      "orientation": "landscape",
+      "rotation": 0,
+      "codec": "h264",
+      "size_mb": 1.6,
+      "analysed_s": 28.86,
+      "fps": 6.9,
+      "frames": 199,
+      "copy": {
+       "codec": "h264",
+       "width": 640,
+       "height": 360
+      }
+     },
+     "plan": {
+      "focus": [
+       "board"
+      ],
+      "level": "targeted",
+      "questions": [
+       "What type of level is the board (grid layout, any walls, holes or blocked cells)?",
+       "What is the board's exact size in rows and columns, and what is its outline?",
+       "Where is each block on the grid, and what are its shape, size and colour?",
+       "Where are the gates on the board's edges, and what are their colours and widths?",
+       "Are there any special pieces or mechanics on the board, such as locked, layered, frozen or arrow blocks?",
+       "What countdown time does the HUD show at the start, so the clear can be timed to land with 3 seconds left?"
+      ],
+      "required_fields": [
+       "board",
+       "mechanics_seen",
+       "hud",
+       "dominant_colours",
+       "confidence"
+      ],
+      "ignore": [
+       "the video's hook, pacing, captions, ending and CTA, since the request only asks for the board",
+       "how the player clears the board in the video and how much time is left at the end",
+       "trailer-only extras such as logos, intro cards and landscape framing"
+      ],
+      "constraints": [
+       "Use the same board as the video: the same size, layout, block positions and colours",
+       "The player clears the board with 3 seconds left on the clock",
+       "The ad is for Color Block Jam"
+      ],
+      "why": "The request reuses only the video's board and sets its own ending (a clear with 3 s left), so the reading must capture the board exactly and nothing else.",
+      "source": "planner",
+      "checks": [
+       "the planner reads the board where the word table would read the look and the board: the plan wins"
+      ]
+     },
+     "focus": [
+      "board"
+     ],
+     "level": "targeted",
+     "analysed_s": 28.86,
+     "read_all": true,
+     "applied": [
+      "board"
+     ],
+     "ask": "Color Block Jam is a puzzle game: coloured blocks are dragged out through gates of their colour on a grid board with a countdown clock. You are reading a reference video so that an ad for this game can ADAPT its concept. Never describe how to copy frames. Use only the measured timestamps below. Do not invent mechanics this game does not have. Say what you see apart from what you infer.\n\nTHE REQUEST this reading serves: \"Make a Color Block Jam ad on the same board as this video, with the same size, layout and colours, but let the player clear it with 3 seconds left.\"\n\nWHAT TO LOOK FOR (always, the whole reading):\n- What does the video show, and what happens, in order, with the seconds?\n- Which game is it: Color Block Jam itself (toy-brick blocks with studs, coloured gates on the board's rim, a LEVEL and TIME HUD) or another game (name it)?\n- What is the idea of the ad in one line?\n- What is the board at the first frame of play: how many columns and rows of cells, its shape, how many blocks (only the coloured blocks that leave through gates; never another game's obstacle), their distinct colours (each once, named as seen: colours that look different get different names), the pieces' sizes, how many sides have gates, whether the layout is mirror-symmetric (the pieces' shapes and places mirror left-right or top-bottom, whatever their colours), how many wall cells are inside it, anything inside it that is not a block, and how busy it looks?\n- How does it end, among these: a win; a near-fail (a win with 5 s or less on the clock); a time-out (the out-of-time screen); a cliffhanger (the clip cuts before any result, often with a question caption); or it stops mid-level (no result, no question: the game's cliffhanger too)?\n- What is the hook: the first thing shown or said, and what does it do (a question, a challenge, a dare, or simply play)?\n- Which captions does the ad overlay, word for word, in order (none when there are none)?\n- What does the HUD show at the first frame of play: the level number and the clock?\n- Which mechanics are shown, and what is on screen that Color Block Jam does not have (booster buttons, power-ups, other menus)?\nTHE USER ASKS IN PARTICULAR (look for these first, as priorities):\n- What type of level is the board (grid layout, any walls, holes or blocked cells)?\n- What is the board's exact size in rows and columns, and what is its outline?\n- Where is each block on the grid, and what are its shape, size and colour?\n- Where are the gates on the board's edges, and what are their colours and widths?\n- Are there any special pieces or mechanics on the board, such as locked, layered, frozen or arrow blocks?\n- What countdown time does the HUD show at the start, so the clear can be timed to land with 3 seconds left?\nIGNORE: the video's hook, pacing, captions, ending and CTA, since the request only asks for the board; how the player clears the board in the video and how much time is left at the end; trailer-only extras such as logos, intro cards and landscape framing.\n\nTIME REFERENCE: the clip is 28.9 s long; give every second on that clock.\n\nReturn ONLY JSON with these fields (REQUIRED: what_it_shows, game_or_product, concept_in_one_line, structure, hook, ending, captions_seen, screen_text, hud, board, mechanics_seen, extras_seen, dominant_colours, confidence; OPTIONAL: the rest, null when you did not look for it): {\n  \"what_it_shows\": \"one line\",\n  \"game_or_product\": \"name or description\",\n  \"concept_in_one_line\": \"the idea of the ad in one line\",\n  \"how_to_adapt\": \"one line: the same concept with Color Block Jam gameplay\",\n  \"hook\": \"the first thing shown or said, and what it does (a question, a challenge, a dare)\",\n  \"captions_seen\": [\"every caption the ad overlays, in order, its words exactly as shown, letter for letter (never a description of it), the end card's title, its fact line and its button included\"],\n  \"screen_text\": [\"the gameplay's HUD only: the level label, the clock, +50, REPLAY, Continue, Level Completed, Level Failed, Out of time (the end card's title, fact line and button are captions, not screen_text)\"],\n  \"ending\": \"win | near-fail (a win with 5 s or less on the clock) | time-out (the out-of-time screen) | cliffhanger (cut before the result, often with a question) | stopped (the clip stops mid-level: no result, no question) | none\",\n  \"hud\": {\"level\": \"the level label at the first frame of play, as shown on screen, or null when none is shown\", \"clock\": \"the countdown clock at the first frame of play, MM:SS, or null when none is shown\", \"clock_last\": \"the last clock reading, MM:SS, or null\"},\n  \"extras_seen\": [\"anything on screen Color Block Jam does not have, named one by one: booster buttons (freeze, hammer, vacuum...), power-ups, characters, other menus; [] when none\"],\n  \"pacing\": \"calm|normal|fast\",\n  \"pace_change\": \"even|speeds up|slows down\",\n  \"moves_by_third\": [first, middle, last] (how many moves, one drag each, you count in the first, the middle and the last third of the gameplay parts only; never the replay),\n  \"mood\": \"a few words\",\n  \"visual_style\": \"a few words\",\n  \"dominant_colours\": [\"#RRGGBB\", ...],\n  \"cta\": \"the call to action, or empty\",\n  \"mistakes\": [{\"at_s\": <seconds>, \"what\": \"the wrong move\"}] (one entry per wrong move the player visibly corrects, or a block stopped by another block; not a drag the clock cuts short, not a hesitation; [] when none),\n  \"mistakes_shown\": true or false (is any wrong move shown at all),\n  \"structure\": [{\"from_s\": <seconds>, \"to_s\": <seconds>, \"purpose\": \"hook|gameplay|mistake|near_fail|fail|victory|replay|payoff|question|end_card|other\", \"what\": \"what is seen\", \"captions\": [\"the captions on screen in this part, word for word\"], \"emphasis\": \"what the part stresses (a zoom, a red clock, slow motion) or empty\", \"evidence_s\": [seconds where it is seen], \"confidence\": 0.0-1.0}] (a part ends where what is on screen changes: a cut, a new screen, a caption appearing or leaving; the hook part ends when the opening caption leaves the screen; replay: a moment shown again; payoff: the satisfying run of exits; question: the cut before the result that asks the viewer),\n  \"roles\": [\"concept\"|\"hook\"|\"pacing\"|\"captions\"|\"ending\"|\"look\"|\"structure\"|\"board\"] (what this reading was for),\n  \"board\": {\"columns\": <cells across at the first frame of play>, \"rows\": <cells down>, \"shape\": \"open|narrow_center|door|holes|cross|ring|lanes\" (open: a plain rectangle, every cell playable; narrow_center: an hourglass: the middle rows are wall across the board's whole width except a two-cell passage in the centre, so a top half and a bottom half are joined only there; door: two rooms side by side, left and right, split by a wall column down the middle with a two-cell door in it; holes: a rectangle with one or a few separate wall pieces inside it (a single cell or a short wall), the rest open; cross: a plus shape, the four corners cut away; ring: a big hole in the middle with a band of cells all round it; lanes: wall columns between two-cell lanes, joined at the top and the bottom; read from the board's outline and its wall cells only: a wall cell (often a grey or dark cell) is part of the board no block can enter, so it makes the shape and is never an obstacle; another game's obstacle (a bubble, ice, a crate, a counter) is not a wall and never makes a shape), \"blocks\": <the coloured blocks at the first frame of play, counted one by one; never an obstacle>, \"colours\": [\"each distinct block colour ONCE, in order of appearance, named as you see it: two colours that look different get different names (purple and magenta, blue and light blue, green and dark green, red and pink)\"], \"pieces\": \"small (1-2 cells) | long (bars of 3-4) | big (2x2 and larger) | varied (small, long and L-shaped together) | mixed (the usual mix)\", \"gates_sides\": <how many of the board's four sides have gates>, \"symmetric\": true or false (do the pieces' shapes and places mirror each other left-right or top-bottom, even where the mirrored pieces have different colours), \"wall_cells\": <how many wall cells are inside the board (cells no block can enter, not the rim around it); 0 when none>, \"obstacles\": [\"anything inside the board that is neither a block nor a wall cell, named, with its count or number; [] when there is none\"], \"busy\": \"simple|medium|busy (how full and tangled the board looks)\"},\n  \"mechanics_seen\": [\"each mechanic of the game shown, in your words\"],\n  \"adaptation\": {\"transferable\": [\"what an ad for this game can take\"], \"translation\": [\"how it becomes Color Block Jam gameplay\"], \"do_not_copy\": [\"what must not be copied\"]},\n  \"confidence\": 0.0-1.0 (how sure you are of this reading as a whole)\n}\nSet \"roles\" to [\"board\"].",
+     "model": "gemini-3.5-flash-lite",
+     "reader": "gemini",
+     "validation": {
+      "status": "passed",
+      "problems": []
+     },
+     "confidence": 0.95,
+     "notes": {
+      "what_it_shows": "A puzzle game level on a grid board with coloured blocks and timed gameplay.",
+      "game_or_product": "Color Block Jam",
+      "concept_in_one_line": "Clear the board of coloured blocks through matching gates before time runs out.",
+      "how_to_adapt": "Make a Color Block Jam ad on the same board as this video, with the same size, layout and colours, but let the player clear it with 3 seconds left.",
+      "hook": "None",
+      "captions_seen": [],
+      "screen_text": [
+       "LEVEL 25",
+       "TIME 01:05"
+      ],
+      "ending": "stopped",
+      "hud": {
+       "level": "LEVEL 25",
+       "clock": "01:05",
+       "clock_last": "00:37"
+      },
+      "extras_seen": [
+       "booster buttons"
+      ],
+      "pacing": "normal",
+      "pace_change": "even",
+      "moves_by_third": [
+       3,
+       3,
+       2
+      ],
+      "mood": "casual puzzle",
+      "visual_style": "clean 3D toy-brick puzzle",
+      "dominant_colours": [
+       "#8A2BE2",
+       "#32CD32",
+       "#9400D3",
+       "#4169E1",
+       "#BA55D3"
+      ],
+      "cta": "",
+      "mistakes": [],
+      "mistakes_shown": false,
+      "structure": [
+       {
+        "from_s": 0.0,
+        "to_s": 28.9,
+        "purpose": "gameplay",
+        "what": "Player moves blocks to their respective gates",
+        "captions": [],
+        "emphasis": "",
+        "evidence_s": [
+         0.0,
+         15.0,
+         28.0
+        ],
+        "confidence": 1.0
+       }
+      ],
+      "roles": [
+       "board"
+      ],
+      "board": {
+       "columns": 4,
+       "rows": 7,
+       "shape": "holes",
+       "blocks": 9,
+       "colours": [
+        "cyan",
+        "magenta",
+        "purple",
+        "green"
+       ],
+       "pieces": "varied",
+       "gates_sides": 2,
+       "symmetric": false,
+       "wall_cells": 1,
+       "obstacles": [],
+       "busy": "busy",
+       "size_first": [
+        4,
+        7
+       ],
+       "occupancy": 0.57,
+       "symmetric_first": false,
+       "symmetric_source": "measured",
+       "colour_count": 4,
+       "colours_counted": [
+        "magenta",
+        "purple",
+        "green",
+        "cyan"
+       ]
+      },
+      "mechanics_seen": [
+       "sliding coloured block puzzles",
+       "gate exits matching block colours"
+      ],
+      "adaptation": {
+       "transferable": [
+        "board layout",
+        "grid size",
+        "block colours"
+       ],
+       "translation": [
+        "adjust timer so it ends with 3 seconds remaining"
+       ],
+       "do_not_copy": [
+        "timed out ending"
+       ]
+      },
+      "confidence": 0.95,
+      "ending_read": {
+       "ending": "cliffhanger",
+       "last_clock": "00:11",
+       "win_screen": false,
+       "out_of_time_screen": false,
+       "question_caption": "",
+       "blocks_left": 6
+      },
+      "board_whole": {
+       "columns": 6,
+       "rows": 9,
+       "shape": "open",
+       "blocks": 7,
+       "colours": [
+        "purple",
+        "green",
+        "blue",
+        "magenta"
+       ],
+       "pieces": "varied",
+       "gates_sides": 4,
+       "symmetric": false,
+       "wall_cells": 0,
+       "obstacles": [],
+       "busy": "medium"
+      },
+      "pacing_said": "normal",
+      "pace_change_said": "even"
+     },
+     "ending_read": {
+      "from_s": 18.86,
+      "to_s": 28.86,
+      "fps": 8,
+      "frames": 79,
+      "ending": "cliffhanger",
+      "last_clock": "00:11",
+      "win_screen": false,
+      "out_of_time_screen": false,
+      "question_caption": "",
+      "why": "The clip cuts to the end before the level is finished or any result screen appears.",
+      "blocks_left": 6,
+      "model": "gemini-3.5-flash-lite",
+      "reader": "gemini",
+      "seconds": 1.1
+     },
+     "board_read": {
+      "at_s": 0.3,
+      "width": 1920,
+      "height": 1080,
+      "box": {
+       "x": 0.39,
+       "y": 0.315,
+       "w": 0.22,
+       "h": 0.47
+      },
+      "extras_seen": [
+       "booster buttons"
+      ],
+      "crop": {
+       "x0": 706,
+       "y0": 289,
+       "x1": 1213,
+       "y1": 899,
+       "width": 851,
+       "height": 1024,
+       "read": true
+      },
+      "board_frame": {
+       "columns": 5,
+       "rows": 8,
+       "shape": "holes",
+       "blocks": 9,
+       "colours": [
+        "magenta",
+        "purple",
+        "green",
+        "cyan"
+       ],
+       "pieces": "varied",
+       "gates_sides": 2,
+       "symmetric": false,
+       "wall_cells": 2,
+       "obstacles": [],
+       "busy": "medium"
+      },
+      "colour_counts": [
+       3
+      ],
+      "size_reads": [
+       [
+        4,
+        8
+       ],
+       [
+        4,
+        8
+       ],
+       [
+        4,
+        7
+       ]
+      ],
+      "measured": {
+       "grid": [
+        [
+         0,
+         1,
+         1,
+         0
+        ],
+        [
+         1,
+         0,
+         1,
+         1
+        ],
+        [
+         1,
+         0,
+         1,
+         0
+        ],
+        [
+         1,
+         1,
+         1,
+         0
+        ],
+        [
+         1,
+         1,
+         1,
+         1
+        ],
+        [
+         1,
+         1,
+         0,
+         0
+        ],
+        [
+         0,
+         0,
+         0,
+         0
+        ]
+       ],
+       "left_right": 0.57,
+       "top_bottom": 0.5,
+       "mirror_lr": 0.49,
+       "mirror_tb": 0.59,
+       "symmetric": false,
+       "clusters": [
+        {
+         "rgb": [
+          32,
+          183,
+          167
+         ],
+         "hue": 174,
+         "lightness": 0.42,
+         "cells": 5
+        },
+        {
+         "rgb": [
+          66,
+          172,
+          25
+         ],
+         "hue": 103,
+         "lightness": 0.39,
+         "cells": 4
+        },
+        {
+         "rgb": [
+          114,
+          51,
+          210
+         ],
+         "hue": 264,
+         "lightness": 0.51,
+         "cells": 4
+        },
+        {
+         "rgb": [
+          163,
+          46,
+          181
+         ],
+         "hue": 292,
+         "lightness": 0.44,
+         "cells": 3
+        }
+       ],
+       "colour_count": 4,
+       "region": [
+        90,
+        91,
+        754,
+        934
+       ],
+       "block_cells": 16
+      },
+      "colour_count": 4,
+      "colour_count_model": 3,
+      "colour_count_code": 4,
+      "colours_counted": [
+       "magenta",
+       "purple",
+       "green",
+       "cyan"
+      ],
+      "colour_clusters_measured": 4,
+      "board": {
+       "columns": 4,
+       "rows": 7,
+       "shape": "holes",
+       "blocks": 9,
+       "colours": [
+        "cyan",
+        "magenta",
+        "purple",
+        "green"
+       ],
+       "pieces": "varied",
+       "gates_sides": 2,
+       "symmetric": false,
+       "wall_cells": 1,
+       "obstacles": [],
+       "busy": "busy",
+       "size_first": [
+        4,
+        7
+       ],
+       "occupancy": 0.57,
+       "symmetric_first": false,
+       "symmetric_source": "measured",
+       "colour_count": 4,
+       "colours_counted": [
+        "magenta",
+        "purple",
+        "green",
+        "cyan"
+       ]
+      },
+      "model": "gemini-3.5-flash-lite",
+      "reader": "gemini",
+      "seconds": 6.9
+     },
+     "separated": {
+      "ran": false,
+      "why": "a read with no pacing question: the model's parts are kept as they are"
+     },
+     "pacing": {
+      "moves_by_third": [
+       3.0,
+       3.0,
+       2.0
+      ],
+      "gameplay_s": 28.9,
+      "dps": 0.28,
+      "tempo": "normal",
+      "tempo_source": "counts",
+      "change": "even",
+      "source": "model",
+      "said": {
+       "pacing": "normal",
+       "pace_change": "even"
+      },
+      "motion": null
+     },
+     "usage": [
+      {
+       "model": "gemini-3.5-flash-lite",
+       "prompt": 1146,
+       "candidates": 42,
+       "thoughts": null
+      },
+      {
+       "model": "gemini-3.5-flash-lite",
+       "prompt": 1135,
+       "candidates": 18,
+       "thoughts": null
+      },
+      {
+       "model": "gemini-3.5-flash-lite",
+       "prompt": 1135,
+       "candidates": 18,
+       "thoughts": null
+      },
+      {
+       "model": "gemini-3.5-flash-lite",
+       "prompt": 1135,
+       "candidates": 18,
+       "thoughts": null
+      }
+     ],
+     "seconds": 18.7
+    }
+   ],
+   "route": {
+    "intent": "new",
+    "edit_type": "adapt_reference",
+    "analysis_level": 2,
+    "requires_video_analysis": true,
+    "requires_gameplay_regeneration": true,
+    "requires_compositing": true,
+    "targets": [],
+    "preserve": [],
+    "allowed_groups": [],
+    "direct_op": null,
+    "feasible": true,
+    "notes": [
+     "the attached video (cbj_trailer_2.mp4) is read as a whole: its structure, pacing, hook and ending are adapted with the game's own gameplay (case p.6)"
+    ],
+    "matched": null,
+    "level_name": "Level 2, full (a video the tool did not make is read with a multimodal model)",
+    "why": "the attached video (cbj_trailer_2.mp4) is read as a whole: its structure, pacing, hook and ending are adapted with the game's own gameplay (case p.6)"
+   },
+   "workflow": "guided"
+  },
+  "needs": []
+ },
+ "level": {
+  "gridWidth": 5,
+  "gridHeight": 7,
+  "timerCount": 60,
+  "inactiveCells": [],
+  "GridBlockDatas": [
+   {
+    "gridPosition": {
+     "x": 4,
+     "y": 5
+    },
+    "blockColor": 0,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": -1
+     }
+    ]
+   },
+   {
+    "gridPosition": {
+     "x": 1,
+     "y": 4
+    },
+    "blockColor": 5,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": -1
+     },
+     {
+      "x": 0,
+      "y": -2
+     }
+    ]
+   },
+   {
+    "gridPosition": {
+     "x": 2,
+     "y": 1
+    },
+    "blockColor": 2,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 1,
+      "y": 0
+     },
+     {
+      "x": 2,
+      "y": 0
+     },
+     {
+      "x": 1,
+      "y": -1
+     }
+    ]
+   },
+   {
+    "gridPosition": {
+     "x": 3,
+     "y": 3
+    },
+    "blockColor": 5,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 1,
+      "y": 0
+     }
+    ]
+   },
+   {
+    "gridPosition": {
+     "x": 2,
+     "y": 6
+    },
+    "blockColor": 2,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": -1
+     },
+     {
+      "x": 1,
+      "y": -1
+     }
+    ]
+   },
+   {
+    "gridPosition": {
+     "x": 0,
+     "y": 3
+    },
+    "blockColor": 0,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": -1
+     }
+    ]
+   },
+   {
+    "gridPosition": {
+     "x": 0,
+     "y": 1
+    },
+    "blockColor": 3,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": -1
+     },
+     {
+      "x": 1,
+      "y": -1
+     }
+    ]
+   },
+   {
+    "gridPosition": {
+     "x": 1,
+     "y": 6
+    },
+    "blockColor": 3,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": -1
+     }
+    ]
+   },
+   {
+    "gridPosition": {
+     "x": 2,
+     "y": 4
+    },
+    "blockColor": 0,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": -1
+     }
+    ]
+   }
+  ],
+  "ExitDatas": [
+   {
+    "exitNumber": 0,
+    "requiredColor": 0,
+    "gridPosition": {
+     "x": 4,
+     "y": 0
+    },
+    "direction": 3,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     }
+    ]
+   },
+   {
+    "exitNumber": 0,
+    "requiredColor": 5,
+    "gridPosition": {
+     "x": 3,
+     "y": 0
+    },
+    "direction": 3,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     }
+    ]
+   },
+   {
+    "exitNumber": 0,
+    "requiredColor": 2,
+    "gridPosition": {
+     "x": 0,
+     "y": 6
+    },
+    "direction": 2,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 1,
+      "y": 0
+     },
+     {
+      "x": 2,
+      "y": 0
+     }
+    ]
+   },
+   {
+    "exitNumber": 0,
+    "requiredColor": 5,
+    "gridPosition": {
+     "x": 0,
+     "y": 6
+    },
+    "direction": 0,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     }
+    ]
+   },
+   {
+    "exitNumber": 0,
+    "requiredColor": 2,
+    "gridPosition": {
+     "x": 3,
+     "y": 6
+    },
+    "direction": 2,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 1,
+      "y": 0
+     }
+    ]
+   },
+   {
+    "exitNumber": 0,
+    "requiredColor": 0,
+    "gridPosition": {
+     "x": 4,
+     "y": 1
+    },
+    "direction": 1,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": 1
+     }
+    ]
+   },
+   {
+    "exitNumber": 0,
+    "requiredColor": 3,
+    "gridPosition": {
+     "x": 4,
+     "y": 5
+    },
+    "direction": 1,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": 1
+     }
+    ]
+   },
+   {
+    "exitNumber": 0,
+    "requiredColor": 3,
+    "gridPosition": {
+     "x": 0,
+     "y": 1
+    },
+    "direction": 0,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 0,
+      "y": 1
+     }
+    ]
+   },
+   {
+    "exitNumber": 0,
+    "requiredColor": 0,
+    "gridPosition": {
+     "x": 2,
+     "y": 0
+    },
+    "direction": 3,
+    "shapeOffsets": [
+     {
+      "x": 0,
+      "y": 0
+     }
+    ]
+   }
+  ]
+ },
+ "v2_level": {
+  "source": "generate",
+  "shipped": null,
+  "shape": "holes",
+  "width": 4,
+  "height": 7,
+  "blocks": 9,
+  "colours": [
+   "Blue",
+   "Red",
+   "Purple",
+   "Green"
+  ],
+  "difficulty": "any",
+  "label": 25,
+  "moves": null,
+  "changes": [],
+  "pieces": "varied",
+  "style": [],
+  "edit": null
+ },
+ "failed": [
+  {
+   "check": "Reference: the board",
+   "status": "failed",
+   "detail": "shape: differs (shape holes read, open made); size: ok (4x7 read, 5x7 made (within 1 cell a side)); blocks: ok (9 blocks read, 9 made (within 2)); colours: ok (colours blue, red, purple, green read; 4 of 4 in the level (green, purple, blue, red; at least half)); walls: 1 read, 0 made, read approximately; it looks busy (info: not used for the difficulty)",
+   "from": "reference",
+   "where": "plan"
+  }
+ ]
+}

@@ -1,0 +1,610 @@
+{
+ "id": "qa-make-audio",
+ "kind": "make",
+ "status": "done",
+ "stage": "done",
+ "lines": [
+  {
+   "t": 0.3,
+   "stage": "plan",
+   "text": "making the planned brief"
+  },
+  {
+   "t": 31.0,
+   "stage": "recording",
+   "text": "recorded the play in the game"
+  },
+  {
+   "t": 55.2,
+   "stage": "compose",
+   "text": "composed the ad"
+  },
+  {
+   "t": 71.8,
+   "stage": "review",
+   "text": "the viewer's review of v1..."
+  },
+  {
+   "t": 96.4,
+   "stage": "audio",
+   "text": "the optional audio: a soundtrack from the concept and the hook spoken..."
+  },
+  {
+   "t": 99.1,
+   "stage": "audio",
+   "text": "Magpie (EN-US.Mia) says 3 line(s): Ready for this? / So satisfying! / Play now"
+  },
+  {
+   "t": 99.2,
+   "stage": "audio",
+   "text": "soundtrack-aneasycolorb-v1-voice.wav: Bright major pentatonic: a stinger under the hook, a pulse through the play at 104 bpm, a pluck one step higher as each block leaves (4), a resolve chord at the win, a soft pad under the end card. 30 s, synthesised (no licensed music). EN-US.Mia narrates the creative's own captions as they appear: “Ready for this?” at 0 s; “So satisfying!” at 4 s; “Play now” at 25 s."
+  },
+  {
+   "t": 99.3,
+   "stage": "plan",
+   "text": "an exact edit: the brief is changed in code (no planner)..."
+  },
+  {
+   "t": 100.6,
+   "stage": "compose",
+   "text": "composed the ad with the new music"
+  },
+  {
+   "t": 100.7,
+   "stage": "done",
+   "text": "v2 made"
+  }
+ ],
+ "n_lines": 10,
+ "result": {
+  "n": 2,
+  "id": "1018-110841-an-easy-color-block-jam",
+  "prompt": "Replace the music with soundtrack-aneasycolorb-v1-voice.wav; keep everything else exactly the same.",
+  "edit": true,
+  "from": 1,
+  "brief": {
+   "summary": "A 30-second portrait ad showing a calm, clean, mistake-free solve of an easy level on a small open board with four blocks. The level now takes more moves at an even, steady pace, so live play fills more of the ad and the end card gets less time.",
+   "controls": [
+    {
+     "control": "level",
+     "asked": null,
+     "plan": "Keep the small open six-by-six board with four blocks and keep it easy. The shortest solution now takes about seven drags, so the solve lasts longer.",
+     "status": "adjusted",
+     "why": "the HUD level number must be 1-9999. the number of moves: read from the request, but not applied (the prompt gives no number of moves).",
+     "engine": []
+    },
+    {
+     "control": "gameplay",
+     "asked": null,
+     "plan": "A clean win with no mistakes or hesitations. The blocks now leave one at a time at a steady rhythm, with no fast burst at the end.",
+     "status": "applied",
+     "why": null,
+     "engine": []
+    },
+    {
+     "control": "difficulty_pacing",
+     "asked": null,
+     "plan": "Easy level, 30 seconds, calm and even tempo throughout.",
+     "status": "adjusted",
+     "why": null,
+     "engine": []
+    },
+    {
+     "control": "visuals",
+     "asked": null,
+     "plan": "The game's own look with the tap ring.",
+     "status": "default",
+     "why": null,
+     "engine": []
+    },
+    {
+     "control": "concept",
+     "asked": null,
+     "plan": "A calm, easy, clean solve on a small board, with the tool's default captions.",
+     "status": "default",
+     "why": null,
+     "engine": []
+    },
+    {
+     "control": "sequence",
+     "asked": null,
+     "plan": "Keep the hook, gameplay, slow-motion replay, result screen and end card. The ad stays 30 seconds, so the longer gameplay takes time away from the end card, making it shorter.",
+     "status": "adjusted",
+     "why": "The end card's length can't be set directly. It shrinks because the gameplay before it gets longer.",
+     "engine": [
+      "the end card runs 8.4 s, so the ad keeps its length and its gameplay timing."
+     ]
+    },
+    {
+     "control": "assets",
+     "asked": null,
+     "plan": "Keep the game's own pictures: the coin pile, the green button and the start background on the end card.",
+     "status": "default",
+     "why": null,
+     "engine": []
+    },
+    {
+     "control": "unchanged",
+     "asked": null,
+     "plan": "Everything else stays as it is.",
+     "status": "default",
+     "why": null,
+     "engine": []
+    }
+   ],
+   "assumptions": [
+    "Read \"uneven gaps\" as coming from the fast chain finish. It is replaced with a steady one-by-one finish. The alternative would have been to keep the chain finish and only make the level longer.",
+    "Chose about seven moves so a calm, easy solve fills most of the 30 seconds. Fewer moves would leave the end card longer."
+   ],
+   "channel": "network",
+   "language": "en",
+   "format": "9:16",
+   "level": {
+    "source": "generate",
+    "shipped": null,
+    "shape": "open",
+    "width": 6,
+    "height": 6,
+    "blocks": 4,
+    "colours": [],
+    "difficulty": "easy",
+    "label": 130,
+    "moves": null,
+    "changes": [],
+    "pieces": "mixed",
+    "style": [],
+    "edit": null
+   },
+   "gameplay": {
+    "ending": "win",
+    "mistakes": 0,
+    "mistake_kinds": [],
+    "hesitations": 0,
+    "timer_s": null,
+    "seed": null,
+    "events": [],
+    "finish": "auto",
+    "clock_left_s": null,
+    "blocks_left": null
+   },
+   "pacing": {
+    "length_s": 30.0,
+    "tempo": "calm",
+    "curve": "even"
+   },
+   "visuals": {
+    "theme": "game",
+    "blocks": [],
+    "background": [],
+    "background_image": null,
+    "board": null,
+    "caption_fill": null,
+    "caption_outline": null,
+    "camera_zoom": null,
+    "punch_ins": [],
+    "caption_colours": [],
+    "cursor": "ring",
+    "hud_timer": true,
+    "hud_level": true,
+    "names": {},
+    "names_src": {}
+   },
+   "concept": {
+    "angle": "A calm, easy, clean solve on a small board.",
+    "hook": "Can you beat it?",
+    "mistake": null,
+    "fix": null,
+    "hurry": null,
+    "cascade": null,
+    "result": null,
+    "end_title": null,
+    "end_fact": null,
+    "cta": null
+   },
+   "sequence": {
+    "style": "standard",
+    "replay": true,
+    "result_screen": true,
+    "end_card": true,
+    "intro_s": null,
+    "hold_s": null,
+    "caption_times": []
+   },
+   "assets": [],
+   "audio": {
+    "sfx": true,
+    "music": "soundtrack-aneasycolorb-v3-voice.wav"
+   },
+   "keep": [
+    "visuals",
+    "copy",
+    "assets",
+    "sound",
+    "camera"
+   ],
+   "changed": [
+    "audio.music"
+   ],
+   "needs": [],
+   "planner": {
+    "model": null,
+    "seconds": 0,
+    "prompt": "Replace the music with soundtrack-aneasycolorb-v3-voice.wav; keep everything else exactly the same.",
+    "edit": true,
+    "restored": [],
+    "direct": {
+     "music": "soundtrack-aneasycolorb-v3-voice.wav"
+    },
+    "route": {
+     "intent": "edit",
+     "edit_type": "direct",
+     "analysis_level": 0,
+     "requires_video_analysis": false,
+     "requires_gameplay_regeneration": false,
+     "requires_compositing": true,
+     "targets": [
+      {
+       "kind": "music",
+       "id": "music",
+       "name": "the music",
+       "field": "audio.music",
+       "how": "name",
+       "file": null,
+       "op": {
+        "music": "soundtrack-aneasycolorb-v3-voice.wav"
+       },
+       "clause": "Replace the music with soundtrack-aneasycolorb-v3-voice"
+      }
+     ],
+     "preserve": [
+      "gameplay",
+      "level",
+      "timing",
+      "camera",
+      "captions",
+      "pictures"
+     ],
+     "allowed_groups": [
+      "audio.music"
+     ],
+     "direct_op": {
+      "music": "soundtrack-aneasycolorb-v3-voice.wav"
+     },
+     "feasible": true,
+     "notes": [
+      "part of the request is not a known thing in this ad (wav): the planner reads it"
+     ],
+     "matched": null,
+     "level_name": "Level 0, direct (from the creative's metadata; no video analysis)",
+     "why": "target: the music",
+     "kept_clauses": [
+      "keep everything else exactly the same"
+     ]
+    },
+    "workflow": "edit"
+   }
+  },
+  "level": {
+   "file": "1018-110841-an-easy-color-block-jam/v4/level.json",
+   "source": "studio/levels/gen_a8bb3d360c1b.json",
+   "why": "a generated easy open level, 6x6, 4 blocks: 4 drags minimum, 0 repositioning, a casual player needs about 1.0x the minimum",
+   "sha": "0031182f6d39f988a260e87336fc1a8ceea08f1e144eaf6b04d7c8abe12b3242"
+  },
+  "recording": {
+   "dir": "recordings/314064487f88f8f0",
+   "reused": true
+  },
+  "board": "1018-110841-an-easy-color-block-jam/v4/board.png",
+  "checks": [
+   {
+    "check": "Difficulty",
+    "status": "pass",
+    "detail": "4 drags minimum, 0 repositioning, 3 block(s) can leave at once, a casual player needs about 1.0x the minimum -> easy (asked: easy)",
+    "from": "level"
+   },
+   {
+    "check": "Block count",
+    "status": "pass",
+    "detail": "4 blocks (asked: 4)",
+    "from": "level"
+   },
+   {
+    "check": "Board shape",
+    "status": "info",
+    "detail": "open, 6x6, 0 cells cut out",
+    "from": "level"
+   },
+   {
+    "check": "Planned moves",
+    "status": "pass",
+    "detail": "all 4 drags played as planned: the same block, cells and outcome",
+    "from": "recording"
+   },
+   {
+    "check": "Ending",
+    "status": "pass",
+    "detail": "the game shows a cleared board with 00:55 on the clock",
+    "from": "recording"
+   },
+   {
+    "check": "Mistakes",
+    "status": "pass",
+    "detail": "0 mistake(s) played (asked: 0)",
+    "from": "recording"
+   },
+   {
+    "check": "Finish",
+    "status": "info",
+    "detail": "the play ends with 4 exit(s) in a row",
+    "from": "recording"
+   },
+   {
+    "check": "Asked: music",
+    "status": "pass",
+    "detail": "music asked; the ad plays soundtrack-aneasycolorb-v3-voice.wav",
+    "from": "prompt",
+    "where": null
+   },
+   {
+    "check": "Asked: facts read from the prompt",
+    "status": "info",
+    "detail": "music (a phrasing the audit does not recognise gives no row; the viewer's review covers the rest)",
+    "from": "prompt",
+    "where": null
+   },
+   {
+    "check": "Rules: the moves",
+    "status": "info",
+    "from": "rules",
+    "where": null,
+    "detail": "the play is reused from the version this edit comes from, where the rules were replayed"
+   }
+  ],
+  "ad_dir": "1018-110841-an-easy-color-block-jam/v4/ad",
+  "video": "1018-110841-an-easy-color-block-jam/v4/ad/ad.mp4",
+  "poster": "1018-110841-an-easy-color-block-jam/v4/ad/poster.png",
+  "length_s": 30.0,
+  "qa": {
+   "failures": [],
+   "warnings": [
+    "end card 8.37 s is long; a longer recording would fill the ad better"
+   ]
+  },
+  "stages": [
+   {
+    "stage": "level",
+    "seconds": 0.0
+   },
+   {
+    "stage": "recording",
+    "seconds": 0.0
+   },
+   {
+    "stage": "compose",
+    "seconds": 1.2
+   },
+   {
+    "stage": "proof",
+    "seconds": 0.0
+   }
+  ],
+  "seconds": 1.3,
+  "created": "2026-10-18 21:00:30",
+  "workflow": "edit",
+  "parts": "1018-110841-an-easy-color-block-jam/v4/parts.json",
+  "evaluation": {
+   "kind": "edit",
+   "what": "controlled editing: the edit report (what changed, what was kept) and the facts the edit asks for; the rules are re-checked only when the play was re-filmed",
+   "groups": [
+    "edit report",
+    "asked facts"
+   ]
+  },
+  "proof": {
+   "asked": [
+    "audio.music"
+   ],
+   "asked_names": [
+    "music"
+   ],
+   "rows": [
+    {
+     "item": "gameplay",
+     "title": "Gameplay",
+     "status": "kept",
+     "detail": "the same recording, reused: the same level and the same 4 moves"
+    },
+    {
+     "item": "timing",
+     "title": "Timing",
+     "status": "kept",
+     "detail": "30 fps, 30.0 s, play 0.50-11.13 s, first move 1.53 s, 4 drags, clock 65 -> 55.8 s; every part and every caption on the same frames",
+     "numbers": {
+      "before": {
+       "fps": 30,
+       "duration_s": 30.0,
+       "play_s": [
+        0.5,
+        11.13
+       ],
+       "first_move_s": 1.53,
+       "clock_start_s": 65.0,
+       "clock_end_s": 55.8,
+       "drags": 4
+      },
+      "after": {
+       "fps": 30,
+       "duration_s": 30.0,
+       "play_s": [
+        0.5,
+        11.13
+       ],
+       "first_move_s": 1.53,
+       "clock_start_s": 65.0,
+       "clock_end_s": 55.8,
+       "drags": 4
+      }
+     }
+    },
+    {
+     "item": "camera",
+     "title": "Camera",
+     "status": "kept",
+     "detail": "the game's camera, the framing of every part and the finger's path"
+    },
+    {
+     "item": "composition",
+     "title": "Composition",
+     "status": "kept",
+     "detail": "all 8 layers in the same place and size"
+    },
+    {
+     "item": "sequence",
+     "title": "Sequence",
+     "status": "kept",
+     "detail": "intro > play > replay > result > result_hold > end; the play's moments in the same order"
+    },
+    {
+     "item": "visual",
+     "title": "Visual structure",
+     "status": "kept",
+     "detail": "the same recording, the same look"
+    },
+    {
+     "item": "assets",
+     "title": "Other assets",
+     "status": "kept",
+     "detail": "every picture (same file contents)"
+    },
+    {
+     "item": "copy",
+     "title": "Captions",
+     "status": "kept",
+     "detail": "all 6 texts word for word"
+    },
+    {
+     "item": "sound",
+     "title": "Sound",
+     "status": "asked",
+     "detail": "the music: no music -> soundtrack-aneasycolorb-v3-voice.wav"
+    }
+   ],
+   "ok": true,
+   "changes": [
+    "music"
+   ],
+   "preserves": [
+    "Gameplay",
+    "Timing",
+    "Camera",
+    "Composition",
+    "Sequence",
+    "Visual structure",
+    "Other assets",
+    "Captions"
+   ],
+   "checklist": {
+    "level_unchanged": {
+     "ok": true,
+     "evidence": "level sha 0031182f6d39 -> 0031182f6d39"
+    },
+    "moves_unchanged": {
+     "ok": true,
+     "evidence": "4 -> 4 drags, block and cells compared"
+    },
+    "move_timing_unchanged": {
+     "ok": true,
+     "evidence": "every drag's start, exit and end frame and the gameplay window compared"
+    },
+    "gameplay_render_reused": {
+     "ok": true,
+     "evidence": "recording 314064487f88f8f0"
+    },
+    "duration_unchanged": {
+     "ok": true,
+     "evidence": "30.0 s -> 30.0 s"
+    },
+    "camera_unchanged": {
+     "ok": true,
+     "evidence": "the recorder's camera and the ad's zoom compared"
+    },
+    "hud_unchanged": {
+     "ok": true,
+     "evidence": "the HUD's hidden parts and the level number compared"
+    },
+    "captions_unchanged": {
+     "ok": true,
+     "evidence": "every caption's text compared"
+    },
+    "pictures_unchanged": {
+     "ok": true,
+     "evidence": "every picture slot compared"
+    },
+    "audio_unchanged": {
+     "ok": false,
+     "evidence": "mix sha d3858955ecff -> b973904c49d6"
+    }
+   },
+   "pixels": {
+    "frames_changed": 0,
+    "frames": 900,
+    "ranges": [],
+    "layers": [],
+    "same_sound": false,
+    "contained": true,
+    "box": null,
+    "copied": {
+     "frames": 900,
+     "of": 900,
+     "gops_rendered": 0,
+     "gops": 8
+    }
+   },
+   "verdict": "Only what was asked changed (Sound); everything else is identical. The video itself was patched: 900 of 900 frames are the approved video's bytes, 0 of 8 GOPs were rendered again.",
+   "route": {
+    "ok": true,
+    "evidence": "Level 0, direct (from the creative's metadata; no video analysis); the gameplay render was reused as routed; made in code, no planner",
+    "level": 0,
+    "edit_type": "direct",
+    "video_analysis": false
+   }
+  },
+  "audio_added": {
+   "file": "soundtrack-aneasycolorb-v1-voice.wav",
+   "description": "Bright major pentatonic: a stinger under the hook, a pulse through the play at 104 bpm, a pluck one step higher as each block leaves (4), a resolve chord at the win, a soft pad under the end card. 30 s, synthesised (no licensed music). EN-US.Mia narrates the creative's own captions as they appear: “Ready for this?” at 0 s; “So satisfying!” at 4 s; “Play now” at 25 s.",
+   "voice": {
+    "text": "Ready for this? / So satisfying! / Play now",
+    "voice": "Magpie-Multilingual.EN-US.Mia",
+    "at_s": 0.15,
+    "seconds": 2.55,
+    "model": "nvidia/magpie-tts-multilingual",
+    "narration": "captions",
+    "lines": [
+     {
+      "layer": "hook",
+      "text": "Ready for this?",
+      "at_s": 0.15,
+      "seconds": 0.88
+     },
+     {
+      "layer": "cap_cascade",
+      "text": "So satisfying!",
+      "at_s": 4.28,
+      "seconds": 1.07
+     },
+     {
+      "layer": "end_cta",
+      "text": "Play now",
+      "at_s": 24.93,
+      "seconds": 0.6
+     }
+    ]
+   },
+   "voice_skipped": null,
+   "bed": true,
+   "from_version": 1
+  }
+ },
+ "error": null,
+ "elapsed": 100.7
+}

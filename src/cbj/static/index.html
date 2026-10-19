@@ -34,6 +34,9 @@
              border: 1px solid var(--line); border-radius: 8px; background: #fcfbfe; }
   textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .sides { display: flex; gap: 6px; margin-bottom: 10px; }
+  .sides button { border-radius: 999px; padding: 6px 14px; }
+  .sides button.off { background: #fff; color: var(--muted); border-color: var(--border, #ddd); }
   .mode { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
   .mode b { color: var(--accent); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -74,6 +77,8 @@
   .history .m { font-size: 11.5px; color: var(--muted); }
   .player video { width: 100%; max-height: 72vh; aspect-ratio: 9 / 16; background: #120c1f; border-radius: 10px;
                   display: block; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pair video { width: 100%; aspect-ratio: 9 / 16; max-height: 46vh; background: #120c1f; border-radius: 8px; }
   .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
   .tab { font-size: 12.5px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer;
          background: #fff; }
@@ -82,6 +87,7 @@
   .links a { color: var(--accent); }
   .vprompt { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }
   .stages { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  #progressCard.live { border-color: #6c5ce7; box-shadow: 0 0 0 3px rgba(108, 92, 231, .18); }
   .stage { font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: var(--def-soft); color: var(--def); }
   .stage.on { background: var(--accent); color: #fff; }
   .stage.done { background: var(--ok-soft); color: var(--ok); }
@@ -127,12 +133,26 @@
   .st.info { background: var(--def-soft); color: var(--def); }
   .hidden { display: none !important; }
   .muted { color: var(--muted); font-size: 12.5px; }
+  .route { margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--def); background: var(--def-soft); font-size: 13px; border-radius: 0 6px 6px 0; }
+  /* the "Reference to creative" card (video-guided generation, 2026-10-16) */
+  .refplan { font-size: 12.5px; margin: 6px 0; display: grid; gap: 4px; }
+  .tl { display: flex; gap: 2px; margin: 10px 0 4px; }
+  .tl .seg { font-size: 11px; line-height: 1.25; padding: 4px 3px; border-radius: 4px; background: var(--def-soft); color: var(--ink);
+             text-align: center; overflow: hidden; min-width: 0; white-space: nowrap; text-overflow: ellipsis; }
+  .tl .seg small { color: var(--muted); }
+  .tl .seg.hook { background: var(--accent-soft); }
+  .tl .seg.mistake, .tl .seg.fail { background: var(--bad-soft); }
+  .tl .seg.near_fail { background: var(--warn-soft); }
+  .tl .seg.victory { background: var(--ok-soft); }
+  .tl .seg.end_card { background: #e6eefc; }
+  .reflists { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px; margin-top: 8px; }
+  @media (max-width: 760px) { .reflists { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <header>
   <h1>CBJ Creative Studio</h1>
-  <span class="sub">Text-to-creative test bench: a prompt in, a finished Color Block Jam ad out</span>
+  <span class="sub">Text-to-creative and controlled editing: a prompt in, a finished Color Block Jam ad out; one change in, only that change out</span>
   <span class="right" id="meta"></span>
 </header>
 <main>
@@ -148,10 +168,14 @@
 
   <section>
     <div class="card">
+      <div class="sides" id="sides">
+        <button id="sideCreate" onclick="setSide('create')" title="Text, image or video in, a new creative out">Create a creative</button>
+        <button id="sideEdit" class="off" onclick="setSide('edit')" title="One change to an existing creative; everything else stays">Edit a creative</button>
+      </div>
       <div class="mode" id="mode"><b>New creative</b>: describe the ad you want.</div>
       <textarea id="prompt" placeholder="e.g. Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost fails before solving it."></textarea>
       <div class="drop" id="drop">Attach images (a logo, a mascot, end-card art) or a reference image or video ("inspired by this", "a Color Block Jam version of this concept"): drop here or click. Say in the prompt how to use them.</div>
-      <input type="file" id="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm" multiple class="hidden">
+      <input type="file" id="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/aac,audio/ogg,audio/flac,.wav,.mp3,.m4a,.aac,.ogg,.flac" multiple class="hidden">
       <div class="muted hidden" id="serverBusy" style="margin-top:8px">Another creative is being made on this machine right now; a new request starts when it is done.</div>
       <div class="chips" id="files"></div>
       <div class="chips" id="earlier"></div>
@@ -161,6 +185,8 @@
         <button id="btnLevel" class="ghost" onclick="levelOnly()" title="Plan, build the level and plan the moves, without recording">Level only</button>
         <button id="btnMake" class="ghost hidden" onclick="make()">Make this plan</button>
         <label class="small" title="Faster, lower-quality encode"><input type="checkbox" id="draft"> draft render</label>
+        <label class="small" title="A multimodal model watches the finished ad as a viewer: match with the prompt, scores, fixes"><input type="checkbox" id="review" checked> review as a viewer after making</label>
+        <label class="small" title="The loop: after making, the tool measures the result against the request and the viewer's review; if something asked for is missed, it feeds the misses back to the planner and makes a revised version, up to two rounds, until nothing measurable is missed. Every version is kept."><input type="checkbox" id="revise" checked> evaluate, feed back, revise (up to 2 rounds)</label>
       </div>
       <div class="chips" id="examples"></div>
     </div>
@@ -168,6 +194,11 @@
     <div class="card" id="understood">
       <h2>What I understood</h2>
       <div id="understoodBody" class="muted">Plan a prompt to see how each of the case's eight prompt controls was read.</div>
+    </div>
+
+    <div class="card hidden" id="refCard">
+      <h2>Reference to creative</h2>
+      <div id="refBody" class="muted">What the attached video was read for, what was taken from it and what was not.</div>
     </div>
 
     <div class="card" id="gameplay">
@@ -185,6 +216,11 @@
       <div class="vprompt" id="vprompt"></div>
       <div class="links" id="links"></div>
     </div>
+    <div class="card hidden" id="pairCard">
+      <h2>Before / after <button class="ghost" onclick="playBoth()" style="padding:3px 10px; font-size:12.5px">Play both</button></h2>
+      <div class="pair"><div><div class="muted" id="pairALabel"></div><video id="videoA" controls playsinline muted></video></div>
+        <div><div class="muted" id="pairBLabel"></div><video id="videoB" controls playsinline></video></div></div>
+    </div>
     <div class="card proof hidden" id="proofCard">
       <h2 id="proofTitle">What this edit changed</h2>
       <div id="proof"></div>
@@ -192,13 +228,17 @@
         <select id="cmpA"></select> with <select id="cmpB"></select>
         <button class="ghost" onclick="compareVersions()" style="padding:3px 10px">Compare</button></div>
     </div>
+    <div class="card review hidden" id="reviewCard">
+      <h2>As a viewer <button class="ghost" id="btnReview" onclick="runReview()" style="padding:3px 10px; font-size:12.5px">Review this version</button></h2>
+      <div id="reviewBody" class="muted">A multimodal model watches the finished ad as a person scrolling a feed: does it match the prompt, would they tap.</div>
+    </div>
     <div class="card things hidden" id="thingsCard">
       <h2>Things in this ad</h2>
       <div class="muted" style="margin-bottom:6px">Replace, remove or rewrite one thing; everything else stays exactly as it is. No prompt needed.</div>
       <div id="things"></div>
       <input type="file" id="thingFile" accept="image/png,image/jpeg,image/webp" class="hidden">
     </div>
-    <div class="card">
+    <div class="card" id="progressCard">
       <h2>Progress</h2>
       <div class="stages" id="stages"></div>
       <div class="log" id="log">Idle.</div>
@@ -210,6 +250,15 @@
 <script>
 const STAGES = ["plan", "level", "recording", "compose", "proof", "done"];
 const NEW_EXAMPLES = [
+  "Create a beginner-friendly Color Block Jam level on a small open board: only 1x1 and 1x2 blocks in red, green and blue, each with a matching exit door on the board edge, and plenty of empty cells so every block has room to move. The player solves it in one clean pass with no wrong moves. Easy difficulty, a calm pace with a generous clock, a 30-second portrait ad. Do not change the game's rules, HUD or block shapes.",
+  "Generate a relaxing 30-second Color Block Jam creative for casual players: a medium-sized open board with four blocks in three colours (blue, yellow, purple), short straight routes to their doors and no walls in the way. Every drag is slow and deliberate with a pause between moves, no mistakes, and the clock never gets close to zero. Easy difficulty, calm tempo. The game's own blocks on a light mint background, white captions with a soft outline. No slow-motion replay: the gameplay, the game's result screen, then the end card.",
+  "Create a playful toy-themed Color Block Jam level, 30 seconds portrait: a 6x8 board with chunky mixed pieces in pastel red, yellow, green and blue, matching doors, one wall tile in the middle. Light blue background behind the board, bright pastel block colours, a rounded cheerful caption style. Concept: 'playtime puzzle'; hook caption 'Toy box jam!'. Use the attached toy pictures as stickers in the two top corners and the attached logo on the end card. Keep the game's doors, block shapes, timer and rules exactly as in the real game.",
+  "Create a 30-second portrait Color Block Jam gameplay advertisement. Start from a board that looks almost completed: three blocks left in two colours, one narrow corridor to the doors. The player makes a wrong move that blocks the remaining path and gets stuck; then the puzzle replays from the same starting position and shows the correct order of drags that clears every block. Concept: 'one wrong move'; caption 'Don't do this...' over the mistake and 'Do this' over the correct run. Sequence: hook, the mistake, the correct run, the game's win screen, then the end card with PLAY NOW. Game assets and sound effects only, no music.",
+  "Create a 30-second Color Block Jam gameplay creative on an open 7x7 board with five blocks of mixed shapes in four colours, laid out so that two blocks cannot reach their matching doors at the start because another block lies across their route. The player first moves that obstructing block aside without clearing it, which frees the corridor, then clears the board in the right order with no wrong moves. Medium difficulty, normal tempo. Show a slow-motion replay of the key move and the exits after it, then the game's result screen and the end card.",
+  "Generate a visually striking 30-second portrait Color Block Jam creative: a mirror-symmetric narrow-centre (hourglass) board with red blocks on the left half and blue blocks on the right, their matching doors near their own edges, and the shared bottleneck in the middle. All the red blocks leave first, then all the blue ones, so one side is cleared before the other and the symmetry breaks naturally; no wrong moves. The game's own look, blocks in the game's red and blue. Concept: 'which side first?'; hook caption 'Which side goes first?'.",
+  "Generate a 30-second Color Block Jam gameplay creative with this exact order of interactions on a level built for it: first move the yellow block aside without clearing it; then the green block exits through its green door; then the red block moves into the space the green block left; then the yellow block exits; finally the red block and any remaining blocks exit. Use an open board of medium size with four or five blocks, one yellow, one green and one red among them. Game assets and sound effects only, no music. Keep the game's rules and HUD unchanged.",
+  "Make a dramatic 30-second portrait Color Block Jam creative: a near-fail where the player makes one wrong move, gets stuck for a moment, then recovers and the last block starts leaving with one second showing on the clock, followed by the win. Hard difficulty; the pace speeds up toward the end as the clock runs down. The game's own look with the clock visible. Concept: 'beat the clock'; hook caption 'Can you beat the clock?', a hurry caption in the last seconds, result caption 'Just in time!'. Sequence: hook, gameplay, slow-motion replay of the last moves, the game's Level Completed screen, end card.",
+  "Build a 30-second Color Block Jam creative whose first half sets up a clever solution on a medium board where one central blocking block holds four other blocks back from their doors. A satisfying solve: a few set-up moves, then the key move frees everything and the four remaining blocks leave through their correct doors one after another in quick succession; no wrong moves. Medium difficulty; the pace speeds up from the set-up to the cascade. Concept: 'one move frees them all'; hook caption 'One move frees them all', a cascade caption on the quick finish. Game assets and sound effects only.",
   "Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost fails before solving it.",
   "An easy level with a satisfying clean solve, fast-paced, 30 seconds, no replay.",
   "The player makes two wrong moves, gets stuck, then solves it with one second left.",
@@ -228,9 +277,17 @@ const NEW_EXAMPLES = [
   "Start slow and speed up until the end.",
 ];
 const EDIT_EXAMPLES = [
+  "Keep everything exactly the same, but change the background behind the board to light blue.",
+  "Keep the gameplay and timing unchanged, but replace the opening caption with 'Can you solve this?'.",
+  "Keep the video unchanged, but replace the background music with the attached track.",
+  "Keep everything exactly the same, but apply the attached texture to the blue block.",
+  "Use the attached object instead of the current obstacle; keep everything else the same.",
+  "I like the current Color Block Jam level, but I want an autumn theme. Change only the look: a warm orange background behind the board, the captions in yellow with a brown outline, the end card in the same warm orange, yellow and brown colours, and the attached leaf picture as a sticker in the top right corner. Keep the same hook, replay, result screen and end card order. Keep all blocks, their positions, colours, matching doors, walls, timer and every drag exactly the same. Use the attached leaf picture and nothing else new.",
   "I like this creative. Keep everything exactly the same, but replace this asset with the attached image.",
   "Keep everything, but replace the coin pile on the end card with the attached picture.",
   "Keep everything exactly the same, but make the hook say 'Beat this in 20 seconds'.",
+  "Change the caption that appears when the timer reaches ten seconds to 'Hurry up!'.",
+  "Change the caption shown just before the win to 'Phew!'.",
   "Same ad, but add a second mistake before the solve.",
   "Same ad, but remove the 'Hurry!' caption.",
   "Keep everything, but put our logo (attached) in the top left corner.",
@@ -238,7 +295,36 @@ const EDIT_EXAMPLES = [
   "Keep the gameplay but use yellow captions with a dark outline.",
   "Same ad, but in Turkish.",
 ];
-const S = { cid: null, versions: [], shown: null, brief: null, briefPrompt: "", files: [], job: null, lines: 0, meta: {} };
+const S = { cid: null, versions: [], shown: null, brief: null, briefPrompt: "", files: [], job: null, lines: 0, meta: {}, side: "create" };
+const DROP_WORDS = {
+  create: 'Attach images (a logo, a mascot, end-card art) or a reference image or video ("inspired by this", "a Color Block Jam version of this concept"): drop here or click. Say in the prompt how to use them.',
+  edit: 'Attach the asset the edit uses (a picture, a texture, a music track), or an MP4 of a creative this tool made (it is recognised by its bytes and edited from its metadata, no video analysis): drop here or click.',
+};
+
+// The two sides of the tool (2026-10-16): creating a creative and editing one are separate workflows
+// on the server (workflows/create.py, workflows/edit.py) and separate sides here. The Edit side needs
+// a creative chosen from the list on the left; the Create side never edits, even while one is shown.
+function setSide(side) {
+  if (side === "edit" && !S.cid) { $("mode").innerHTML = `<b>Edit a creative</b>: choose one from the list on the left first (or attach an MP4 this tool made).`; S.side = "edit"; paintSide(); return; }
+  S.side = side; paintSide(); setMode();
+}
+
+function paintSide() {
+  $("sideCreate").classList.toggle("off", S.side !== "create");
+  $("sideEdit").classList.toggle("off", S.side !== "edit");
+  $("drop").textContent = DROP_WORDS[S.side];
+  $("btnLevel").classList.toggle("hidden", S.side === "edit");
+  $("btnPlanMake").textContent = S.side === "edit" ? "Plan & make the edit" : "Plan & make";
+  $("prompt").placeholder = S.side === "edit"
+    ? "e.g. Keep everything exactly the same, but change the hook to 'Can you solve this?'"
+    : "e.g. Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost fails before solving it.";
+  ["thingsCard", "proofCard", "pairCard"].forEach(id => { if (S.side === "create") $(id).classList.add("hidden"); });
+  if (S.side === "edit") $("refCard").classList.add("hidden");
+  else if (S.shown || S.brief) renderReference(S.shown ? S.shown.brief : S.brief);
+  if (S.side === "edit" && S.shown) { if (S.shown.proof) $("proofCard").classList.remove("hidden"); $("thingsCard").classList.remove("hidden"); if (S.shown.from) $("pairCard").classList.remove("hidden"); }
+}
+
+function editing() { return S.side === "edit" && S.cid ? S.cid : null; }
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 
@@ -254,10 +340,13 @@ function base() { return S.cid && S.shown ? S.shown.n : null; }
 function setMode() {
   const last = S.versions.length ? S.versions[S.versions.length - 1] : null;
   const b = base();
-  $("mode").innerHTML = S.cid
-    ? `<b>Editing v${b ?? "?"}</b> of ${esc(S.cid)}${last && b !== last.n ? ` (an earlier version: the new version starts from v${b}, not from v${last.n})` : ""}. Describe the change; everything you do not mention stays as it is.`
-    : `<b>New creative</b>: describe the ad you want.`;
-  const ex = S.cid ? EDIT_EXAMPLES : NEW_EXAMPLES;
+  const edit = editing();
+  $("mode").innerHTML = edit
+    ? `<b>Editing v${b ?? "?"}</b> of ${esc(S.cid)}${last && b !== last.n ? ` (an earlier version: the new version starts from v${b}, not from v${last.n})` : ""}. Describe the one change; everything you do not mention stays as it is, and the edit report proves it. <span class="muted">Exact edits with no prompt: "Things in this ad" on the right.</span>`
+    : (S.side === "edit" ? `<b>Edit a creative</b>: choose one from the list on the left first.`
+       : `<b>New creative</b>: describe the ad you want${S.cid ? ' <span class="muted">(the creative on the right stays as it is; to change it, switch to "Edit a creative")</span>' : ""}.`);
+  paintSide();
+  const ex = edit ? EDIT_EXAMPLES : NEW_EXAMPLES;
   $("examples").innerHTML = ex.map(e => `<button class="chip" title="${esc(e)}">${esc(e.length > 60 ? e.slice(0, 58) + "…" : e)}</button>`).join("");
   [...$("examples").children].forEach((c, i) => c.onclick = () => { $("prompt").value = ex[i]; $("prompt").focus(); });
 }
@@ -265,7 +354,7 @@ function setMode() {
 function busy(on) {
   S.busy = on;
   if (!on) S.job = null;
-  ["btnPlanMake", "btnPlan", "btnLevel", "btnMake"].forEach(id => $(id).disabled = on);
+  ["btnPlanMake", "btnPlan", "btnLevel", "btnMake", "btnReview"].forEach(id => $(id).disabled = on);
 }
 
 function renderStages(current, failed) {
@@ -274,16 +363,20 @@ function renderStages(current, failed) {
     `<span class="stage ${i < idx || current === "done" ? "done" : i === idx ? "on" : ""}">${s}</span>`).join("");
 }
 
+let lastLine = "";
 async function poll(jid) {
-  S.job = jid; S.lines = 0; $("log").textContent = ""; $("err").classList.add("hidden");
+  S.job = jid; S.lines = 0; $("log").textContent = ""; $("err").classList.add("hidden"); lastLine = "";
   try { localStorage.setItem("cbjJob", jid); } catch (e) {}
+  $("progressCard").classList.add("live"); $("progressCard").scrollIntoView({behavior: "smooth", block: "nearest"});
   try {
     while (true) {
       const j = await api(`/api/jobs/${jid}?since=${S.lines}`);
-      for (const l of j.lines) $("log").textContent += `${l.t.toFixed(1).padStart(6)} s  [${l.stage}] ${l.text}\n`;
+      for (const l of j.lines) { $("log").textContent += `${l.t.toFixed(1).padStart(6)} s  [${l.stage}] ${l.text}\n`; lastLine = l.text; }
       S.lines = j.n_lines;
       $("log").scrollTop = $("log").scrollHeight;
       renderStages(j.status === "done" && j.kind === "make" ? "done" : j.stage);
+      if (j.status === "running" || j.status === "queued")
+        $("mode").innerHTML = `<b>${j.kind === "make" ? "Making" : j.kind === "plan" ? "Planning" : j.kind === "review" ? "Reviewing" : "Working"}…</b> ${esc(j.stage ? `[${j.stage}] ` : "")}${esc(lastLine.slice(0, 140))}`;
       if (j.status === "done") return j.result;
       if (j.status === "failed") {
         $("err").textContent = j.error; $("err").classList.remove("hidden");
@@ -291,7 +384,7 @@ async function poll(jid) {
       }
       await new Promise(r => setTimeout(r, 700));
     }
-  } finally { try { localStorage.removeItem("cbjJob"); } catch (e) {} }
+  } finally { try { localStorage.removeItem("cbjJob"); } catch (e) {} $("progressCard").classList.remove("live"); }
 }
 
 // After a reload, a job that was running keeps going on the server: pick it up again.
@@ -321,7 +414,7 @@ async function watchServer() {
         const m = await api("/api/meta");
         const other = m.busy && !S.job;
         $("serverBusy").classList.toggle("hidden", !other);
-        ["btnPlanMake", "btnPlan", "btnLevel", "btnMake"].forEach(id => $(id).disabled = other);
+        ["btnPlanMake", "btnPlan", "btnLevel", "btnMake", "btnReview"].forEach(id => $(id).disabled = other);
       } catch (e) {}
     }
     await new Promise(r => setTimeout(r, 2500));
@@ -329,6 +422,7 @@ async function watchServer() {
 }
 
 function renderBrief(b, title) {
+  renderReference(b);
   if (!b) { $("understoodBody").innerHTML = '<span class="muted">Nothing planned.</span>'; return; }
   const groups = S.meta.groups || {};
   const changedBy = c => (b.changed || []).filter(g => (groups[g] || "") === c.control);
@@ -337,9 +431,16 @@ function renderBrief(b, title) {
       <td>${c.asked ? `<span class="asked">“${esc(c.asked)}”</span>` : '<span class="none">not mentioned</span>'}</td>
       <td>${esc(c.plan)}${changedBy(c).length ? `<div class="muted" style="margin-top:4px">Fields set by the prompt: ${esc(changedBy(c).join(", "))}</div>` : ""}${c.why ? `<div class="why ${c.status === "not_supported" ? "bad" : ""}">${esc(c.why)}</div>` : ""}${(c.engine || []).map(n => `<div class="why">While making it: ${esc(n)}</div>`).join("")}</td>
       <td><span class="st ${c.status}">${c.status.replace("_", " ")}</span></td></tr>`).join("");
+  const needs = (b.needs || []).length ? `<div class="why bad" style="margin:0 0 10px; padding:10px 12px; border-radius:8px; background:#fff3f0">
+      <b>This request uses files that are not attached:</b> ${esc(b.needs.join(" and "))}.<br>
+      <span class="muted">Attach them and press Plan &amp; make again, or make the ad without them.</span>
+      <div class="row" style="margin-top:8px"><button class="ghost" onclick="$('file').click()" style="padding:3px 10px">Attach the files</button>
+      <button class="ghost" onclick="make(true)" style="padding:3px 10px">Make it without them</button></div></div>` : "";
   const p = b.planner || {};
   const gname = r => { const g = r.split(":")[0]; return (S.meta.group_names || {})[g] || g.replace(/^assets\./, "the picture: ").replace(/_/g, " "); };
   const restored = (p.restored || []).length ? `<p class="muted">${p.edit ? "Kept as it was (the edit did not ask about it)" : "Left at the tool's default (the prompt did not ask about it)"}: ${esc([...new Set(p.restored.map(gname))].join(", "))}</p>` : "";
+  const rt = p.route;
+  const routeLine = rt && rt.intent === "edit" ? `<div class="route"><b>Route</b> (decided in code from the creative's metadata before planning): ${esc(routeSummary(rt))}${(rt.notes || []).length ? `<div class="muted">${rt.notes.map(esc).join("<br>")}</div>` : ""}</div>` : "";
   const refs = (p.references || []).length ? `<ul class="assume">${p.references.map(r => `<li>Read from the attached ${esc(r.kind || "file")} ${esc(r.file)}: ${r.error ? "could not be read (" + esc(r.error) + ")" : esc(refSummary(r))}</li>`).join("")}</ul>` : "";
   const gp = b.gameplay, lv = b.level;
   const evText = e => `${e.block.all ? "all " : ""}${e.block.which !== "any" ? e.block.which + " " : ""}${e.block.colour || "block"} ${e.action}${e.when !== "next" ? " " + e.when : ""}`;
@@ -352,24 +453,85 @@ function renderBrief(b, title) {
                  `level: ${esc(b.level.source)}${b.level.shape !== "any" ? " / " + esc(b.level.shape) : ""}${b.level.difficulty !== "any" ? " / " + esc(b.level.difficulty) : ""}`,
                  `theme: ${esc(b.visuals.theme)}`, `sequence: ${esc(b.sequence.style.replace("_", " "))}${b.sequence.replay ? "" : ", no replay"}`,
                  `channel: ${esc(b.channel)}`, `language: ${esc(b.language)}`];
-  $("understoodBody").innerHTML = `
+  $("understoodBody").innerHTML = `${needs}
     ${title ? `<div class="muted" style="margin-bottom:6px">${esc(title)}</div>` : ""}
     <p class="summary">${esc(b.summary)}</p>
     <div class="muted" style="margin-bottom:10px">${facts.join(" · ")}</div>
     <table><thead><tr><th>Prompt control</th><th>Asked</th><th>What the tool does</th><th>Status</th></tr></thead>
     <tbody>${rows}</tbody></table>
+    ${routeLine}
     ${refs}
     ${(b.assumptions || []).filter(a => a && a.length > 2).length ? `<ul class="assume">${b.assumptions.filter(a => a && a.length > 2).map(a => `<li>Assumed: ${esc(a)}</li>`).join("")}</ul>` : ""}
     ${restored}
-    <div class="muted" style="margin-top:8px">${p.model ? `Planner: ${esc(p.model)}, ${p.seconds} s` : ""}</div>
+    <div class="muted" style="margin-top:8px">${p.model ? `Planner: ${esc(p.model)}, ${p.seconds} s` : p.direct ? "Made in code from the route: no planner model was called" : ""}</div>
     <details><summary>Brief as data (what the engine executes)</summary><pre>${esc(JSON.stringify(b, null, 1))}</pre></details>`;
+}
+
+const ROUTE_TYPES = {new_creative: "a new creative", adapt_reference: "a creative adapted from the attached video", direct: "a direct edit, made in code",
+                     known_layers: "an edit of known layers through the planner", planner: "an edit through the planner", gameplay_edit: "a gameplay edit (a retake in the game)",
+                     conflict: "a contradiction (refused)"};
+function routeSummary(r) {
+  const t = (r.targets || []).map(x => `${x.name}${x.when && x.when[0] != null ? ` (${x.when[0]}-${x.when[1]} s)` : ""}${x.missing ? " — not in this ad" : ""}${x.located ? `, ${x.located.note}` : ""}`);
+  return `${ROUTE_TYPES[r.edit_type] || r.edit_type}; ${r.level_name || ""}${t.length ? `; target: ${t.join("; ")}` : ""}` +
+    `; ${r.requires_gameplay_regeneration ? "the game films it again" : "the gameplay render is reused"}` +
+    `; video analysis: ${r.requires_video_analysis === true ? "yes (a video the tool did not make)" : r.requires_video_analysis === "optional" ? "optional (a moment the metadata could not place)" : "none"}` +
+    `${(r.preserve || []).length ? `; preserved: ${r.preserve.join(", ")}` : ""}`;
+}
+
+// The "Reference to creative" card (Create side; core requirement 4, 2026-10-16): the reading plan (the focus, the
+// level, the questions, what was ignored, why), the reference's parts as a short timeline, the confidence, what was
+// adapted and what was not copied, and the prompt the multimodal model saw under a fold.
+function renderReference(b) {
+  const card = $("refCard");
+  const p = (b && b.planner) || {};
+  const a = (p.references || []).find(r => r && r.kind === "video");
+  const prov = (b && b.reference) || null;
+  if (!b || S.side === "edit" || (!a && !prov)) { card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const r = a || {}, plan = r.plan || (prov && prov.kind === "image" && prov.plan) || {}, n = r.notes || {}, f = r.facts || {};
+  const segs = n.structure || [];
+  const sep = r.separated ? (r.separated.ran ? `parts separated: ${r.separated.snapped || 0} of ${r.separated.boundaries || 0} boundaries snapped to measured cuts`
+                                            : "parts not separated (a confident read)") : "";
+  const head = [`<b>${esc(r.file || prov.file)}</b>`,
+                `read in full · applied: <b>${esc((r.focus || (prov && prov.focus) || []).join(", ") || "nothing")}</b> (${esc(r.level || (prov && prov.level) || "none")})`
+                  + (prov && (prov.named || []).length ? ` · named by the request: <b>${esc(prov.named.join(", "))}</b>` : "")
+                  + (prov && (prov.filled || []).length ? ` · filled from the reference (the request left it open): <b>${esc(prov.filled.join(", "))}</b>` : ""),
+                `${esc(r.analysed_s ?? (prov && prov.analysed_s) ?? 0)} s analysed`,
+                r.confidence != null ? `confidence ${esc(r.confidence)}` : "",
+                r.validation ? `validation ${esc(r.validation.status)}` : "", esc(sep)].filter(Boolean).join(" · ");
+  const quota = (r.quota || []).length ? `<div class="why">${r.quota.map(esc).join("; ")}; the next reader answered.</div>` : "";
+  const order = r.reader_order ? `<div class="muted">Readers: ${esc(r.reader_order.order.join(" first, then "))}${r.reader_order.from === "CBJ_VIDEO_READER" ? " (set by CBJ_VIDEO_READER)" : ""}; read by ${esc(r.reader || "?")}${(r.board_read || {}).skipped ? `; the board's still: ${esc(r.board_read.skipped.join(", "))}` : ""}</div>` : "";
+  const low = r.low_confidence ? `<div class="why bad">Read with low confidence (${esc(r.confidence)}): what was taken from it is only a hint.</div>` : "";
+  const err = r.error ? `<div class="why bad">Not read: ${esc(r.error)}. The ad was planned without it.</div>`
+            : r.skipped ? `<div class="why">Not read: ${esc(r.skipped)}.</div>`
+            : r.parts_dropped ? `<div class="why">${esc(r.parts_dropped)}. The rest of the reading (the concept, the board, the ending, the hook, the captions) is used.</div>` : "";
+  const list = (title, items) => (items || []).length ? `<div><b>${title}</b><ul class="assume">${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+  const planBlock = plan.level ? `<div class="refplan">
+      <div><b>Why</b>: ${esc(plan.why || "")} <span class="muted">(${plan.source === "words" ? "read by the word table" : "the planner's reading plan"})</span></div>
+      ${list("Looked for", plan.questions)}
+      ${(plan.ignore || []).length ? `<div><b>Ignored</b>: ${esc(plan.ignore.join("; "))}</div>` : ""}
+      ${(plan.constraints || []).length ? `<div><b>Fixed by the request</b>: ${esc(plan.constraints.join("; "))}</div>` : ""}
+      ${(plan.checks || []).length ? `<div class="muted">${plan.checks.map(esc).join("<br>")}</div>` : ""}</div>` : "";
+  const timeline = segs.length ? `<div class="tl">${segs.map(s => `<span class="seg ${esc(s.purpose)}" style="flex:${Math.max(0.6, s.to_s - s.from_s)}" title="${esc(`${s.from_s}-${s.to_s} s ${s.purpose}: ${s.what || ""}`)}">${esc(String(s.purpose).replace("_", "-"))}${s.purpose_raw ? ` <small>(${esc(s.purpose_raw)})</small>` : ""}<br><small>${esc(s.from_s)}-${esc(s.to_s)} s</small></span>`).join("")}</div>
+      ${n.structure_model ? `<div class="muted">The model's own seconds: ${n.structure_model.map(s => `${esc(s.from_s)}-${esc(s.to_s)} s ${esc(s.purpose)}`).join(", ")}; cuts measured at ${esc((f.cuts_s || []).join(", ") || "none")} s${f.pace_change ? `; measured pace change: ${esc(f.pace_change)}` : ""}</div>` : ""}` : "";
+  const ask = r.ask ? `<details><summary>What the model was asked</summary><pre>${esc(r.ask)}</pre></details>` : "";
+  $("refBody").classList.remove("muted");
+  $("refBody").innerHTML = `<div style="margin-bottom:6px; font-size:13px">${head}</div>${low}${err}${quota}${order}
+    ${n.concept_in_one_line ? `<p class="summary">${esc(n.concept_in_one_line)}</p>` : ""}
+    ${planBlock}${timeline}
+    <div class="reflists">${list("Adapted", prov && prov.adapted)}${list("Not copied", prov && prov.not_copied)}</div>
+    ${prov && prov.hud && (prov.hud.took || []).length ? `<div><b>From its HUD</b> (the reference is Color Block Jam): ${esc(prov.hud.took.join("; "))}</div>` : ""}
+    ${prov && prov.board && prov.board.text ? `<div><b>Board read</b>: ${esc(prov.board.text)}${prov.board.fit ? `; <i>${esc(prov.board.fit)}</i>` : ""}${(prov.board.took || []).length ? ` <span class="muted">(taken: ${esc(prov.board.took.join(", "))}; a new board of this type is generated, its cells are not copied)</span>` : ""}</div>` : ""}
+    ${list("Mechanics translated", prov && prov.mechanics)}${list("Not used: not in Color Block Jam", prov && prov.not_used)}${ask}`;
 }
 
 function refSummary(r) {
   const n = r.notes || {};
-  if (r.kind === "video") return `${n.concept_in_one_line || n.what_it_shows || "a video"}; ending ${n.ending || "?"}, pacing ${n.pacing || "?"}${n.hook ? `, hook “${n.hook}”` : ""}`;
+  if (r.kind === "video") return `${r.skipped ? "not read: " + r.skipped : n.concept_in_one_line || n.what_it_shows || "a video"}; ending ${n.ending || "?"}, pacing ${n.pacing || "?"}${n.hook ? `, hook “${n.hook}”` : ""}${(n.structure || []).length ? `; structure: ${n.structure.map(x => `${x.from_s}-${x.to_s} s ${(x.purpose || "").replace("_", "-")}`).join(", ")}` : ""}${r.focus ? `; read for ${r.focus.join(", ") || "nothing"} (${r.level}), see "Reference to creative"` : ""}`;
   const pal = (r.palette || []).slice(0, 4).map(p => p.name).join(", ");
-  return `${n.subject || "an image"}; colours ${pal}; mood ${n.mood || "?"}`;
+  const role = r.role ? ` — used as a ${[["modify", "picture that modifies the creative"], ["composition", "board reference"], ["asset", "picture to place"], ["style", "style reference"]].filter(([k]) => r.role[k]).map(([, w]) => w).join(" and a ") || "reference"}${(r.role.taken || []).length ? `: ${r.role.taken.join("; ")}` : ""}` : "";
+  const board = n.board && n.board.is_puzzle_board ? `; a board: ${n.board.grid_cols || "?"}x${n.board.grid_rows || "?"}, ${n.board.block_count || "?"} blocks, ${(n.board.block_colours || []).join("/")}` : "";
+  return `${n.subject || "an image"}; colours ${pal}; mood ${n.mood || "?"}${board}${role}`;
 }
 
 function renderGameplay(d, title) {
@@ -425,7 +587,8 @@ function renderVersion(v) {
   const base = `/studio/${v.ad_dir}`;
   $("links").innerHTML = [["ad.mp4", "video"], ["ad.json", "ad.json"], ["compose.json", "proof (compose.json)"]]
     .map(([f, l]) => `<a href="${base}/${f}" target="_blank">${l}</a>`).join("") +
-    `<a href="/studio/${v.id}/v${v.n}/brief.json" target="_blank">brief.json</a><a href="/studio/${v.level.file}" target="_blank">level.json</a>`;
+    `<a href="/studio/${v.id}/v${v.n}/brief.json" target="_blank">brief.json</a><a href="/studio/${v.level.file}" target="_blank">level.json</a>` +
+    `<a href="/api/parts/${encodeURIComponent(v.id)}?base=${v.n}" target="_blank" title="The parts manifest: every part, caption, picture, moment and clock reading with its seconds; what an edit is routed on">parts (metadata)</a>`;
   renderBrief(v.brief, `Brief of v${v.n}, after the engine's checks`);
   fetch(`/studio/${v.recording.dir}/play.json`).then(r => r.ok ? r.json() : null).then(play => {
     if (S.shown !== v) return;
@@ -434,6 +597,8 @@ function renderVersion(v) {
                    `v${v.n}: recorded in the game. Checks read from the recording and the level file.`);
   }).catch(() => {});
   renderCompare(v);
+  renderReview(v);
+  renderPair(v);
   if (v.proof) renderProof(v.proof, `What v${v.n} changed from v${v.from ?? v.n - 1}`);
   else if (S.versions.length > 1) { $("proof").innerHTML = '<div class="muted">The first version. Pick two versions to compare.</div>'; $("proofTitle").textContent = "Versions"; }
   $("proofCard").classList.toggle("hidden", !v.proof && S.versions.length < 2);
@@ -456,11 +621,39 @@ function renderProof(pr, title) {
       (px.contained === true ? "; every changed pixel is inside the changed layers' boxes" : px.contained === false ? "; SOME CHANGED PIXELS ARE OUTSIDE THE CHANGED LAYERS" : "") +
       (px.note ? `; ${px.note}` : "")
     : (px.note || "");
+  const CHECK = {level_unchanged: "level", moves_unchanged: "moves", move_timing_unchanged: "move timing", gameplay_render_reused: "gameplay render reused",
+                 duration_unchanged: "duration", camera_unchanged: "camera", hud_unchanged: "HUD", captions_unchanged: "captions", pictures_unchanged: "pictures", audio_unchanged: "audio"};
+  const chk = (pr.checklist ? Object.entries(pr.checklist).map(([k, x]) => `<span class="st ${x.ok ? "kept" : "asked"}" title="${esc(x.evidence || "")}">${x.ok ? "✓" : "✗"} ${esc(CHECK[k] || k)}</span>`).join(" ") : "") +
+    (pr.route ? ` <span class="st ${pr.route.ok ? "kept" : "asked"}" title="${esc(pr.route.evidence || "")}">${pr.route.ok ? "✓" : "✗"} route: level ${pr.route.level}, ${esc(ROUTE_TYPES[pr.route.edit_type] || pr.route.edit_type)}</span>` : "");
+  const numLine = r => r.numbers ? `<div class="muted">before: ${esc(numText(r.numbers.before))}<br>after: ${esc(numText(r.numbers.after))}</div>` : "";
   $("proof").innerHTML = `<p class="verdict ${pr.ok ? "" : "bad"}">${esc(pr.verdict)}</p>
+    ${pr.changes ? `<div class="muted" style="margin-bottom:6px"><b>Changes:</b> ${esc((pr.changes || []).join(", ") || "nothing")}. <b>Preserves:</b> ${esc((pr.preserves || []).join(", ") || "nothing")}.</div>` : ""}
+    ${chk ? `<div style="margin-bottom:8px; display:flex; flex-wrap:wrap; gap:4px">${chk}</div>` : ""}
     <div class="rep">${pr.rows.map(r => `<div class="r ${r.status}"><div class="h"><b>${esc(r.title)}</b> <span class="st ${r.status}">${STATUS[r.status]}</span></div>
-      <div class="d">${esc(r.detail)}${(r.reasons || []).map(n => `<div class="muted">engine: ${esc(n)}</div>`).join("")}</div></div>`).join("")}</div>
+      <div class="d">${esc(r.detail)}${numLine(r)}${(r.reasons || []).map(n => `<div class="muted">engine: ${esc(n)}</div>`).join("")}</div></div>`).join("")}</div>
     ${pixels ? `<div class="muted" style="margin-top:6px">Frames: ${esc(pixels)}</div>` : ""}
     <div class="muted" style="margin-top:4px">Asked to change: ${esc((pr.asked_names || pr.asked || []).join(", ") || "nothing")}</div>`;
+}
+
+function renderPair(v) {
+  const prev = v.edit ? S.versions.find(x => x.n === (v.from ?? v.n - 1)) : null;
+  $("pairCard").classList.toggle("hidden", !prev);
+  if (!prev) return;
+  $("pairALabel").textContent = `v${prev.n} (before)`; $("pairBLabel").textContent = `v${v.n} (after)`;
+  $("videoA").src = `/studio/${prev.video}`; $("videoA").poster = `/studio/${prev.poster}`;
+  $("videoB").src = `/studio/${v.video}?t=${Date.now()}`; $("videoB").poster = `/studio/${v.poster}`;
+}
+
+function playBoth() {
+  const a = $("videoA"), b = $("videoB");
+  a.pause(); b.pause(); a.currentTime = 0; b.currentTime = 0;
+  Promise.all([a.play(), b.play()]).catch(() => {});
+}
+
+function numText(n) {
+  if (!n) return "";
+  const play = n.play_s ? `${n.play_s[0]}-${n.play_s[1]} s` : "?";
+  return `${n.fps} fps, ${n.duration_s} s, play ${play}, first move ${n.first_move_s} s, ${n.drags} drags, clock ${n.clock_start_s} -> ${n.clock_end_s} s`;
 }
 
 function renderCompare(v) {
@@ -478,7 +671,7 @@ async function compareVersions() {
 
 function thumb(t) {
   const f = t.file || "";
-  if (!f || t.kind !== "picture") return `<div class="th">${esc(t.kind === "sound" ? "♪" : "")}</div>`;
+  if (!f || t.kind !== "picture") return `<div class="th">${esc(t.kind === "sound" || t.kind === "music" ? "♪" : "")}</div>`;
   if (f.startsWith("gradient")) { const c = f.split(" ").filter(x => x.startsWith("#")); return `<div class="th" style="background:linear-gradient(${c[0]},${c[1] || c[0]})"></div>`; }
   if (f === "tap ring") return `<div class="th">ring</div>`;
   if (f === "builtin:hand") return `<div class="th">hand</div>`;
@@ -495,7 +688,7 @@ async function loadThings(v) {
   const when = t => t.when ? ` <span class="muted">${t.when[0]}-${t.when[1]} s</span>` : "";
   $("things").innerHTML = inv.map((t, i) => `<div class="t">${thumb(t)}
       <div><b>${esc(t.name)}</b>${when(t)}<div>${t.kind === "caption" ? `<span class="txt">“${esc(t.text)}”</span>` : t.empty ? '<span class="muted">none</span>' : esc(t.shows)}</div></div>
-      <div class="acts">${t.kind === "picture" ? `<button class="ghost" data-i="${i}" data-a="replace">${t.empty ? "Add" : "Replace"}</button>` : ""}
+      <div class="acts">${t.kind === "picture" || t.kind === "music" ? `<button class="ghost" data-i="${i}" data-a="replace">${t.empty || (t.kind === "music" && !t.file) ? "Add" : "Replace"}</button>` : ""}
         ${t.kind === "caption" ? `<button class="ghost" data-i="${i}" data-a="text">Edit</button>` : ""}
         ${t.kind === "sound" ? `<button class="ghost" data-i="${i}" data-a="sound">${t.shows === "on" ? "Turn off" : "Turn on"}</button>` : ""}
         ${t.can_remove && t.kind !== "sound" ? `<button class="ghost" data-i="${i}" data-a="remove">Remove</button>` : ""}</div></div>`).join("");
@@ -514,9 +707,18 @@ async function direct(op) {
   finally { busy(false); }
 }
 
+const BLOCK_COLOURS = ["Green", "Yellow", "Blue", "Red", "Orange", "Purple", "DarkGreen"];  // the game's enum order
+async function boardColours() {
+  try {
+    const lv = await (await fetch(`/studio/${S.shown.level.file}`)).json();
+    return [...new Set((lv.GridBlockDatas || []).map(b => BLOCK_COLOURS[b.blockColor]).filter(Boolean))];
+  } catch (e) { return BLOCK_COLOURS; }
+}
+
 function thingAction(t, a) {
   if (a === "replace") {
     const input = $("thingFile");
+    input.accept = t.kind === "music" ? "audio/*,.wav,.mp3,.m4a,.aac,.ogg,.flac" : "image/png,image/jpeg,image/webp";
     input.value = "";
     input.onchange = async () => {
       if (!input.files.length) return;
@@ -525,11 +727,20 @@ function thingAction(t, a) {
       const j = await r.json();
       if (!r.ok) { alert(j.detail || "upload failed"); return; }
       S.meta.uploads = [...new Set([...(S.meta.uploads || []), ...j.uploaded])]; renderEarlier();
-      direct({picture: t.id, file: j.uploaded[0]});
+      if (t.id === "skin") {
+        const colours = await boardColours();
+        const block = window.prompt(`Which block gets the texture? One of: ${colours.join(", ")}`, colours[0] || "Blue");
+        if (!block) return;
+        direct({picture: "skin", file: j.uploaded[0], block: block.trim().replace(/^\w/, c => c.toUpperCase())});
+        return;
+      }
+      direct(t.kind === "music" ? {music: j.uploaded[0]} : {picture: t.id, file: j.uploaded[0]});
     };
     input.click();
   } else if (a === "remove") {
-    if (t.kind === "caption") direct({caption: t.id, text: ""}); else direct({picture: t.id, file: null});
+    if (t.kind === "caption") direct({caption: t.id, text: ""});
+    else if (t.kind === "music") direct({music: null});
+    else direct({picture: t.id, file: null});
   } else if (a === "text") {
     const text = window.prompt(`New text for ${t.name}:`, t.text || "");
     if (text !== null && text !== t.text) direct({caption: t.id, text});
@@ -538,8 +749,9 @@ function thingAction(t, a) {
   }
 }
 
-async function loadCreative(cid, n) {
+async function loadCreative(cid, n, side) {
   S.cid = cid;
+  if (side) S.side = side;
   S.versions = await api(`/api/creatives/${cid}`);
   renderVersion(n ? S.versions.find(v => v.n === n) : S.versions[S.versions.length - 1]);
   setMode(); refreshHistory();
@@ -550,13 +762,13 @@ async function refreshHistory() {
   $("history").innerHTML = list.length ? list.map(c => `<div class="item ${c.id === S.cid ? "active" : ""}" data-id="${esc(c.id)}">
       <div class="p">${esc(c.prompt)}</div><div class="m">${c.versions} version${c.versions > 1 ? "s" : ""} · ${esc(c.id.slice(0, 11))}</div></div>`).join("")
     : '<div class="muted">None yet.</div>';
-  [...$("history").children].forEach(el => el.onclick = () => el.dataset.id && loadCreative(el.dataset.id));
+  [...$("history").children].forEach(el => el.onclick = () => el.dataset.id && loadCreative(el.dataset.id, null, "edit"));
 }
 
 function newCreative() {
-  S.cid = null; S.versions = []; S.brief = null; S.shown = null;
+  S.cid = null; S.versions = []; S.brief = null; S.shown = null; S.side = "create";
   $("prompt").value = ""; $("tabs").innerHTML = ""; $("video").classList.add("hidden"); $("noVideo").classList.remove("hidden");
-  $("vprompt").textContent = ""; $("links").innerHTML = ""; $("proofCard").classList.add("hidden"); $("thingsCard").classList.add("hidden");
+  $("vprompt").textContent = ""; $("links").innerHTML = ""; $("proofCard").classList.add("hidden"); $("thingsCard").classList.add("hidden"); $("reviewCard").classList.add("hidden"); $("pairCard").classList.add("hidden");
   $("btnMake").classList.add("hidden"); renderBrief(null); renderGameplay(null); setMode(); refreshHistory();
 }
 
@@ -565,11 +777,23 @@ async function plan(thenMake) {
   if (!prompt) { $("prompt").focus(); return; }
   $("err").classList.add("hidden");
   busy(true); $("btnMake").classList.add("hidden");
+  const cid = editing();
+  if (!cid) { S.cid = null; S.versions = []; clearShown(thenMake ? "Making a new creative… the progress is below." : "Planning a new creative… the plan appears below."); }
   try {
-    const {job} = await api("/api/plan", {prompt, creative_id: S.cid, base: base(), uploads: S.files});
+    const {job} = await api("/api/plan", {prompt, creative_id: cid, base: cid ? base() : null, uploads: S.files});
     S.brief = await poll(job); S.briefPrompt = prompt;
-    renderBrief(S.brief, S.cid ? "Planned edit (not made yet)" : "Planned (not made yet)");
-    if (thenMake) await make(); else $("btnMake").classList.remove("hidden");
+    const matched = S.brief.planner && S.brief.planner.route && S.brief.planner.route.matched;
+    if (!cid && matched && matched.creative_id) {
+      // the attached MP4 is one of this tool's versions (the same bytes): the edit starts from it, on the Edit side
+      await loadCreative(matched.creative_id, matched.n, "edit");
+      S.files = S.files.filter(f => f !== matched.upload); renderFiles();
+    }
+    renderBrief(S.brief, editing() ? "Planned edit (not made yet)" : "Planned (not made yet)");
+    if ((S.brief.needs || []).length) {
+      // the request names files that are not attached: a question, not an ad without them
+      $("mode").innerHTML = `<b>Files needed:</b> ${esc(S.brief.needs.join(" and "))}. Attach them and plan again, or choose "Make it without them" below.`;
+      $("understood").scrollIntoView({behavior: "smooth", block: "start"});
+    } else if (thenMake) await make(); else $("btnMake").classList.remove("hidden");
   } catch (e) { showError(e); }
   finally { busy(false); }
 }
@@ -578,19 +802,78 @@ function showError(e) {
   $("err").textContent = String(e.message || e); $("err").classList.remove("hidden");
 }
 
-async function make() {
+function clearShown(text) {
+  $("video").pause(); $("video").removeAttribute("src"); $("video").classList.add("hidden");
+  $("noVideo").textContent = text; $("noVideo").classList.remove("hidden");
+  $("vprompt").textContent = ""; $("links").innerHTML = ""; $("tabs").innerHTML = "";
+  ["proofCard", "thingsCard", "reviewCard", "pairCard"].forEach(id => $(id).classList.add("hidden"));
+  renderGameplay(null); S.shown = null;
+}
+
+async function make(withoutFiles) {
   if (!S.brief) return;
+  if ((S.brief.needs || []).length && !withoutFiles) { showError(`Attach ${S.brief.needs.join(" and ")} and plan again, or choose "Make it without them".`); return; }
   busy(true); $("btnMake").classList.add("hidden");
+  const cid = editing();
+  if (!cid) clearShown("Making a new creative… the progress is below.");
   try {
-    const {job} = await api("/api/make", {prompt: S.briefPrompt, brief: S.brief, creative_id: S.cid, base: base(), draft: $("draft").checked});
+    const {job} = await api("/api/make", {prompt: S.briefPrompt, brief: S.brief, creative_id: cid, base: cid ? base() : null, draft: $("draft").checked,
+                                          review: $("review").checked, revise: $("revise").checked, without_files: !!withoutFiles});
     const v = await poll(job);
     S.brief = null; S.files = []; renderFiles(); $("prompt").value = "";
-    await loadCreative(v.id, v.n);
+    await loadCreative(v.id, v.n, cid ? "edit" : "create");
   } catch (e) { showError(e); if (S.brief) $("btnMake").classList.remove("hidden"); }
   finally { busy(false); }
 }
 
 function planAndMake() { plan(true); }
+
+const SCORE_WORDS = {first_second: "first second", dead_time: "dead time", pace: "pace", readability: "readability", clarity: "clarity", cta: "call to action"};
+function renderReview(v, r) {
+  const card = $("reviewCard"); card.classList.remove("hidden");
+  $("btnReview").disabled = S.busy;
+  const show = rev => {
+    if (!rev || rev.error) {
+      $("reviewBody").innerHTML = rev && rev.error ? `<span class="muted">The review failed: ${esc(rev.error)}</span>` :
+        `<span class="muted">Not reviewed yet. Press "Review this version": a multimodal model watches the finished ad as a person scrolling a feed and says whether it matches the prompt and whether they would tap.</span>`;
+      return;
+    }
+    const sc = Object.entries(rev.viewer).map(([k, n]) => `<span class="st ${n >= 4 ? "pass" : n === 3 ? "info" : "adjusted"}" title="${k === "first_second" || k === "dead_time" ? "measured" : "the model's score"}">${esc(SCORE_WORDS[k] || k)} ${n}/5</span>`).join(" ");
+    const match = (rev.match || []).map(m => `<tr><td><span class="st ${m.verdict === "match" ? "pass" : m.verdict === "not asked" ? "info" : "adjusted"}">${esc(m.verdict)}</span></td><td><b>${esc(m.control)}</b><div>${esc(m.seen)}</div></td></tr>`).join("");
+    const fixes = (rev.fixes || []).map(f => `<li>${esc(f)}</li>`).join("");
+    const f = rev.facts || {};
+    const bad = (rev.match || []).filter(m => m.verdict === "no" || m.verdict === "partial");
+    if (S.shown === v && !$("vprompt").querySelector(".reviewLine"))
+      $("vprompt").insertAdjacentHTML("beforeend", `<br><span class="reviewLine">As a viewer: <b>${rev.overall === "ship" ? "ready to ship" : "worth a fix"}</b> · would download: <b>${esc(rev.would_download)}</b>${bad.length ? ` · not as asked: ${esc(bad.map(m => m.control + " (" + m.verdict + ")").join(", "))}` : ""} · <a href="#reviewCard" onclick="$('reviewCard').scrollIntoView({behavior:'smooth'}); return false;">details</a></span>`);
+    $("reviewBody").innerHTML = `<div><b>${rev.overall === "ship" ? "Ready to ship" : "Worth a fix"}</b> · would download: <b>${esc(rev.would_download)}</b> · ${esc(rev.why)}</div>
+      <div style="margin:8px 0">${sc}</div>
+      <div class="muted" style="font-size:12px">Measured: the game first moves at ${esc(f.first_move_s)} s; held screens ${Math.round((f.static_share || 0) * 100)}% of ${esc(f.length_s)} s${(f.captions || []).some(c => !c.readable) ? "; a caption is on screen for less than its reading time" : ""}. Reviewed by ${esc(rev.model)} in ${esc(rev.seconds)} s.</div>
+      ${match ? `<table class="checks" style="margin-top:8px"><thead><tr><th>Seen</th><th>Control</th></tr></thead><tbody>${match}</tbody></table>` : ""}
+      ${fixes ? `<div style="margin-top:8px"><b>Fixes, best first</b><ol style="margin:4px 0 0 18px">${fixes}</ol></div>` : ""}
+      ${rev.suggested_edit ? `<div style="margin-top:8px"><b>Suggested edit:</b> ${esc(rev.suggested_edit)} <button class="ghost" style="padding:2px 8px; font-size:12px" onclick="applySuggestion()">Put it in the prompt box</button></div>` : ""}
+      <div class="links" style="margin-top:6px"><a href="/studio/${esc(rev.sheet)}" target="_blank">contact sheet</a><a href="/studio/${esc(v.id)}/v${v.n}/review.json" target="_blank">review.json</a></div>`;
+  };
+  if (r) { show(r); return; }
+  fetch(`/studio/${v.id}/v${v.n}/review.json?t=${Date.now()}`).then(x => x.ok ? x.json() : null).then(rev => { if (S.shown === v) show(rev); }).catch(() => show(null));
+}
+
+function applySuggestion() {
+  fetch(`/studio/${S.shown.id}/v${S.shown.n}/review.json`).then(x => x.json()).then(r => {
+    $("prompt").value = r.suggested_edit || ""; $("prompt").focus(); window.scrollTo({top: 0, behavior: "smooth"});
+  });
+}
+
+async function runReview() {
+  if (!S.shown || S.busy) return;
+  const v = S.shown;
+  busy(true);
+  try {
+    const {job} = await api("/api/review", {creative_id: v.id, n: v.n});
+    const r = await poll(job);
+    if (S.shown === v) renderReview(v, r);
+  } catch (e) { showError(e); }
+  finally { busy(false); }
+}
 
 function renderEarlier() {
   const rest = (S.meta.uploads || []).filter(f => !S.files.includes(f));
@@ -624,7 +907,7 @@ $("prompt").addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaK
 
 (async () => {
   S.meta = await api("/api/meta");
-  $("meta").textContent = `planner: ${S.meta.models[0].split("/").pop()}`;
+  $("meta").textContent = `planner: ${S.meta.models[0].split("/").pop()}${S.meta.backend === "claude" ? " (Claude Code CLI)" : ""}`;
   renderStages(""); setMode(); refreshHistory(); renderEarlier();
   resumeJob(); watchServer();
 })();

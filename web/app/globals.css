@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   Color Block Jam Studio — tokens mapped 1:1 from the Stitch
+   project "Color Block Jam Studio" (design/*.html tailwind.config).
+   Depth: white cards on the pale blue-violet ground, shadow-sm at most.
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  /* surfaces */
+  --color-background: #f9f9ff;
+  --color-surface: #f9f9ff;
+  --color-surface-bright: #f9f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f1f3ff;
+  --color-surface-container: #e9edff;
+  --color-surface-container-high: #e1e8fd;
+  --color-surface-container-highest: #dce2f7;
+  --color-surface-variant: #dce2f7;
+  --color-surface-dim: #d3daef;
+  --color-inverse-surface: #293040;
+  --color-inverse-on-surface: #edf0ff;
+
+  /* ink */
+  --color-on-surface: #141b2b;
+  --color-on-surface-variant: #4a4455;
+  --color-outline: #7b7486;
+  --color-outline-variant: #ccc3d7;
+
+  /* primary (violet) */
+  --color-primary: #5300b7;
+  --color-primary-container: #6d28d9;
+  --color-on-primary: #ffffff;
+  --color-primary-fixed: #ebddff;
+  --color-primary-fixed-dim: #d3bbff;
+  --color-on-primary-fixed: #250059;
+  --color-surface-tint: #7331df;
+
+  /* secondary (sky) */
+  --color-secondary: #006591;
+  --color-secondary-container: #39b8fd;
+  --color-secondary-fixed: #c9e6ff;
+  --color-secondary-fixed-dim: #89ceff;
+  --color-on-secondary-fixed: #001e2f;
+
+  /* tertiary (mint) */
+  --color-tertiary: #004b31;
+  --color-tertiary-container: #006544;
+  --color-tertiary-fixed: #6ffbbe;
+  --color-tertiary-fixed-dim: #4edea3;
+  --color-on-tertiary-fixed: #002113;
+
+  /* error */
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  /* amber: adjusted / side effect (from the engine's own page) */
+  --color-amber: #a86400;
+  --color-amber-container: #fff1d9;
+
+  /* type */
+  --font-headline: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+
+  --text-headline-xl: 2.25rem;
+  --text-headline-xl--line-height: 2.75rem;
+  --text-headline-xl--letter-spacing: -0.025em;
+  --text-headline-xl--font-weight: 700;
+  --text-headline-xl-mobile: 1.75rem;
+  --text-headline-xl-mobile--line-height: 2.25rem;
+  --text-headline-xl-mobile--letter-spacing: -0.02em;
+  --text-headline-xl-mobile--font-weight: 700;
+  --text-headline-lg: 1.5rem;
+  --text-headline-lg--line-height: 2rem;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg--font-weight: 600;
+  --text-headline-md: 1.25rem;
+  --text-headline-md--line-height: 1.75rem;
+  --text-headline-md--letter-spacing: -0.015em;
+  --text-headline-md--font-weight: 600;
+  --text-title-sm: 1rem;
+  --text-title-sm--line-height: 1.5rem;
+  --text-title-sm--letter-spacing: -0.01em;
+  --text-title-sm--font-weight: 600;
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.5rem;
+  --text-body-md: 0.875rem;
+  --text-body-md--line-height: 1.375rem;
+  --text-body-sm: 0.75rem;
+  --text-body-sm--line-height: 1.125rem;
+  --text-label-md: 0.875rem;
+  --text-label-md--line-height: 1.25rem;
+  --text-label-md--font-weight: 500;
+  --text-label-sm: 0.75rem;
+  --text-label-sm--line-height: 1rem;
+  --text-label-sm--letter-spacing: 0.01em;
+  --text-label-sm--font-weight: 500;
+  --text-code-sm: 0.75rem;
+  --text-code-sm--line-height: 1rem;
+  --text-code-sm--font-weight: 500;
+
+  /* radius */
+  --radius: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+
+  /* spacing names from the Stitch config */
+  --spacing-space-xs: 0.25rem;
+  --spacing-space-sm: 0.5rem;
+  --spacing-space-md: 1rem;
+  --spacing-space-lg: 1.5rem;
+  --spacing-space-xl: 2rem;
+}
+
+html,
+body {
+  min-height: 100dvh;
+  width: 100%;
+  background: var(--color-background);
+}
+
+html {
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-body-md);
+  line-height: var(--text-body-md--line-height);
+  color: var(--color-on-surface);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary-container);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-primary-fixed);
+}
+
+video {
+  background: #120c1f;
+}
+
+details > summary {
+  cursor: pointer;
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
