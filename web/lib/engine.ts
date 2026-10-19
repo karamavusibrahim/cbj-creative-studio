@@ -4,8 +4,9 @@
 //  - direct: the browser calls `${url}/api/...` itself (the engine allows this site's origin with CORS).
 //    Workflow calls and uploads go this way: Vercel functions cap bodies at 4.5 MB, reference videos are 80 MB.
 //  - relay: `/api/engine/relay/<path>` on this site, which adds the engine token on the server. Used for reads
-//    when the browser has no token (locked) and for everything when the engine sends no CORS headers
-//    (an engine started without CBJ_CORS_ORIGINS, e.g. the local dev engine).
+//    when the browser has no token (locked), for everything when the site has no passcode and the engine needs a
+//    token (the token is handed out only behind a passcode, SPEC-HARDENING §1), and for everything when the engine
+//    sends no CORS headers (an engine started without CBJ_CORS_ORIGINS, e.g. the local dev engine).
 // Media (<video>, <img>) never needs either: the engine serves /studio/* and /api/sprite/* openly.
 // With "My own engine" saved (SPEC-OWN-ENGINE §2) the connection is the user's own engine: always direct, with their
 // token, never the relay, and no key headers (lib/keys.ts sends none while it is on).
@@ -15,7 +16,7 @@ import type { Job } from "./types";
 
 export interface EngineConn {
   url: string; // ENGINE_URL, no trailing slash ("" when not known yet)
-  token: string; // "" when the engine has none or the session is locked
+  token: string; // "" when the engine has none, the session is locked, or the site has no passcode
   direct: boolean; // the engine answers this origin with CORS and the session may call it
   own?: boolean; // the user's own engine (SPEC-OWN-ENGINE): direct always, the relay never
 }

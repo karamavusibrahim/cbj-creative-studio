@@ -33,6 +33,10 @@
 // and Edit from the fixture bucket's assets/index.json (3 items), Attach as a dropped file (every POST /api/upload answered
 // in the browser), the role badges, a failed download, an unreadable index; offline, the link disabled. Same build as the
 // catalogue checks. --sample-assets-only runs just these.
+// Then SPEC-HARDENING (scripts/qa-hardening.mjs; online): no engine token in the session JSON without a passcode, the
+// relay's refused segments (%2F, %252F, %5C, "..", a leading "."), a redirecting engine not followed, /api/report 401
+// locked and 200 unlocked (a second `next start` on :3106 against a stand-in engine on :8799), and Download report
+// locked ("Needs the passcode", the Unlock dialog, then the relay). --hardening-only runs just these.
 import { chromium } from "playwright";
 import { serveCatalogue } from "./qa-catalogue.mjs";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -50,8 +54,9 @@ const keysOnly = process.argv.includes("--keys-only"); // only the SPEC-OWN-KEYS
 const ownEngineOnly = process.argv.includes("--own-engine-only"); // only the SPEC-OWN-ENGINE checks
 const catalogueOnly = process.argv.includes("--catalogue-only"); // only the SPEC-R2-CATALOGUE checks
 const sampleAssetsOnly = process.argv.includes("--sample-assets-only"); // only the SPEC-SAMPLE-ASSETS checks
+const hardeningOnly = process.argv.includes("--hardening-only"); // only the SPEC-HARDENING checks
 const explicitFeedbackOnly = process.argv.includes("--feedback-only");
-const feedbackOnly = explicitFeedbackOnly || label === "locked" || soundtrackOnly || inlineOnly || keysOnly || ownEngineOnly || catalogueOnly || sampleAssetsOnly;
+const feedbackOnly = explicitFeedbackOnly || label === "locked" || soundtrackOnly || inlineOnly || keysOnly || ownEngineOnly || catalogueOnly || sampleAssetsOnly || hardeningOnly;
 const CID = "1015-074810-create-a-hard-color-block";
 const PAGES = [
   ["create", "/", "Create a new creative"],
@@ -295,7 +300,7 @@ if (feedbackOnly) {
 }
 
 // --real-feedback: the one real record is the inline panel's (designer "qa-inline"), unless only the dialog's checks run
-if (!keysOnly && !ownEngineOnly && !catalogueOnly && !sampleAssetsOnly) {
+if (!keysOnly && !ownEngineOnly && !catalogueOnly && !sampleAssetsOnly && !hardeningOnly) {
   if (!soundtrackOnly && !noFeedback && !inlineOnly) {
     await import("./qa-feedback.mjs").then((m) => m.default({ browser, base, label, check, featurePage, VIEWPORTS, CID, realFeedback: realFeedback && explicitFeedbackOnly }));
   }
@@ -321,6 +326,10 @@ if (catalogueOnly || (label !== "locked" && !feedbackOnly)) {
 
 if (sampleAssetsOnly || (label !== "locked" && !feedbackOnly)) {
   await import("./qa-sample-assets.mjs").then((m) => m.default({ browser, base, label, check, VIEWPORTS, CID, only: sampleAssetsOnly }));
+}
+
+if (hardeningOnly || (label === "online" && !feedbackOnly)) {
+  await import("./qa-hardening.mjs").then((m) => m.default({ base, check, featurePage }));
 }
 
 await browser.close();

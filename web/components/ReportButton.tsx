@@ -1,8 +1,8 @@
 "use client";
 
-import { Download, Loader2 } from "lucide-react";
+import { Download, KeyRound, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { engineText, saveText } from "@/lib/engine";
+import { EngineError, engineText, saveText } from "@/lib/engine";
 import { useEngine } from "./EngineProvider";
 import { cx } from "./ui";
 
@@ -10,6 +10,9 @@ import { cx } from "./ui";
 // was read, every step with its lines, the level and the play, the checks, the edit report, the review, the revision,
 // the feedback, the files). A split: HTML by default, Markdown beside it. Read through the normal engine client, so it
 // works through the relay too, and saved under the engine's own file name. Hidden offline and on an older engine.
+// A report lists the feedback left on the version, so it is an owner read (SPEC-HARDENING §3): locked, the button says
+// "Needs the passcode" and a click asks for it first; the call then goes the unlocked way (directly with the token, or
+// through the relay, which now sees the session).
 
 const FORMATS = { html: "text/html", md: "text/markdown" } as const;
 
@@ -19,14 +22,17 @@ export default function ReportButton({ cid, n, className, block = false }: { cid
   const [error, setError] = useState("");
   if (engine.status !== "online" || !engine.meta?.features?.report) return null;
 
+  const locked = !engine.unlocked;
+
   async function get(fmt: keyof typeof FORMATS) {
-    setBusy(fmt);
     setError("");
+    if (!(await engine.ensureUnlocked())) return;
+    setBusy(fmt);
     try {
       const text = await engineText(engine.conn, `/api/report/${encodeURIComponent(cid)}?version=${n}&format=${fmt}`);
       saveText(text, `${cid}-v${n}-report.${fmt}`, FORMATS[fmt]);
     } catch (e) {
-      setError((e as Error).message);
+      setError(e instanceof EngineError && e.status === 401 ? "Needs the passcode" : (e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -63,6 +69,12 @@ export default function ReportButton({ cid, n, className, block = false }: { cid
           Markdown
         </button>
       </div>
+      {locked && !error ? (
+        <p className="inline-flex items-center gap-1.5 text-body-sm text-on-surface-variant">
+          <KeyRound aria-hidden className="size-3.5" />
+          Needs the passcode
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="text-body-sm font-semibold text-error">
           {error}

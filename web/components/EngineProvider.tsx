@@ -28,7 +28,8 @@ interface Health {
 interface Session {
   unlocked: boolean;
   required: boolean;
-  engine?: { url: string; token: string };
+  // token: only after unlocking a passcode; direct: the browser may call the engine itself (it has the token it needs)
+  engine?: { url: string; token?: string; direct: boolean };
 }
 
 export interface EngineCtx {
@@ -145,9 +146,9 @@ export default function EngineProvider({ children }: { children: ReactNode }) {
         : {
             url,
             token: session.unlocked ? session.engine?.token || "" : "",
-            direct: Boolean(health?.cors && session.unlocked),
+            direct: Boolean(health?.cors && session.unlocked && session.engine?.direct),
           },
-    [ownUrl, ownToken, url, session.unlocked, session.engine?.token, health?.cors],
+    [ownUrl, ownToken, url, session.unlocked, session.engine?.token, session.engine?.direct, health?.cors],
   );
 
   const refreshMeta = useCallback(async () => {

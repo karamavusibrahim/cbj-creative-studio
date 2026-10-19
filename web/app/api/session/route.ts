@@ -3,11 +3,15 @@ import { COOKIE, engineToken, engineUrl, isUnlocked, passcodeRequired, same, ses
 
 export const dynamic = "force-dynamic";
 
+// The engine token reaches the browser only behind a passcode (SPEC-HARDENING §1): after unlocking, so uploads over the
+// relay's 4.5 MB cap go directly. Without a passcode anyone could read it here, so the answer carries none, and the
+// browser calls the engine directly only when it needs no token (`direct`); everything else goes through the relay.
 export async function GET() {
   const unlocked = await isUnlocked();
   const required = passcodeRequired();
   if (!unlocked) return Response.json({ unlocked: false, required });
-  return Response.json({ unlocked: true, required, engine: { url: engineUrl(), token: engineToken() } });
+  const engine = required ? { url: engineUrl(), token: engineToken(), direct: true } : { url: engineUrl(), direct: !engineToken() };
+  return Response.json({ unlocked: true, required, engine });
 }
 
 export async function POST(request: Request) {

@@ -160,13 +160,23 @@ browser ──(direct, CORS)──> engine: /api/* workflow calls and uploads, /
 - `GET /api/engine/health` asks the engine's `/api/health` (falls back to `/api/meta` for an older engine), with a
   4 s timeout, and never throws: `{online, busy, backend, models, effort, url, cors}`. `cors` says whether the
   engine allows this site's origin. The header pill polls it every 10 s (3 s while a job runs).
-- Workflow calls (`plan`, `make`, `preview`, `review`, `direct`, `enhance`, `trends`, `soundtrack`) and uploads go **directly** from the browser
-  to the engine when CORS allows it and the session is unlocked. This is because Vercel caps function bodies at
-  4.5 MB, and reference videos can be 80 MB.
+- The engine token reaches the browser **only behind a passcode**. With `STUDIO_PASSCODE` set, `GET /api/session`
+  hands out `ENGINE_TOKEN` after unlocking, and workflow calls (`plan`, `make`, `preview`, `review`, `direct`,
+  `enhance`, `trends`, `soundtrack`) and uploads go **directly** from the browser to the engine when CORS allows it.
+  This is because Vercel caps function bodies at 4.5 MB, and reference videos can be 80 MB. Without a passcode the
+  session answer carries no token: the browser calls the engine directly only when CORS allows it and the engine
+  needs no token (no `ENGINE_TOKEN`), and otherwise uses the relay for everything (so uploads are capped at 4.5 MB
+  on Vercel; set a passcode to lift that).
 - `/api/engine/relay/<path>` is a same-origin fallback. It adds `ENGINE_TOKEN` on the server and only passes
-  `/api/*` and `/studio/*.json` through; POSTs need an unlocked session. It is used for reads while the session is
-  locked, and for everything when the engine sends no CORS headers. (Uploads over 4.5 MB through the relay will
-  fail on Vercel, so run the deployed engine with `CBJ_CORS_ORIGINS`.)
+  `/api/*` and `/studio/*.json` through; POSTs need an unlocked session, and so do the owner's reads (`feedback`,
+  `feedback.md`, `lessons`, `report`: they show what designers wrote). It checks the path it will fetch: Next decodes
+  each segment once, and a segment that still holds `/`, `\`, `%`, or starts with `.` is refused (400); the
+  allowlist and the owner check run on those cleaned segments, the upstream URL is built from them, and an engine
+  redirect is never followed (502). It is used for reads while the session is locked, for everything without a
+  passcode on a token-protected engine, and for everything when the engine sends no CORS headers. (Uploads over
+  4.5 MB through the relay will fail on Vercel, so run the deployed engine with `CBJ_CORS_ORIGINS` and a passcode.)
+- *Download report* is an owner read: locked, it says "Needs the passcode" and asks for it on a click; it then
+  goes directly with the token or through the relay with the unlocked session.
 - Media is never relayed. `<video>` and `<img>` point at `${ENGINE_URL}/studio/<path>` (online) or
   `/showcase/<path>` (offline / showcase pages). The engine serves those paths without a token.
 - Jobs are polled every 700 ms. The running job id is kept in `localStorage`, so a reload picks it up again.
@@ -177,7 +187,7 @@ browser ──(direct, CORS)──> engine: /api/* workflow calls and uploads, /
 | Name | Where | Meaning |
 |---|---|---|
 | `ENGINE_URL` | server | The engine's base URL: `http://127.0.0.1:8765` in dev, the tunnel URL in production. |
-| `ENGINE_TOKEN` | server | The engine's `CBJ_API_TOKEN`, if any. Given to the browser only after unlocking. |
+| `ENGINE_TOKEN` | server | The engine's `CBJ_API_TOKEN`, if any. Given to the browser only after unlocking a passcode; without `STUDIO_PASSCODE` it never leaves the server (the relay adds it). |
 | `STUDIO_PASSCODE` | server | Optional. When set, Generate / Apply / Review / uploads need the passcode once (an httpOnly cookie). Browsing never does. |
 | `SESSION_SECRET` | server | Optional. HMAC key for the session cookie (otherwise the cookie is the passcode's sha256). |
 | `NEXT_PUBLIC_CATALOGUE_URL` | browser (build time) | Optional. The R2 catalogue's public base URL; see "The catalogue on Cloudflare R2". |
@@ -308,6 +318,16 @@ vercel --prod     # set ENGINE_URL, ENGINE_TOKEN, STUDIO_PASSCODE, SESSION_SECRE
   download's error line, no link when the index answers 404, the link disabled offline (also simulated in an online run),
   no overflow and no console errors. On a build without the catalogue only the "off" checks run. Screenshots
   `qa/sample-assets-*`.
+- Hardening checks (`scripts/qa-hardening.mjs`, run by `qa.mjs online`; `--hardening-only` runs just these): the site's
+  own session JSON holds no token without a passcode; *Download report* on the Edit workspace with the session answered as
+  locked says "Needs the passcode", a click opens the Unlock dialog and asks nothing of `/api/report`, and after the
+  passcode (answered in the browser) the waiting click downloads through the relay. Then a second `next start` on :3106
+  against a recording stand-in engine on :8799, three times (no passcode with a token, no passcode without one, a
+  passcode): no `engine.token` without a passcode (`direct` only when the engine needs no token), the token after
+  unlocking with one; `%2F`, `%252F`, `%5C` and a leading `.` refused (400) with nothing reaching the engine, `..` and
+  `%2e%2e` (resolved by Next before the route) never reaching it as a dot segment nor stepping around the owner check
+  while locked, a plain encoded name passed unchanged; a redirecting engine answer is a 502 and its target is never asked;
+  `/api/report/…` is 401 locked and 200 unlocked. Screenshot `qa/hardening-*`.
 - `node scripts/keyboard.mjs [base]`: the tab order of the Create page and the unlock dialog's focus trap. It
   aborts every workflow POST in the browser and skips the dialog step when no passcode is set.
 
