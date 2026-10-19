@@ -17,7 +17,8 @@ async function relay(request: Request, parts: string[], method: "GET" | "POST") 
   const base = engineUrl();
   if (!base) return Response.json({ detail: "The studio engine is not configured (ENGINE_URL)." }, { status: 503 });
   const [root, second] = parts;
-  if (!(root === "api" || root === "studio") || parts.some((p) => p === ".." || p === "")) {
+  // dot segments in any form are refused: fetch would normalise them away after the checks below ran on them
+  if (!(root === "api" || root === "studio") || parts.some((p) => p === "" || /^(\.|%2e)+$/i.test(p))) {
     return Response.json({ detail: "not relayed" }, { status: 404 });
   }
   // studio files: only the small JSON ones (videos and pictures load from the engine directly)
@@ -34,7 +35,10 @@ async function relay(request: Request, parts: string[], method: "GET" | "POST") 
     return Response.json({ detail: "Unlock the studio first: this page is for the studio's owner." }, { status: 401 });
   }
   const search = new URL(request.url).search;
-  const href = `${base}/${parts.map(encodeURIComponent).join("/")}${search}`;
+  const path = `/${parts.map(encodeURIComponent).join("/")}`;
+  const href = `${base}${path}${search}`;
+  // the URL actually fetched must be the path that was checked (nothing normalised away)
+  if (!new URL(href).pathname.endsWith(path)) return Response.json({ detail: "not relayed" }, { status: 404 });
   const headers: Record<string, string> = {};
   if (engineToken()) headers.Authorization = `Bearer ${engineToken()}`;
   const ct = request.headers.get("content-type");
