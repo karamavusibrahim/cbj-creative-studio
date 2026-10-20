@@ -205,7 +205,7 @@ own files are not changed (the build works on a copy of the project):
 
 * Default model at demo time must be callable from the tool: use NVIDIA build
   (`nvidia/nemotron-3-super-120b-a12b` for planning, `nvidia/nemotron-3.5-lightning-30b-a3b` for
-  cheap classification), with fallbacks, exactly the pattern you run in aiforgift. Offer Claude
+  cheap classification), with fallbacks. Offer Claude
   (`claude-opus-5-5` or `claude-sonnet-5-5`) behind an env var as the premium planner; mention both
   in the write-up.
 * Structured output: the planner returns a CreativeDoc or a JSON Patch against the parent
@@ -230,8 +230,7 @@ own files are not changed (the build works on a copy of the project):
   colour, cell colour, light tint, overlay font style). Do not restyle gameplay frames with AI
   video; it breaks consistency.
 * Generation: Higgsfield Nano Banana Pro (`nano_banana_pro`, 2 credits per image at 2k, up to 14
-  reference images) for backgrounds, props and characters. Your aiforgift wrapper around the CLI
-  already does this.
+  reference images) for backgrounds, props and characters.
 
 ### 4.5 Video reference inputs
 
@@ -269,7 +268,7 @@ before each paid batch; one sample first.
 
 ### 4.7 QA and regeneration loop
 
-Reuse your aiforgift pattern: deterministic checks first (solver says solvable, playback event log
+The evaluation pattern: deterministic checks first (solver says solvable, playback event log
 shows every expected exit, timer never negative, duration within 30-60 s, aspect 9:16), then a VLM
 judge on a labelled frame montage for the soft criteria (hook present, text legible, no overlapping
 UI, concept matches the prompt), then auto-fix by patching the CreativeDoc and re-rendering only the

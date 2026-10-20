@@ -17,7 +17,7 @@ the moment, not a licence to use someone's name.
 
 Results are cached per day, theme and region in studio/_trends/ (TTL below).
 
-A link works the same way (fairy-trend-studio's "add a link" step): the page behind a public URL is
+A link works the same way: the page behind a public URL is
 read (Tavily extract, else a direct fetch with the tags stripped), becomes the only signal, and the same
 model writes 1-3 ideas from it with the same checks; the URL is the source. Only public http(s) hosts are
 fetched (no local or private addresses), at most 200 KB of text.

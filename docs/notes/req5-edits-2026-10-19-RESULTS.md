@@ -149,3 +149,20 @@ plan of moves, no new play.
 - A flaw the parent had (one block left at a "which one goes first" cut) stays in an edit that did not ask about it; the
   loop names it and the planner rightly changes nothing.
 - The edit workflow's viewer gives taste remarks ("a dice does not connect to a near-miss"); they are info, never a change.
+
+## 6. Rerun of all five on the final code (`run-r3.log`, `results-r3/`, `creatives-r3/`, `_frames-r3/`)
+
+The code had changed after the per-case runs above (the wall and skin layers on every board part and on the end card's
+board picture, the GOP marking, the colour-word resolver); the five requests were run again, unchanged, on the final code,
+with nothing else on the machine. Every case kept its result; no code was changed after this pass.
+
+| case | version | route | ran | report | invariants | viewer | eye check (`_frames-r3/`) |
+|---|---|---|---|---|---|---|---|
+| E1 | v1 -> v4 | planner (the stopwatch read as "this object", said once) | recording reused; compose 3.6 s, proof 5.8 s | Other assets asked; 104 of 1440 frames in the end-art box; 1336 frames the approved bytes (1 of 8 GOPs) | 11/11 | ship, as asked | the dice replaces only the stopwatch |
+| E2 | v1 -> v5 | direct, no planner | recording reused; compose 36.8 s, proof 78.6 s | Composition + Other assets asked; 900 of 900 frames in the obstacle box | 10/10 | ship, as asked | the boulder on the wall cells in the play, the frozen question and the end card's board picture |
+| E3 | v1 -> v3 | direct, no planner | recording reused; compose 35.8 s, proof 73.4 s | Composition + Other assets asked; 705 of 900 frames in the cursor box | 10/11 (the cursor is on every frame: no GOP to copy, the documented limit) | ship, as asked | the pointer replaces the hand; Level 25, the clock, the colours untouched |
+| E4 | v1 -> v3 | direct, no planner (cyan -> the green slot shown as cyan) | recording reused, 12 drags identical; compose 36.4 s, proof 69.9 s | Composition + Other assets asked; 659 of 900 frames in the skin box; 241 frames the approved bytes | 11/11 | ship, as asked | the ice on the cyan L block, faint by design |
+| E5 | v1 -> v5 | planner, declared: the background | the same job filmed again (the earlier re-film with this look reused: same frames, 11 drags identical); compose 56.2 s | Visual structure asked, eight rows kept | 10/10 | ship, as asked | the forest behind the board on the play, the question and the end card's picture; "Which one goes first?" and the end card kept |
+
+The one measured miss is E5's parent flaw (one block left at the cut), named and left alone as before. Uncontended, the
+whole set took 9 minutes (the earlier 26-minute composes were machine contention).

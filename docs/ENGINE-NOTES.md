@@ -888,7 +888,7 @@ designer only the video, the change, what changed and what was kept, and offers 
 
 `uv run cbj soundtrack <creative_id> [--base N] [--voice] [--line "..."]`, `POST /api/soundtrack`, the site's *Soundtrack
 (optional)* card. NVIDIA build has no music-generation model (checked with the key: its audio functions are
-text-to-speech), so, as in the aiforgift reels, the bed is **synthesised from facts**: the version's theme sets the mode
+text-to-speech), so the bed is **synthesised from facts**: the version's theme sets the mode
 (major for game, candy, pastel; minor for neon, dark), the tempo and curve set the pulse (84/104/124 bpm, ramping when the
 play speeds up or slows), the parts manifest places a stinger under the hook, the pulse only while the play runs, a pad
 under the end card and the exact length, every block exit gets a pluck one scale step higher at its second, the ending

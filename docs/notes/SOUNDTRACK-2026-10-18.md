@@ -1,13 +1,11 @@
 # The optional soundtrack (2026-10-18)
 
-Request: "audio generation according to the prompt, optional, the way my aiforgift reels do it; the audio follows the
-game creative's concept". Built in `cbj-creative` with zero effect on the workflows.
+Request: "audio generation according to the prompt, optional; the audio follows the game creative's concept". Built in `cbj-creative` with zero effect on the workflows.
 
-## 1. What the reels do, and what NVIDIA build offers
-- The aiforgift reels (`~/aiforgift-reels/narrate.py`, `petbath-foley.py`, `nightsky-foley.py`, `reel-studio/mix-*.sh`)
-  use **NVIDIA Magpie TTS** (NVCF gRPC, `nvidia-riva-client`) for narration and **procedurally synthesised ambience
-  beds** (pure-Python additive synthesis) because NVIDIA build has no audio-generation model; music beds came from
-  outside (Suno) and were mixed with ffmpeg (sidechain ducking, LUFS targets).
+## 1. The approach, and what NVIDIA build offers
+- The approach: **NVIDIA Magpie TTS** (NVCF gRPC, `nvidia-riva-client`) for the spoken hook and a **procedurally
+  synthesised bed** (pure-Python additive synthesis), because NVIDIA build has no audio-generation model; mixed with
+  ffmpeg (sidechain ducking, LUFS targets).
 - Checked again today with the key: the NVCF catalogue (231 functions) has `ai-magpie-tts-multilingual`,
   `ai-magpie-tts-zeroshot`, `ai-chatterbox-multilingual-tts`, `ai-studiovoice` (speech enhancement) and
   `ai-nemotron-voicechat`; the REST catalogue (81 models) has nothing audio. **No music or sound-effect generation.**

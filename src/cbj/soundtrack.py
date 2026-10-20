@@ -3,7 +3,7 @@ spoken hook, delivered as an ordinary uploaded sound file the workflows already 
 
 Why. The ads have sound effects and, when the user attaches one, a music file. Nothing writes music for a
 concept. NVIDIA build has no music or sound-generation model (its audio functions are text-to-speech:
-Magpie, Chatterbox; Fugatto was never released), so this does what the aiforgift reels do: the bed is
+Magpie, Chatterbox; Fugatto was never released), so the bed is
 synthesised procedurally, here from the facts of the finished version, and the voice is NVIDIA Magpie TTS
 over NVCF gRPC (the `voice` extra: nvidia-riva-client).
 

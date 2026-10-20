@@ -6,7 +6,7 @@ step that turns what is trending today into prompts the engine can make. Built a
 the game's C# (`~/Downloads/CBJ`, line-cited in the game-rules skill), the planner (`planner.py` SYSTEM and the 40
 post-rules), the brief schema and word tables (`brief.py`), the evaluator's prompt reader (`audit.asked`), the four
 workflows (`workflows/*.py`), the routing words (`route.py`, `reference.py`), the prompt-controls skill, and the trend
-step of fairy-trend-studio (Google Trends RSS + Tavily news → LLM, which is the model reused here).
+step (Google Trends RSS + Tavily news → LLM).
 
 ## 1. What the analysis found (why the enhancer is shaped the way it is)
 
@@ -106,7 +106,7 @@ easy spacious calm solve in autumn colours with a note to attach a pumpkin stick
 lanes board that speeds up and stops as a cliffhanger ("Can you finish strong?"). Skipped with reasons: a named
 athlete's trade rumour, a named TV series, a hurricane, a gang-violence game, listicles.
 
-**From a link (added later the same day, fairy-trend-studio's "add a link" step).** `trends.from_link(url)`: the page
+**From a link (added later the same day).** `trends.from_link(url)`: the page
 behind a public http(s) URL is the only signal (Tavily extract first, then a direct fetch with the tags stripped; local
 and private addresses are refused before any fetch; 200 KB cap, 6000 characters kept; an unsafe page is refused), the
 same model writes 1-3 ideas with the same checks, the source is forced to the URL, cached per URL. `cbj trends --link URL`,
@@ -123,7 +123,7 @@ reviewed exactly like a typed prompt.
   `.claude/skills/cbj-prompt-enhancement`.
 - Web (`web/`): the "Enhance prompt" button and the Enhanced card on Create and Edit; the collapsed "Start from a
   trend (optional)" card on Create; spec in `web/SPEC-ENHANCE.md`.
-- `.env` needs `TAVILY_API_KEY` for the trends (copied from fairy-trend-studio; the free tier is enough). Without it the
+- `.env` needs `TAVILY_API_KEY` for the trends (the free tier is enough). Without it the
   trend card is hidden and `meta.features.trends` is false; the enhancer needs nothing new.
 
 ## 5. How to check
