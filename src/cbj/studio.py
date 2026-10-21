@@ -130,7 +130,7 @@ def resolve_level(brief: dict, log: Log) -> tuple[Path, str]:
         short = _too_short(brief, path)
         if short and not _asked_level_number(brief):
             # "an easy level" with a long ad: the game's own levels are tutorial-size, so one is
-            # generated to the ad's length instead (the case asks for 30-60 s)
+            # generated to the ad's length instead (the brief asks for 30-60 s)
             log(f"the game's Level {lv['shipped']} {short}; generating a level sized to the ad instead...")
             B.engine_note(brief, "level", f"the game's own Level {lv['shipped']} {short}, so a level of the same "
                                           f"difficulty is generated to fill the {brief['pacing']['length_s']:g} s ad.")

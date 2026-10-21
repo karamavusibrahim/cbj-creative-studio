@@ -207,7 +207,7 @@ export default function Attachments({
         ) : null}
         <p className="max-w-md text-body-sm text-outline">
           {hint ||
-            "A logo, a mascot or end-card art to place; or a reference image or video (“inspired by this”, “a Color Block Jam version of this concept”). Say in the prompt how to use them."}
+            "A logo, a mascot or end-card art to place; or a reference image or video (“inspired by this”, “a CBJ version of this concept”). Say in the prompt how to use them."}
         </p>
         <p className="mt-2 flex flex-wrap justify-center gap-x-3 text-body-sm text-on-surface-variant">
           <span className="inline-flex items-center gap-1">
@@ -278,7 +278,7 @@ export default function Attachments({
       <div className="mt-4 flex items-start gap-3 rounded-xl bg-surface-container-high/60 p-3.5">
         <Info aria-hidden className="mt-0.5 size-5 shrink-0 text-primary" />
         <Muted className="leading-relaxed">
-          Attachments guide the look, the board and the pacing. Color Block Jam&apos;s rules and block mechanics are always preserved.
+          Attachments guide the look, the board and the pacing. CBJ&apos;s rules and block mechanics are always preserved.
         </Muted>
       </div>
     </Card>

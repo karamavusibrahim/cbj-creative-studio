@@ -15,7 +15,7 @@ from cbj import imageplan as IP
 from cbj import imageread as IR
 from cbj import studio
 
-REQ3 = Path.home() / "rollic-case" / "req3-image-guided-2026-10-17"
+REQ3 = Path.home() / "cbj-work" / "req3-image-guided-2026-10-17"
 PROMPTS = {
     "A1": ("pic_w.png", "Create a Color Block Jam creative inspired by this image: use its colours for the background and the captions, but keep the game's own block colours. A clean, satisfying win in 30 seconds."),
     "A2": ("pic_w.png", "Make a 40-second ad with this picture's sunset palette on everything, the blocks too, on a narrow-centre level like the one in the image. The player almost runs out of time before clearing it."),

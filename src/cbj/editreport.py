@@ -1,6 +1,6 @@
 """The edit report: what an edit kept and what it changed, item by item.
 
-The case (p.7) asks that an edit preserve the original's gameplay, timing, camera, composition,
+The brief (p.7) asks that an edit preserve the original's gameplay, timing, camera, composition,
 sequence, visual structure and other assets, and change only the requested element. This module
 measures each of those between two versions of a creative, from what the versions stored: the
 level file, the play script and the game's own log of the recording, the job the recorder ran,
@@ -149,7 +149,7 @@ def _fmt_s(f: int) -> str:
 
 
 def numbers(x: dict) -> dict:
-    """The timeline of a version in numbers (case p.7 "timing"; research note 13.4): fps, the ad's
+    """The timeline of a version in numbers (brief p.7 "timing"; research note 13.4): fps, the ad's
     length, the gameplay window, the first move and the clock at the first and the last drag."""
     comp, res = x["compose"], x["result"]
     fps = comp.get("fps", 30)
@@ -173,7 +173,7 @@ def numbers_text(n: dict) -> str:
 
 def checklist(a: dict, b: dict, copy_diffs: list, asset_diffs: list) -> dict:
     """The flat preservation facts of an edit (research note 13.6), each {ok, evidence}: what a
-    reviewer can read in one glance and what the case's p.7 list names."""
+    reviewer can read in one glance and what the brief's p.7 list names."""
     starts = lambda r: [(x["start_frame"], x.get("exit_frame"), x["end_frame"]) for x in r["result"].get("drags", [])]
     tl = lambda x: {k: v.get("frames") for k, v in x["compose"].get("timeline", {}).items()}
     same_rec = a["v"]["recording"]["dir"] == b["v"]["recording"]["dir"]

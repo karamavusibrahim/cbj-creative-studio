@@ -20,7 +20,7 @@ checked the step twice, and everything it found is fixed.
 
 ## 1. Why this step
 
-The case asks for gameplay "appropriate for the requested concept" (p.5): a near-fail moment, a
+The brief asks for gameplay "appropriate for the requested concept" (p.5): a near-fail moment, a
 satisfying solve, a specific sequence of moves. Its own example prompt is "a difficult level with
 a narrow center section... where the player almost fails before solving it" (p.4). The ad research
 (COMPETITOR-ADS-2026-10-10.md) showed what works:
@@ -29,7 +29,7 @@ a narrow center section... where the player almost fails before solving it" (p.4
 - a **near-fail win** is a gap nobody runs.
 
 So the gameplay layer must produce these on demand, and they must stay **exact and repeatable**.
-The case's most important point is controlled editing (p.7), and that only works if the same
+The brief's most important point is controlled editing (p.7), and that only works if the same
 request gives the same video.
 
 ## 2. What was built, and why each piece
@@ -39,7 +39,7 @@ request gives the same video.
 | Ending | What the viewer sees | Why |
 |---|---|---|
 | **Win (S3)** | A clean solve; the last drags speed up | The plain "satisfying solve" |
-| **Near-fail (S4)** | A mistake, a stuck moment, a hesitation, then a fast finish with **00:01** left | The case's p.4 example, and the gap in competitors' ads |
+| **Near-fail (S4)** | A mistake, a stuck moment, a hesitation, then a fast finish with **00:01** left | The brief's p.4 example, and the gap in competitors' ads |
 | **Cliffhanger (S1)** | The easy blocks are cleared, the last two get in each other's way, cut with "Can you see the move?" | What most winning ads do |
 | **Time-out (S5)**, opt-in | The last block races for its gate; "Out of Time!" lands one cell short | Fail endings do well on social channels, but CBJ's own ads avoid them, so this is opt-in and refused on easy levels |
 
@@ -151,7 +151,7 @@ block is a single cell from its gate, because there is no race to cut short.
 
 ### 2.11 The narrow-centre level
 
-`data/levels/gen/narrow_center_01.json` came from Fable's search for the case's example prompt.
+`data/levels/gen/narrow_center_01.json` came from Fable's search for the brief's example prompt.
 - A 6x8 hourglass with a two-lane waist and 7 blocks.
 - 9 drags minimum, 2 of them repositioning.
 - A simulated naive player needs 1.29 times the minimum. Every shipped level is at 1.25 or below.
@@ -187,7 +187,7 @@ Picture strips: `cbj-creative/reports/scenario/`. Videos: `cbj-creative/renders/
 
 ## 4. Two checks by Fable 5.1, and what changed
 
-**First check** (code, videos, case PDF). All its earlier rules were applied except the level
+**First check** (code, videos, brief). All its earlier rules were applied except the level
 generator, which is planned for Oct 12. Nine findings were fixed:
 - **Time-out:** the stare before the race is gone.
 - **Cliffhanger:** the set-up drags into a blocker are now played as attempts, pressed and held.
@@ -240,7 +240,7 @@ determinism across three separate processes, and found:
 
 ## 6. Case fit (Fable's view)
 
-This step delivers the case's example 1 (p.4) as gameplay: a narrow-centre level, a believable
+This step delivers the brief's example 1 (p.4) as gameplay: a narrow-centre level, a believable
 blocked attempt and a visible 00:01 recovery, recorded in the real game. Consistency (p.8) is
 proven: identical game state across recordings, and every predicted frame hit. "Appropriate
 gameplay" (p.5) is a real control: ending, mistakes, hesitations, seed and length. Fable's main
@@ -261,11 +261,11 @@ After that:
 
 ## 8. How to reproduce
 
-The full guide is `~/rollic-case/SCENARIO-CHECK-STEPS.md`: 14 steps, each with the exact output
+The full guide is `~/cbj-work/SCENARIO-CHECK-STEPS.md`: 14 steps, each with the exact output
 to expect. The short version:
 
 ```
-cd ~/rollic-case/cbj-creative
+cd ~/cbj-work/cbj-creative
 uv run pytest -q
 uv run cbj build-player
 uv run cbj scenario data/levels/gen/narrow_center_01.json --ending near_fail -o renders/my_near_fail

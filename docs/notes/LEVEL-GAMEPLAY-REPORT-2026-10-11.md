@@ -1,11 +1,11 @@
 # Core requirement 2: level & gameplay generation (report)
 
-Step done 2026-10-11/12. Repo `~/rollic-case/cbj-creative`. Plan and decisions:
+Step done 2026-10-11/12. Repo `~/cbj-work/cbj-creative`. Plan and decisions:
 `LEVEL-GAMEPLAY-PLAN-2026-10-11.md`. How to test it in the UI: `LEVEL-GAMEPLAY-CHECK-STEPS.md`.
 
-## 1. What the case asks, and where it stands now
+## 1. What the brief asks, and where it stands now
 
-"The creative should contain Color Block Jam gameplay that is appropriate for the requested
+"The creative should contain CBJ gameplay that is appropriate for the requested
 concept" (p.5), with seven examples of what a user may ask for.
 
 | Case item | Before this step | Now | Shown by (real runs) |

@@ -2,7 +2,7 @@
 
 ## In one paragraph
 
-The case's first core requirement is natural-language input: a prompt goes in, a final Color
+The brief's first core requirement is natural-language input: a prompt goes in, a final Color
 Block Jam creative comes out. A prompt may give instructions about eight things: the level,
 the gameplay, difficulty or pacing, visuals, the concept, the sequence of events, the assets,
 and what must stay unchanged. Until this step the tool could do much of this, but only through
@@ -25,7 +25,7 @@ partial items, listed under the limits.
 ## 1. Why this step
 
 - **p.3:** "The tool should accept natural-language prompts describing the desired creative.
-  The system should translate these requests into a final Color Block Jam creative." Prompts
+  The system should translate these requests into a final CBJ creative." Prompts
   may give instructions about the eight controls.
 - **p.4:** "describe what they want in natural language and receive a usable creative". The
   examples are "illustrative rather than exhaustive": the tool must handle what a UA team would
@@ -138,7 +138,7 @@ The recorder repaints the game's own materials before the board is built:
 - its **display** colour and name, which the viewer sees.
 
 Captions use the display name ("I can't reach mint!"), and the end card follows the background.
-Rollic's project is untouched: the recolouring code lives in our recorder, built into the copy.
+the publisher's project is untouched: the recolouring code lives in our recorder, built into the copy.
 
 ### 2.7 Edits: only what was asked, and proof
 
@@ -157,7 +157,7 @@ same thing twice never records it again.
 ### 2.8 Unity MCP: not used at run time
 
 The UI already runs the real game: our built player records it headless and frame-exact, with
-no editor open. Unity MCP drives an open editor, which here is Rollic's project and must stay
+no editor open. Unity MCP drives an open editor, which here is the publisher's project and must stay
 untouched. It is also slower, not repeatable, and would not run on a reviewer's machine. What
 the visual controls needed was runtime recolouring in our recorder, and that is now built.
 Fable agreed. Unity MCP stays useful as a development tool, for example to author new block
@@ -165,9 +165,9 @@ meshes, which is out of scope.
 
 ## 3. Results
 
-### 3.1 The case's own prompt (p.4)
+### 3.1 The brief's own prompt (p.4)
 
-> Create a difficult Color Block Jam level with a narrow center section and show gameplay where
+> Create a difficult CBJ level with a narrow center section and show gameplay where
 > the player almost fails before solving it.
 
 | What happened | Detail | Time |
@@ -294,8 +294,8 @@ Re-run live on such an edit. Also fixed:
 
 ## 6. How to test it
 
-The guide is `~/rollic-case/TEXT-TO-CREATIVE-CHECK-STEPS.md`. In short:
+The guide is `~/cbj-work/TEXT-TO-CREATIVE-CHECK-STEPS.md`. In short:
 ```
-cd ~/rollic-case/cbj-creative
+cd ~/cbj-work/cbj-creative
 uv run cbj ui        # then open http://127.0.0.1:8765
 ```

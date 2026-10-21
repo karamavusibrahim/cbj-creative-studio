@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import OwnerPage, { type OwnerQuery } from "@/components/feedback/OwnerPage";
 
-export const metadata: Metadata = { title: "Feedback · Color Block Jam Studio" };
+export const metadata: Metadata = { title: "Feedback · CBJ Studio" };
 
 export default async function FeedbackPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;

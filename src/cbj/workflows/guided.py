@@ -1,5 +1,5 @@
-"""Guided creative generation: a prompt plus media in, a new creative out (the case's core
-requirements 3 and 4, case p.6), with its own evaluate / feed back / revise loop. See
+"""Guided creative generation: a prompt plus media in, a new creative out (the brief's core
+requirements 3 and 4, brief p.6), with its own evaluate / feed back / revise loop. See
 workflows/__init__.py.
 
 The input is always a prompt AND media: a reference video with a prompt, or a reference image with
@@ -103,14 +103,14 @@ def plan(log: studio.Log, prompt: str, uploads: list[str]) -> dict:
 
 def video_ref(brief: dict) -> bool:
     """Whether a version was made from a reference video (the video-reference workflow). image_guided.py calls some of
-    the functions below too; the round-3 rules (the case's range as no length, the solve and breathe words, the pinned
+    the functions below too; the round-3 rules (the brief's range as no length, the solve and breathe words, the pinned
     mistakes) apply only when this holds, so the image workflow keeps its behaviour (the owner, 2026-10-17)."""
     return any(isinstance(r, dict) and r.get("kind") == "video" for r in (brief.get("planner") or {}).get("references") or [])
 
 
 def keep_asked_guided(prompt: str, before: dict, after: dict) -> list[str]:
     """create.keep_asked for the guided workflow: the asked length and the asked ending stay through a revision, the length
-    read with the case's 30-60 s range as no length (audit.asked(..., case_range=True); round 3, case 18: create's reading
+    read with the brief's 30-60 s range as no length (audit.asked(..., case_range=True); round 3, case 18: create's reading
     restored "30–60 second" as 60 s in the revision). create.keep_asked itself is unchanged for the text workflow."""
     from .. import audit
     a = audit.asked(prompt, case_range=True)
@@ -411,15 +411,15 @@ def keep_stated(prompt: str, before: dict, after: dict, misses: list[dict], vide
 
 SHORT_PLAY = re.compile(r"play (\d+)% of the reference, (\d+)% of the ad|play ([\d.]+) s expected, ([\d.]+) s in the ad")
 MORE_BLOCKS = 3  # a revision whose play is too short raises the reference's block count by this much (at most 10)
-SHORT_SHARE = 0.6  # the ad's play under this share of the reference's play is too short (the case's own rule is 40%)
+SHORT_SHARE = 0.6  # the ad's play under this share of the reference's play is too short (the brief's own rule is 40%)
 
 
 def play_too_short(misses: list[dict]) -> str | None:
     """Why the play is too short, from the misses fed back: "gameplay at the centre" failed, or the part-length row
     shows less play in the ad than the reference has. None otherwise."""
     for c in misses:
-        if c.get("check") == "Asked: gameplay at the centre (the case)":
-            return "the case's gameplay at the centre failed"
+        if c.get("check") == "Asked: gameplay at the centre (the brief)":
+            return "the brief's gameplay at the centre failed"
         if c.get("check") == "Reference: the part lengths":
             # only a clearly short play (under SHORT_SHARE of what the reference asks): an all-play reference's ad is
             # capped near 80% play by the engine, and raising its blocks there changed the board in every revision and
@@ -438,7 +438,7 @@ def pin_reference(before: dict, after: dict, misses: list[dict]) -> list[str]:
     and the hidden clock's captions) unless the miss fed back is that field's own reference row or an asked fact about
     it (PINNED); the length and the timing always (round 2, case 05: a revision's normal tempo cut a 78% play to 51%;
     the request's own length is kept by keep_asked, its other stated values by keep_stated). When the play is too short
-    for the case or the reference (round 1, third run: a 4-block board gave 3.5 s of play and both revisions kept it),
+    for the brief or the reference (round 1, third run: a 4-block board gave 3.5 s of play and both revisions kept it),
     the block count may rise above the reference's, and the size by a cell a side to hold it. Restores the pinned fields
     in `after` and returns what it kept and why, in words."""
     from .. import videoref as V
@@ -742,7 +742,7 @@ def hud_fix(prompt: str, before: dict, brief2: dict, misses: list[dict]) -> list
 
 
 def revise_once(log: studio.Log, prompt: str, v: dict, review_on: bool) -> dict:
-    """One round of the loop (the case p.10), as create.revise_once, with the reference kept: the
+    """One round of the loop (the brief p.10), as create.revise_once, with the reference kept: the
     revised brief carries the readings and the provenance, so its evaluation still has the
     reference rows. The media are not read again."""
     text = feedback(prompt, v)

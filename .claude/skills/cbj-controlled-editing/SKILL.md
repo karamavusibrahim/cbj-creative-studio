@@ -1,6 +1,6 @@
 ---
 name: cbj-controlled-editing
-description: Core requirement 5 of the Color Block Jam case in cbj-creative - how a follow-up prompt on an approved creative changes only what it asks: the edit whitelist of declared field groups, the smallest re-run (compose only, the same job filmed again with a new look, a board edit keeping the maximum valid prefix of moves, or new play closest to the original), pinned timing, replacements drawn in the replaced thing's box, the asset inventory, undo by version history, A/B variants and branches from one base, idempotence, the identical-result guard, honest refusals, and the nine-row edit report with its kept / asked / side-effect / NOT ASKED statuses. Use when planning, writing or judging any edit of an existing creative, when a test expects preservation, and when deciding whether a change must be refused.
+description: Core requirement 5 of the CBJ brief in cbj-creative - how a follow-up prompt on an approved creative changes only what it asks: the edit whitelist of declared field groups, the smallest re-run (compose only, the same job filmed again with a new look, a board edit keeping the maximum valid prefix of moves, or new play closest to the original), pinned timing, replacements drawn in the replaced thing's box, the asset inventory, undo by version history, A/B variants and branches from one base, idempotence, the identical-result guard, honest refusals, and the nine-row edit report with its kept / asked / side-effect / NOT ASKED statuses. Use when planning, writing or judging any edit of an existing creative, when a test expects preservation, and when deciding whether a change must be refused.
 metadata:
   spec-version: "1"
   last-verified: "2026-10-19"
@@ -22,8 +22,8 @@ skill is the contract an editing agent and an auditing agent share.
   `src/cbj/boardedit.py`; `src/cbj/editreport.py`; `src/cbj/edits.py` (inventory, direct edits); `src/cbj/ad.py` (pins);
   `src/cbj/parts.py` (the parts manifest every version writes) and `src/cbj/route.py` (the edit's type and analysis
   level, decided before planning; `verify` after it; `match_upload` for an attached MP4; `locate_with_vision` optional).
-- `docs/ENGINE-NOTES.md` (the former root README) "Controlled editing"; reports `~/rollic-case/CONTROLLED-EDITING-REPORT-2026-10-12.md` and
-  `~/rollic-case/CC-SCENARIOS-REPORT-2026-10-14.md` (45 scenarios: 34 tested, 34 pass, 11 skipped).
+- `docs/ENGINE-NOTES.md` (the former root README) "Controlled editing"; reports `~/cbj-work/CONTROLLED-EDITING-REPORT-2026-10-12.md` and
+  `~/cbj-work/CC-SCENARIOS-REPORT-2026-10-14.md` (45 scenarios: 34 tested, 34 pass, 11 skipped).
 - Acceptance rules an auditor applies: [references/acceptance-rules.md](references/acceptance-rules.md).
 
 ## 3. Facts
@@ -128,7 +128,7 @@ hook, a near-fail, 30 s; four pictures generated with Higgsfield and dropped in 
 | "Make the background behind the board light mint" / "Make the red blocks pink" | the same job filmed again with the new look (35 s); game state identical on every frame | Only what was asked changed (Visual structure) |
 | "Keep everything, but remove the logo" | compose only; the caption band widens back | Changed as asked: Other assets; also changed because of it: Composition |
 
-Results: `~/rollic-case/case-test-2026-10-15/` (base.py, edits.py, edits_results.json, hf_assets/), creative
+Results: `~/cbj-work/case-test-2026-10-15/` (base.py, edits.py, edits_results.json, hf_assets/), creative
 `1015-074810-create-a-hard-color-block` v1-v11.
 
 **Common to every workflow (2026-10-19).** The translation once, the rules rows and the shared case rows on every version,
@@ -162,7 +162,7 @@ whose removal eases the level most) and names it.
 ## 6. Evidence
 - `uv run cbj make "<edit>" --edit <id> [--base N]`; `uv run cbj edit-report <id> A B`; `uv run cbj ad-diff`; the UI's
   *Compare* and *Things in this ad* (exact edits with no planner, same proofs; `/api/direct`).
-- Harness: `~/rollic-case/case-test-2026-10-14/cc_cases.py` (`CC_TAG=<n> CBJ_OUT=<folder> uv run python cc_cases.py [ids]`,
+- Harness: `~/cbj-work/case-test-2026-10-14/cc_cases.py` (`CC_TAG=<n> CBJ_OUT=<folder> uv run python cc_cases.py [ids]`,
   UI must run), `summarize.py <folder>`; results `results_cc6/` = the final 34/34 pass.
 - Tests: `tests/test_editing.py`, `tests/test_control_cases.py`, `tests/test_case_fixes.py`, `tests/test_route.py`.
 - The route of a planned edit: "What I understood" (the Route line) and `brief.planner.route`; the manifest:

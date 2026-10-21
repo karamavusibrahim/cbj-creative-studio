@@ -2,7 +2,7 @@
 
 Two additions to cbj-creative, both in front of the agentic workflows and never inside them: a **prompt enhancer** that
 rewrites a request in the words the planner reads reliably without adding asks, and an optional **ideas from trends**
-step that turns what is trending today into prompts the engine can make. Built after reading the case PDF (14 pages),
+step that turns what is trending today into prompts the engine can make. Built after reading the brief (14 pages),
 the game's C# (`~/Downloads/CBJ`, line-cited in the game-rules skill), the planner (`planner.py` SYSTEM and the 40
 post-rules), the brief schema and word tables (`brief.py`), the evaluator's prompt reader (`audit.asked`), the four
 workflows (`workflows/*.py`), the routing words (`route.py`, `reference.py`), the prompt-controls skill, and the trend
@@ -78,7 +78,7 @@ pure function of the text plus, for an edit, the version's inventory.
 |---|---|
 | "make a cool ad where a bomb explodes and clears the red blocks, super engaging, only 1% can solve it" | "Make an ad where one key move frees all the red blocks at once, so they leave one after another through their red gate, and the hook caption is "Can you beat it?"." Changes: bomb → key move (replaced, no bombs); 1% claim → dare (replaced, ad rules); "cool … super engaging" → questions (ending? pacing? look?). |
 | "Zor bir seviye olsun, oyuncu son saniyede kazansın, 45 saniye, pembe bloklar" (Turkish) | "A hard level, with a near-fail ending where the player wins at the last second, solved with one second left. The ad is 45 seconds long, with pink blocks." Four translated changes, each quoting the Turkish words; questions: captions in Turkish or English? all blocks pink or one colour? |
-| the case's own prompt (narrow centre, almost fails) | unchanged; questions: how close the near-fail (1/2/3 s), the length, a hook of your own. |
+| the brief's own prompt (narrow centre, almost fails) | unchanged; questions: how close the near-fail (1/2/3 s), the length, a hook of your own. |
 | edit "swap this for the attached one" + hf_mascot_brick.png on 1015-074810 v1 | "Keep everything else exactly as it is (…), and replace one picture in the ad with the attached hf_mascot_brick.png." Question: which picture (the stopwatch beside the hook, the logo top-left, the stopwatch on the end card), read from the inventory. Read as an edit. |
 | "same vibe as this pic, hard, 45s, make the blocks pop" + T8_retro_neon_arcade.png | "A hard level, 45 seconds long, with the same look and mood as the attached image …, used as a reference for its look and colours." "pop" → question (neon theme / colourful chunky blocks / zoom); read as image-guided. |
 
@@ -129,7 +129,7 @@ reviewed exactly like a typed prompt.
 ## 5. How to check
 
 ```
-cd ~/rollic-case/cbj-creative
+cd ~/cbj-work/cbj-creative
 uv run pytest tests/test_enhance.py tests/test_trends.py -q          # 19 tests, no network, no model
 CBJ_PLANNER=claude uv run cbj enhance "make a cool ad where a bomb clears the red blocks, only 1% can solve it"
 CBJ_PLANNER=claude uv run cbj enhance "swap this for the attached one" --edit 1015-074810-create-a-hard-color-block --base 1 --upload hf_mascot_brick.png

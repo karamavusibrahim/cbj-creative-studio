@@ -23,7 +23,7 @@ correction records, versions with rollback. Nothing here changes a creative or a
   `studio/_lessons/corrections.jsonl`, `studio/_lessons/current.json`.
 - `src/cbj/app.py`: `POST/GET /api/feedback`, `GET /api/feedback.md`, `GET/POST /api/lessons`; `src/cbj/cli.py`:
   `cbj feedback`, `cbj lessons`. Tests: `tests/test_feedback.py`. The site: `web/SPEC-FEEDBACK.md`.
-- Why, with the paper's reading and the live result: `~/rollic-case/FEEDBACK-AND-LESSONS-2026-10-18.md`.
+- Why, with the paper's reading and the live result: `~/cbj-work/FEEDBACK-AND-LESSONS-2026-10-18.md`.
 
 ## 3. Facts
 **A record** is `{id "fb-<date>-<time>-<hex>", created, designer (≤40 chars, "anonymous" when empty), page (create |

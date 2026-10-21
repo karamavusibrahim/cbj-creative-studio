@@ -150,7 +150,7 @@ def relative_colours(prompt: str) -> int | None:
     n = _COUNT_WORDS.get((m.group("n1") or m.group("n2") or m.group("n4") or m.group("n5") or "one").lower(), 1)
     word = (m.group("w1") or m.group("w2") or m.group("w3") or m.group("w4") or m.group("w5") or "").lower()
     return n if word in ("more", "extra", "additional", "add", "with") else -n
-# the board itself, or a new board of its type (2026-10-19): with a Color Block Jam board read cell by cell, the board
+# the board itself, or a new board of its type (2026-10-19): with a CBJ board read cell by cell, the board
 # role copies THE board (the design a designer recognises) unless the words ask for a new one
 NEW_BOARD = re.compile(r"\b(a |an )?(new|different|another|fresh|other|random)\b[^.;]{0,30}\b(board|level|layout|arrangement|puzzle)\b|"
                        r"\bof (this|that|the same) (type|kind|sort)\b|\bin (this|that|its) spirit\b|\bnot (the same|a copy|identical)\b|"
@@ -1520,7 +1520,7 @@ def play_levers_left(brief: dict, prompt: str, prov: dict) -> list[str]:
 
 
 def fill_play(brief: dict, prompt: str, prov: dict) -> list[str]:
-    """Gameplay at the centre (the case, p.2; G1, 2026-10-17: C3's 8 blocks from the picture played 18 s of a 45 s ad):
+    """Gameplay at the centre (the brief, p.2; G1, 2026-10-17: C3's 8 blocks from the picture played 18 s of a 45 s ad):
     before the first take, the play the tool expects is set against the stated length. Under PLAY_SHARE_PLAN, on a
     board whose count the picture FILLED (the request named none), the blocks rise by 2, twice at most, to the most
     one level takes (10), the size a cell a side when the board cannot hold them and its size is the picture's too; on
@@ -1574,7 +1574,7 @@ def fill_play(brief: dict, prompt: str, prov: dict) -> list[str]:
             if lv.get("width") and lv.get("height"):
                 bd["built"]["size"] = [lv["width"], lv["height"]]
             line = (f"the picture's {n0} blocks would give about {play0:.0f} s of play in a {L:g} s ad; {n} blocks are built "
-                    f"(about {play:.0f} s) so the gameplay carries the ad, as the case asks")
+                    f"(about {play:.0f} s) so the gameplay carries the ad, as the brief asks")
             rec["levers"].append(line)
             notes.append(line)
     else:
@@ -1763,7 +1763,7 @@ def plate_word(bg: list[str]) -> str:
 
 CASCADE_CLAIM = re.compile(r"\bfrees? (them |every\w* |all )|\bone move frees\b|\bchain reaction\b", re.I)
 # promises the game never plays (G14, 2026-10-17: C3's hook "Clear it in perfect pairs" on a mirror-symmetric board; in
-# Color Block Jam one drag frees one block, so the clears never come in pairs, together or all at once)
+# CBJ one drag frees one block, so the clears never come in pairs, together or all at once)
 PAIR_CLAIM = re.compile(r"\b(in |perfect |matching )?pairs?\b|\btogether\b|\bboth at once\b|\b(two|three) at a time\b|"
                         r"\bin one go\b|\ball at once\b|\bat the same time\b|\bsimultaneous\w*\b|\bchains?\b", re.I)
 GAME_FACT = ("in Color Block Jam one drag frees one block; the moves of a mirror-symmetric board are not paired; do not "

@@ -1,7 +1,7 @@
 # Core requirement 5: analysis of the research document and the final approach (2026-10-17)
 
 Inputs: ~/Downloads/Core_Requirement_5_Controlled_Creative_Editing_Research.md (the research document, 13 sections),
-the case PDF (p.7, p.8, p.10-13), the game (~/Downloads/CBJ, every script), the tool as it stands today (cbj-creative:
+the brief (p.7, p.8, p.10-13), the game (~/Downloads/CBJ, every script), the tool as it stands today (cbj-creative:
 workflows/edit.py, route.py, edits.py, editreport.py, compose.py, ad.py, CreativeRunner.cs, the stored creatives in
 studio/), REQ5-UNITY-CONTROLLED-EDITING-2026-10-17.md (this morning's Unity feasibility note) and the Oct 12 / Oct 15
 editing reports.
@@ -25,9 +25,9 @@ this game or this submission and should be named as non-goals rather than built.
 | Replacement variant 1: texture / material change (§3.5) | BUILT twice: in-game colours per slot (shared materials repainted before the board is built) and a compositor "skin" layer that draws a picture on one block of a colour on every gameplay frame from the recorded positions. NOT built: an in-game texture (`_MainTex` on the slot's materials; the shader has it; the Lego pieces' UVs are unverified) | keep; in-game texture = next step unless an hour is free (REQ5-UNITY note §3) |
 | Variant 2: prefab of comparable geometry (§3.5) | NOT BUILT. Possible: BlockPieceConfig's prefabs are swappable in the player and the game re-materials and re-colliders them; a user GLB via Unity's glTFast | next step, with the mechanism named |
 | Variant 3: a fundamentally different shape (§3.5) | NOT APPLICABLE as a visual edit: a block's shape IS gameplay. The document's own rule applies ("a visual change must preserve the collision footprint or be rejected as a visual-only edit"), and the game enforces it: colliders come from the pivot, not the visual | say so in one line |
-| "obstacle_04 … traffic cone … orange decorative obstacle beside the centre passage" (§3.1, Demo 1) | MISMATCH. Color Block Jam has no decorative obstacles: only blocks, holes (inactive cells), borders and gates (verified in every script). "Use this object instead of the current obstacle" maps to the walls (built: the picture drawn on the wall cells in perspective, proof tier 1) or to a block (the skin slot) | keep the mapping; the write-up states what an "obstacle" is in this game |
+| "obstacle_04 … traffic cone … orange decorative obstacle beside the centre passage" (§3.1, Demo 1) | MISMATCH. CBJ has no decorative obstacles: only blocks, holes (inactive cells), borders and gates (verified in every script). "Use this object instead of the current obstacle" maps to the walls (built: the picture drawn on the wall cells in perspective, proof tier 1) or to a block (the skin slot) | keep the mapping; the write-up states what an "obstacle" is in this game |
 | Approach B: independent compositing layers; "change just the hook" (§4) | BUILT (ad.json layers; ffmpeg; Remotion not used, by decision) | keep; the hook edit is one of the examples |
-| Approach C: source-blind MP4 surgery with SAM 2/3, tracking, clean plate, inpainting (§5) | NOT BUILT, by decision. The case's loop (p.10) edits the tool's own creatives, which carry their source; an uploaded video that is one of the tool's own is matched by bytes and edited from its data; a foreign video is routed to "adapt the concept" (requirement 4) with a plain message. The document's own cautions decide the rest: no proof possible outside the mask, hidden background unrecoverable, ProPainter / E2FGVI non-commercial | non-goal in the write-up, two sentences; the better fallback for THIS game is reconstruction into the document (board + drags read from the video and validated by the solver), REQ5-UNITY note §5 |
+| Approach C: source-blind MP4 surgery with SAM 2/3, tracking, clean plate, inpainting (§5) | NOT BUILT, by decision. The brief's loop (p.10) edits the tool's own creatives, which carry their source; an uploaded video that is one of the tool's own is matched by bytes and edited from its data; a foreign video is routed to "adapt the concept" (requirement 4) with a plain message. The document's own cautions decide the rest: no proof possible outside the mask, hidden background unrecoverable, ProPainter / E2FGVI non-commercial | non-goal in the write-up, two sentences; the better fallback for THIS game is reconstruction into the document (board + drags read from the video and validated by the solver), REQ5-UNITY note §5 |
 | Patch compiler + evidence report; typed tools; the agent never issues raw ffmpeg/Unity commands (§6) | BUILT: route (code) → planner or direct edit → brief.check → studio.make (stages re-run only when inputs changed) → edit report → viewer review → feedback → up to two revisions that must return unasked changes to the base version | keep; the write-up's diagram |
 | Provenance DAG, undo, compare any two, cached unchanged layers (§6.2) | BUILT: "from" per version, edit from any version, compare any two, content-addressed recordings | keep |
 | Three-panel playback: original / revised / change heatmap (§7) | NOT BUILT. The report gives numbers (frames changed, the changed-pixel box, GOP bytes copied) and the review sheet, no picture of the difference | ADD today: cheap and it is what a reviewer looks at first |
@@ -43,7 +43,7 @@ and the fresh-clone test.
 ## 2. The final approach (the write-up's "How controlled editing works", one page)
 
 **The creative is a document, the video is a view of it.** A creative is stored as its stages, each a file the next
-stage is a pure function of: the brief (every control of the case as data), the level (the game's own JSON), the play
+stage is a pure function of: the brief (every control of the brief as data), the level (the game's own JSON), the play
 (the drag script, cell by cell, with per-drag timing), the film (the real game recorded at a fixed step, with its own
 log of every frame), the ad (segments, layers, audio), the video. Nothing in the video exists outside these files.
 
@@ -65,7 +65,7 @@ other difference; one fails the edit and is sent back to the loop.
 | 3 re-plan | a second mistake, another order, pacing that needs new moves | the closest of 24 plays | "the first K of M moves are the same, N in common" |
 | 4 re-generate | harder, easier, a different board | the closest board (at most 3 changes), the HUD number kept | the two boards side by side, the changes listed |
 
-**The evidence report.** Nine rows (the case's seven items plus captions and sound), each measured from the stored
+**The evidence report.** Nine rows (the brief's seven items plus captions and sound), each measured from the stored
 files, never from the plan: kept / changed as asked / changed because of the asked change (reason written) / changed
 without being asked (fails). Then the pixels: frames changed, the box, bytes of the approved video kept. Then the
 picture: original, revised and the difference heatmap at the most-changed frame (added today).
@@ -102,7 +102,7 @@ and video workflows.
 2. A user 3D object as the block piece (BlockPieceConfig prefabs swapped in the player; glTFast runtime import; orientation and scale per piece type).
 3. The walls as an in-game quad per inactive cell (depth-correct occlusion; proof tier 2).
 4. HUD sprites as slots (Image.sprite from a loaded texture).
-5. Reconstruction of an external Color Block Jam creative into the document (grid from the board's box, per-cell colour classifier, drags from rest-state differences, every candidate validated by the solver; chess and Go video-transcription precedent), so a foreign creative becomes editable under the same contract. Source-blind masking and inpainting stay out: no proof outside the mask, non-commercial licences.
+5. Reconstruction of an external CBJ creative into the document (grid from the board's box, per-cell colour classifier, drags from rest-state differences, every candidate validated by the solver; chess and Go video-transcription precedent), so a foreign creative becomes editable under the same contract. Source-blind masking and inpainting stay out: no proof outside the mask, non-commercial licences.
 6. Exact edits in the UI for the game-owned elements (colours, background, camera zoom, clock, level number), today planner-only.
 
 ## 5. Risks in the demo and what to say

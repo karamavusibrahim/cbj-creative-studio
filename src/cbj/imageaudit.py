@@ -602,7 +602,7 @@ def quoted_row(prompt: str, vdir: Path) -> dict | None:
 
 
 def play_fills_row(prov: dict, record: dict, vdir: Path) -> dict | None:
-    """The play fills the ad (the case, p.2; G1, 2026-10-17): the live play, from the first drag to the last exit or the
+    """The play fills the ad (the brief, p.2; G1, 2026-10-17): the live play, from the first drag to the last exit or the
     cut (the parts manifest's play part), against the ad's length, at least PLAY_SHARE_ROW when the board is the
     picture's. A count the request names that cannot fill makes the row info, with the limit the plan stated."""
     from .imageplan import PLAY_SHARE_ROW

@@ -18,7 +18,7 @@ const WORKFLOWS: [string, string][] = [
   ],
   [
     "Guided by a reference video",
-    "Attach an ad (30-60 s) with words like \"inspired by this\". The video is read whole for its idea: the hook, the structure, the pace and the ending. It is never placed in the ad. The plan says what was adapted and what was not copied; Color Block Jam's rules and block mechanics always stay the game's own.",
+    "Attach an ad (30-60 s) with words like \"inspired by this\". The video is read whole for its idea: the hook, the structure, the pace and the ending. It is never placed in the ad. The plan says what was adapted and what was not copied; CBJ's rules and block mechanics always stay the game's own.",
   ],
   [
     "Guided by a reference image",
@@ -59,7 +59,7 @@ export default function HelpSheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <p className="text-body-md text-on-surface-variant">
-          Text, an image or a video in; a 30-60 second Color Block Jam ad out. The level, the moves and the recording come
+          Text, an image or a video in; a 30-60 second CBJ ad out. The level, the moves and the recording come
           from a deterministic game pipeline; a planner model reads the request; every result is checked from the recording.
           The engine makes one creative at a time.
         </p>

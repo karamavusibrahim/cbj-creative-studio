@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import EditWorkspace from "@/components/edit/EditWorkspace";
 
-export const metadata: Metadata = { title: "Edit · Color Block Jam Studio" };
+export const metadata: Metadata = { title: "Edit · CBJ Studio" };
 
 export default async function EditPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;

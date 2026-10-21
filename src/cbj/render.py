@@ -26,7 +26,7 @@ RUNNER_SRC = REPO / "unity" / "CreativeRunner"
 BUILD_DIR = REPO / "build"
 BUILD_PROJECT = BUILD_DIR / "unity-project"
 PLAYER_APP = BUILD_DIR / "CBJRunner.app"
-PLAYER_STOCK = BUILD_DIR / "CBJRunner-stock.app"  # Rollic's game without the game patch
+PLAYER_STOCK = BUILD_DIR / "CBJRunner-stock.app"  # the publisher's game without the game patch
 GAME_PATCH = REPO / "unity" / "game-patch"
 # The game patch (unity/game-patch/game.patch) stops the clock when the last block starts to
 # leave and keeps a second ending from showing after the first. These are the files it changes.
@@ -449,7 +449,7 @@ def compare_recordings(a: str | Path, b: str | Path) -> dict:
 
 
 def apply_game_patch(project: Path, stock: bool = False) -> None:
-    """Write the patched game files (or, with stock, Rollic's originals) into a project.
+    """Write the patched game files (or, with stock, the publisher's originals) into a project.
     Refuses a project whose files are neither, since the patch was written against the originals."""
     project = Path(project)
     for rel in PATCHED_FILES:
@@ -465,7 +465,7 @@ def apply_game_patch(project: Path, stock: bool = False) -> None:
 
 def build_player(project: Path = DEFAULT_PROJECT, unity: str = DEFAULT_UNITY, stock: bool = False) -> Path:
     """Copy the Unity project into build/, add the runner scripts and the game patch, and build the
-    macOS player. stock=True leaves the game as Rollic shipped it (to show its original behaviour).
+    macOS player. stock=True leaves the game as shipped (to show its original behaviour).
     The original project is never modified, so it can stay open in the editor."""
     project = Path(project).expanduser().resolve()
     if not (project / "Assets").is_dir() or not (project / "ProjectSettings").is_dir():

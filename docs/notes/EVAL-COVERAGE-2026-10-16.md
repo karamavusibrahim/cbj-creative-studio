@@ -1,11 +1,11 @@
-# Evaluation coverage check against the case study and the game's rules (2026-10-16)
+# Evaluation coverage check against the brief and the game's rules (2026-10-16)
 
-Done before the scenario rerun, as asked: every point the case highlights is mapped to the row that measures it in
+Done before the scenario rerun, as asked: every point the brief highlights is mapped to the row that measures it in
 the tool's evaluation, with where the fact is read from. "Measured" means read from the game's own record (the
 level file, the recorder's result.json and play.json, the ad's compose.json and parts.json, the poster pixels),
 never from the plan. The viewer's review (a vision model on a one-frame-per-second sheet) judges the soft side only.
 
-## The case's controls (p.3, "prompts may contain instructions about")
+## The brief's controls (p.3, "prompts may contain instructions about")
 
 | control | rows (status from) | added today |
 |---|---|---|
@@ -20,10 +20,10 @@ never from the plan. The viewer's review (a vision model on a one-frame-per-seco
 
 ## The requested gameplay (p.5)
 
-| the case's example | row |
+| the brief's example | row |
 |---|---|
 | a specific type of level | Asked: board shape, walls, packed/spacious/symmetric |
-| a visually interesting board | **a visually interesting board (the case)**: size, blocks, colours, piece kinds, walls, doors (info row, for the reader and the viewer) |
+| a visually interesting board | **a visually interesting board (the brief)**: size, blocks, colours, piece kinds, walls, doors (info row, for the reader and the viewer) |
 | a difficult or easy level | Difficulty (a solver rating: minimum drags, repositioning, blocks that can leave at once, a casual player's ratio) |
 | a particular gameplay progression | Order of interactions, the blocking move, the blocked attempt |
 | a near-fail moment | Ending (00:0N on the clock at the last exit), seconds left |
@@ -32,11 +32,11 @@ never from the plan. The viewer's review (a vision model on a one-frame-per-seco
 
 ## Gameplay at the centre (p.2) and 30-60 s
 
-- **gameplay at the centre (the case)**: the share of the ad that is play, replay or the result clip; fails under 40 %
+- **gameplay at the centre (the brief)**: the share of the ad that is play, replay or the result clip; fails under 40 %
   and tells the planner what to shorten. Added today.
-- 30-60 s (the case): the finished ad's length. Existed.
+- 30-60 s (the brief): the finished ad's length. Existed.
 
-## Gameplay consistency (p.11): "does Color Block Jam behave like a game, not an unconstrained animation"
+## Gameplay consistency (p.11): "does CBJ behave like a game, not an unconstrained animation"
 
 The rules rows replay the recorder's own log of every drag through the Python port of the game's C# (rules.py,
 re-read in the Unity scripts on 2026-10-15; 11 tests in tests/test_rules.py plus the solver's):

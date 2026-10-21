@@ -1,21 +1,21 @@
 # Image-guided creative generation: constraints and rules of the fourth workflow (2026-10-17)
 
-Written after reading the case PDF page by page ("AI Engineer, Creative Case Study.pdf", 14 pages), the Unity project
-Rollic sent (`~/Downloads/CBJ`: `LevelData.cs`, `BlockData.cs` 7 colours, `ExitService.cs`, six levels, `Sprites/UI`), the
+Written after reading the brief page by page (14 pages), the Unity project
+the publisher sent (`~/Downloads/CBJ`: `LevelData.cs`, `BlockData.cs` 7 colours, `ExitService.cs`, six levels, `Sprites/UI`), the
 analysis `CASE-ANALYSIS-AND-WORKFLOW.md` §1 and §4.4, and the code as it stands (`imageref.py`, `reference.read_board`,
 `workflows/guided.py`, `audit.reference_rows`). These rules govern a NEW workflow, `workflows/image_guided.py`: a prompt
 plus a reference image becomes a new creative. The text workflow (`create.py`), the edit workflow (`edit.py`) and the
 video-guided workflow (`guided.py`) are not changed by any of this (md5 before the work:
 create ebb322d518d3a20c754e23832e6e5008, edit c92754cce2e1bbcf36dbc6a79a300f45, guided be50be32df27e7b49c2e98a1f670974f).
 
-## 0. What the case asks, in its own words
+## 0. What the brief asks, in its own words
 
 | page | what it says | what it means here |
 |---|---|---|
-| p.2 | "turns text, image, and video inputs into controllable 30-60 second Color Block Jam creatives"; "keeping Color Block Jam gameplay at the center"; the user "should not need to understand generative AI models" | always a 30-60 s creative played and filmed by the real game; one sentence plus one dropped picture |
+| p.2 | "turns text, image, and video inputs into controllable 30-60 second CBJ creatives"; "keeping CBJ gameplay at the center"; the user "should not need to understand generative AI models" | always a 30-60 s creative played and filmed by the real game; one sentence plus one dropped picture |
 | p.3 | prompt controls: level type, gameplay, difficulty/pacing, visual elements, concept, sequence, assets, elements that stay | the prompt's own controls always win over the picture |
 | p.5 | "a visually interesting board", "a specific type of level" | a board in a picture is a legitimate source for the level's type |
-| p.6 | images may be "visual references, assets to insert, style or composition references, inputs for modifying an existing creative"; "Use this object instead of the current obstacle"; "Create a Color Block Jam creative inspired by this image"; "The system should understand the role of the provided image and incorporate it appropriately" | the FIRST decision is the image's role; each role takes something different; the role and what it gave are shown |
+| p.6 | images may be "visual references, assets to insert, style or composition references, inputs for modifying an existing creative"; "Use this object instead of the current obstacle"; "Create a CBJ creative inspired by this image"; "The system should understand the role of the provided image and incorporate it appropriately" | the FIRST decision is the image's role; each role takes something different; the role and what it gave are shown |
 | p.7 | controlled editing: one change, nothing else | "use this object instead of the obstacle" on an EXISTING creative is the edit workflow, not this one |
 | p.8 | "Consistency comes first": Unity for gameplay; AI for intent, planning, reference analysis, asset generation, visual transformation | the picture is read by a multimodal model; the board is generated and solved by the tool and played by Unity; no pixel of a reference picture is drawn into gameplay |
 | p.10 | prompt + optional image → generate → review → modify → revised version | one prompt box, one drop zone, a result, the loop |
@@ -38,7 +38,7 @@ create ebb322d518d3a20c754e23832e6e5008, edit c92754cce2e1bbcf36dbc6a79a300f45, 
 | `LevelManager`: levels from `Levels/*.json`; a level not loaded by number shows `-1` | a generated level needs a label; a badge number read in a picture can be that label only when asked |
 | `Levels/Level_01..06.json`: 4x5 to 6x6, 2-8 blocks, all timers 300 s, no holes, pieces of 2-4 cells | the shipped levels are small; a picture's 14-block board is beyond them and beyond the generator's spoken range (below) |
 | `CameraController.FitBoardToScreen`: the camera fits the whole board with padding | a picture's zoom/framing is not copied; the board is always fully visible |
-| no other mechanic exists in the scripts (no ice, keys, chains, bubbles, boosters, bombs, moving walls, characters on the board, doors that open) | anything like that in a picture is listed "not used: not in Color Block Jam" |
+| no other mechanic exists in the scripts (no ice, keys, chains, bubbles, boosters, bombs, moving walls, characters on the board, doors that open) | anything like that in a picture is listed "not used: not in CBJ" |
 
 The tool's generator (`cbj-creative/src/cbj/generate.py`, skill `cbj-level-gameplay`): 7 shapes `open, narrow_center
 (hourglass), door (two rooms joined by a gap), holes (separate wall cells), cross (corners cut away), ring (a big hole in
@@ -98,18 +98,18 @@ builds (walls / holes / cross / two rooms), with the line "<what the picture sho
 I9. **Translate, never copy.** No pixel of a reference picture enters the creative (unless its role is asset or modify,
 then only in that slot); the caption text is not reused unless the request quotes it or asks for "the same words"; the
 exact cells are never copied (the level is generated in that spirit, solved by the tool's own rules and filmed by Unity).
-Things the game does not have are listed as "<it>: not used: not in Color Block Jam".
+Things the game does not have are listed as "<it>: not used: not in CBJ".
 
 I9b. **The board itself, when the picture is the game (2026-10-19).** The owner's test ("create a similar game concept, just
 use one more color" on a level screenshot) showed that a designer who attaches a board expects THAT board, not a new one
-of its type. So, when the picture is a Color Block Jam board and the board role is on, the board is read cell by cell
+of its type. So, when the picture is a CBJ board and the board role is on, the board is read cell by cell
 (`imagecells`), verified against the pixels, built into the game's level JSON, solved, and played as read; the request's
 changes on it (a colour more or fewer, a recolour, a mirror) are applied in code and said; a board drawn unplayable gets
 the smallest gate repair, said; thin walls become wall cells. "A new board of this type" keeps I9's type generation. I9's
 "never copy" still holds for the picture's pixels and its captions' words.
 
 I10. **The screen.** The HUD is hidden only when the request asks for it or asks for the picture's screen/look and the
-picture shows none. For a Color Block Jam screenshot, the badge's level number and the clock go to the creative only when
+picture shows none. For a CBJ screenshot, the badge's level number and the clock go to the creative only when
 the request asks for "the same level number/clock" or leaves the label open and asks for the screen.
 
 I11. **The ending is the prompt's.** A picture has no ending. The ending, mistakes, finish and length come from the
@@ -144,7 +144,7 @@ I16. **Kept apart.** New files only for the logic (`workflows/image_guided.py`, 
 evaluation module, a skill `cbj-image-guided`); shared files get additive changes only (the dispatch in `app.py` and
 the workflows note). The three existing workflows stay byte-identical (md5 above), the existing tests stay green.
 
-## 2. The test (case p.12 + the owner's ask)
+## 2. The test (brief p.12 + the owner's ask)
 
 Four pictures made from the tool's own creatives, one change each (colours, block count, board design, look + screen),
 neutral names `pic_w..pic_z`; 12 prompts, 3 per picture, the four endings 3 times each

@@ -16,7 +16,7 @@ const NO_VOICE_TIP = "The engine has no voice (NVIDIA key or the voice extra)";
 const HELP = "Added after the creative is made, as a music edit you can see in the version history. Nothing else changes.";
 const REVIEW_LINE = "Reviewed as v1, before the audio was added (the audio edit kept every frame)";
 const WORKFLOW = /\/api\/(plan|make|preview|direct|review|upload|enhance|trends|lessons|feedback|soundtrack)$/;
-const PROMPT = "An easy Color Block Jam level, calm, 30 seconds.";
+const PROMPT = "An easy CBJ level, calm, 30 seconds.";
 
 export default async function audioChecks({ browser, base, label, check, featurePage, VIEWPORTS }) {
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

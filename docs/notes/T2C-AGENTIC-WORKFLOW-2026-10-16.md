@@ -4,7 +4,7 @@ Code: `cbj-creative/src/cbj/workflows/create.py` (orchestration), `planner.py` (
 engine: level, play, recording, ad), `audit.py` + `checks.py` (the measured evaluation), `review.py` (the viewer),
 `parts.py` (the metadata of a finished creative). The edit side (`workflows/edit.py`) is a separate workflow and is
 not described here. The user sees one box: a prompt, optional files, Generate; the rest below is hidden from them
-(case p.10).
+(brief p.10).
 
 ## 1. Understand (one LLM call, about 20 s with the Claude CLI)
 
@@ -62,14 +62,14 @@ edit side later needs no video analysis.
 
 ## 6. Evaluate (code, measured, and a vision model, judged)
 
-Profile "text" (`audit.workflow`): the board, the play, the rules, the asked facts, the case's rows.
+Profile "text" (`audit.workflow`): the board, the play, the rules, the asked facts, the brief's rows.
 
 - Level and play checks (`checks.py`): the planned drags played as planned; the ending from the game's status and
   clock; mistakes and who stopped whom; the order of interactions; the satisfying finish; the pacing curve;
   difficulty, block count, shapes, looks, a named block.
 - Rules rows (`audit.rules_rows`): the recorder's drags replayed through the Python port of the game's C#.
 - Asked facts (`audit.asked`, read from the prompt itself, never the plan): counts, colours, difficulty, shape,
-  style, length and the case's 30-60 s, seconds left, mistakes, hesitations, the clock, walls, the HUD number,
+  style, length and the brief's 30-60 s, seconds left, mistakes, hesitations, the clock, walls, the HUD number,
   blocks per colour, the blocked attempt, the blocking move, the order, the ending, the satisfying finish, each
   quoted caption and its moment, the cursor, the background, the music, the sequence (win first, replay, end
   card, result screen), the game's own look, "gameplay at the centre" (p.2). Each row says pass or failed and which
@@ -118,7 +118,7 @@ evaluation profile, revision record).
 - The viewer's model sometimes answers in prose instead of JSON; that review is stored as an error, not a verdict.
 - The audit's regexes decide what is measured; a phrasing they miss gives no row (visible in "facts read").
 
-## Modules, prompts, skills and files, step by step (paths under /Users/ibrahimkaramavus/rollic-case/)
+## Modules, prompts, skills and files, step by step (paths under ~/cbj-work/)
 
 Models: the planner is chosen by `CBJ_PLANNER` (`cbj-creative/src/cbj/llm.py`): `claude` = the Claude Code CLI on
 this machine (`claude -p --json-schema`, opus, low effort, about 20 s a brief; `ClaudeCliVision` reads images
@@ -131,7 +131,7 @@ over `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, falling back to `nvidia/ne
 |---|---|---|---|
 | 0 dispatch | `app.py` (`/api/plan`, `/api/make`, jobs one at a time), `workflows/__init__.py`, `workflows/create.py` (this side), `workflows/edit.py` (the other side, not used here) | none | `static/index.html` (the UI, "Create a creative" side) |
 | 1 understand | `planner.py` (`plan`, `SYSTEM` at line 31 to 119: the brief's schema in words, the eight controls, the engine's limits, the "blocks" and "stuck" actions; `_blocking_move`, `_mistake_count_from_words`, `_reference_files` post-rules), `brief.py` (`SCHEMA`, `check`, `default_brief`, `CONTROLS`, `ENDINGS`, `MAX_HESITATIONS`, `CLOCK_LEFT_RANGE`, `LENGTH_RANGE_S`), `reference.py` (`IMAGE_ASK` line 156, `VIDEO_ASK` line 160, `is_reference_prompt`, `NAMED` colours), `imageref.py` (`role`, `style_kit`, `board_facts`, `apply`), `llm.py` | `planner.SYSTEM` + the request + the route text (edit side only) + the manifest text (edit side only); `reference.IMAGE_ASK` / `VIDEO_ASK` per attached file | uploads in `cbj-creative/studio/uploads/`; game sprites listed from `CBJ/Assets/Sprites/UI` (`draw.PROJECT`, `draw.SPRITES`); music by extension (`brief.AUDIO_EXT`) |
-| 2 level | `studio.py` (`resolve_level`, `_level_gate`, `hud_label`), `generate.py` (`Spec`, `generate_for_brief`, `holes_for`, `_assign_colours`, `_events_fit`, `GATES_VERSION`), `solver.py` (`solve_fast`, A*), `difficulty.py` (`rate`, bands), `rules.py` (the C# port), `level.py` (`load_level`, `validate`, `LevelData` fields), `boardedit.py` (a gate moved, a wall added when asked), `audit.level_misses`, `checks.level_checks` | none | shipped levels `cbj-creative/data/levels/Level_01..06.json` (copies of `CBJ/Assets/Levels/`), their solutions `data/solutions/`, generated boards `studio/levels/`, the case's example `data/levels/gen/narrow_center_01.json` |
+| 2 level | `studio.py` (`resolve_level`, `_level_gate`, `hud_label`), `generate.py` (`Spec`, `generate_for_brief`, `holes_for`, `_assign_colours`, `_events_fit`, `GATES_VERSION`), `solver.py` (`solve_fast`, A*), `difficulty.py` (`rate`, bands), `rules.py` (the C# port), `level.py` (`load_level`, `validate`, `LevelData` fields), `boardedit.py` (a gate moved, a wall added when asked), `audit.level_misses`, `checks.level_checks` | none | shipped levels `cbj-creative/data/levels/Level_01..06.json` (copies of `CBJ/Assets/Levels/`), their solutions `data/solutions/`, generated boards `studio/levels/`, the brief's example `data/levels/gen/narrow_center_01.json` |
 | 3 play | `play.py` (`plan`, `blocking_moves`, `blocked_attempts`, `hesitation`, `PACING_VERSION`), `events.py` (`from_brief`, `check_events`, `ACTIONS`), `describe.py` (block labels, colour names, the move script) | none | `play.json`, `spec.json` in the recording folder |
 | 4 record | `render.py` (`Camera`, `level_label`, the job for the runner; `RUNNER_SRC = cbj-creative/unity/CreativeRunner`), `studio.ensure_recording` (cache by spec) | none | the Unity project `CBJ/` (scripts `Assets/Scripts/`: `GameManager.cs`, `GridManager.cs`, `Block.cs`, `LevelManager.cs`, `Camera/CameraController.cs`, `UI/WinMenu.cs`, `UI/FailMenu.cs`); the built player; output `studio/recordings/<sha>/` (`job.json`, `level.json`, `result.json`, `play.json`, `frames.json`, `gameplay.mp4`, `NN_drag.png`) |
 | 5 compose | `ad.py` (`build_ad`, `AD_OPTIONS`, captions and their moments, `reading_s`), `compose.py` (`build_and_render`, render QA, `diff`), `draw.py` (the game's font and sprites), `sound.py` (effects synthesized in code, the music track), `video.py` (ffmpeg), `formats.py` (1:1, 4:5, 16:9 from the 9:16 master), `parts.py` (`build`, `write`, `text`: the manifest), `edits.py` (`inventory`: what an ad contains) | none | `studio/<creative>/vN/ad/ad.json`, `compose.json`, `ad.mp4`, `poster.png`, `audio.wav`; `vN/parts.json`; sprites from `CBJ/Assets/Sprites/UI` (coin pile, stopwatch, buttons, `StartBACKGROUND.png`); fonts from the project |
@@ -152,7 +152,7 @@ Tests: `cbj-creative/tests/` (29 files; the ones for this side: `test_rules.py`,
 `test_review*.py`, `test_app.py`, `test_case_fixes.py`, `test_unity_render.py` which starts Unity).
 
 Docs: `cbj-creative/README.md` (sections "Text to creative", "Level & gameplay generation", "The viewer's review",
-"Two workflows, one evaluation each", "Reference images and videos"); the case mapping `EVAL-COVERAGE-2026-10-16.md`;
+"Two workflows, one evaluation each", "Reference images and videos"); the brief mapping `EVAL-COVERAGE-2026-10-16.md`;
 the test folders `t2c-audit-2026-10-15/`, `t2c-variants-2026-10-15/`, `t2c-scenarios-2026-10-16/` (each with
 `PROMPTS.md`, `run.py`, `analyze.py`, `REPORT.md`, `creatives*/`, `results*/`), the harness
 `case-test-2026-10-13/harness.py` they share.

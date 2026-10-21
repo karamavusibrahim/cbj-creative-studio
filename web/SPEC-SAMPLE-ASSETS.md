@@ -1,7 +1,7 @@
 # SPEC: sample assets on the Create and Edit pages (from the catalogue bucket)
 
 ## Why
-The test inputs used while building the tool (the Color Block Jam trailers, reference pictures, objects, textures,
+The test inputs used while building the tool (the CBJ trailers, reference pictures, objects, textures,
 logos, stickers, a music track) are published with the catalogue at `<NEXT_PUBLIC_CATALOGUE_URL>/assets/index.json`
 (shape: `{note, groups: [{title, items: [{file, path, about, bytes, kind: image|video|audio}]}]}`), so that anyone can
 try the same requests. The site should offer them where files are attached.

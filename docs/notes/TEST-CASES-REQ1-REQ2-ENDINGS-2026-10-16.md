@@ -1,6 +1,6 @@
-# Color Block Jam: 7 hard test prompts for core requirements 1 and 2, four endings (2026-10-16)
+# CBJ: 7 hard test prompts for core requirements 1 and 2, four endings (2026-10-16)
 
-Seven hard test prompts for **Req 1, Text-to-Creative** and **Req 2, Level & gameplay generation** (case PDF pages 3-5).
+Seven hard test prompts for **Req 1, Text-to-Creative** and **Req 2, Level & gameplay generation** (brief pages 3-5).
 Each case has a prompt to type into the tool as written, the ending it must reach, and the checks that decide pass or fail.
 
 **Hard** means two things here. The gameplay is a hard level, and the prompt stacks several constraints the tool has to
@@ -116,12 +116,12 @@ correction, the gaps grow, or anything breaks G1-G7.
 
 ## Near-fail win (2 prompts)
 
-### H-03. Narrow centre, almost fails (the case PDF's own prompt)
+### H-03. Narrow centre, almost fails (the brief's own prompt)
 **Covers:** Req 1 (level structure, difficulty, sequence of events) and Req 2 (difficult level, specific level type, near-fail moment).
 **Ending:** near-fail win.
 
-**Prompt** (word for word from the case PDF, page 4)
-> Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost
+**Prompt** (word for word from the brief, page 4)
+> Create a difficult CBJ level with a narrow center section and show gameplay where the player almost
 > fails before solving it.
 
 The prompt gives no length, clock or block count. The tool must choose them inside 30-60 s and say what it chose (G7).
@@ -262,7 +262,7 @@ breaks G1-G7.
 
 ---
 
-## Coverage against the case PDF
+## Coverage against the brief
 
 | | H-01 | H-02 | H-03 | H-04 | H-05 | H-06 | H-07 |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|

@@ -1,6 +1,6 @@
 ---
 name: cbj-image-guided
-description: Core requirement 3 of the Color Block Jam case in cbj-creative - how a prompt PLUS a reference image becomes a new creative in its own workflow (workflows/image_guided.py) - the image's role decided first (style, board, asset, modify), the whole-picture reading and the board read on a crop with code measures (symmetry by mirror mask, colour clusters, median size, fill), the prompt's values winning, "take what is named, fill only the board, only X means only X", the mapping of every read colour to the game's seven rendered block colours, counting the board and never the caption, clamping to what the generator builds and saying so, never copying pixels, cells or caption text, the image evaluation rows and the loop, and the measured reliability of the reading on four pictures with a hand truth. Use when planning, building, testing or judging any new creative made from an attached picture, when writing an image test prompt, and when deciding whether a result took too much or too little from its picture.
+description: Core requirement 3 of the CBJ brief in cbj-creative - how a prompt PLUS a reference image becomes a new creative in its own workflow (workflows/image_guided.py) - the image's role decided first (style, board, asset, modify), the whole-picture reading and the board read on a crop with code measures (symmetry by mirror mask, colour clusters, median size, fill), the prompt's values winning, "take what is named, fill only the board, only X means only X", the mapping of every read colour to the game's seven rendered block colours, counting the board and never the caption, clamping to what the generator builds and saying so, never copying pixels, cells or caption text, the image evaluation rows and the loop, and the measured reliability of the reading on four pictures with a hand truth. Use when planning, building, testing or judging any new creative made from an attached picture, when writing an image test prompt, and when deciding whether a result took too much or too little from its picture.
 metadata:
   spec-version: "1"
   last-verified: "2026-10-19"
@@ -9,16 +9,16 @@ metadata:
 
 ## 1. Purpose
 
-The case (p.6) says images may be used as visual references, assets to insert, style or composition references, or
-inputs for modifying an existing creative ("Use this object instead of the current obstacle", "Create a Color Block Jam
+The brief (p.6) says images may be used as visual references, assets to insert, style or composition references, or
+inputs for modifying an existing creative ("Use this object instead of the current obstacle", "Create a CBJ
 creative inspired by this image"), and that "the system should understand the role of the provided image and
 incorporate it appropriately". This skill fixes how the image-guided workflow decides that role, what each role may take
 from the picture, what it never takes, how the result is judged, and how reliable the reading is known to be. The full
-rules (I1-I16, each tied to a PDF page and to a game file) are in `~/rollic-case/REQ3-IMAGE-GUIDED-RULES-2026-10-17.md`.
+rules (I1-I16, each tied to a PDF page and to a game file) are in `~/cbj-work/REQ3-IMAGE-GUIDED-RULES-2026-10-17.md`.
 
 ## 2. Source of truth
 
-- The case PDF pages 2, 3, 5, 6, 7, 8, 10, 11, 12, 13 (quoted in the rules document, section 0).
+- The brief pages 2, 3, 5, 6, 7, 8, 10, 11, 12, 13 (quoted in the rules document, section 0).
 - The game: `~/Downloads/CBJ/Assets` (`Scripts/LevelData.cs`, `Scripts/BlockData/BlockData.cs`, `Materials/BlockMaterials/*.mat`,
   `Materials/GroundMaterial.mat`, `Scripts/Services/Exit/ExitService.cs`, `Scripts/GameManager.cs`, `Scripts/UIManager.cs`),
   summarised with the consequences for a picture in the rules document, section 0b; [cbj-game-rules](../cbj-game-rules/SKILL.md).
@@ -38,7 +38,7 @@ rules (I1-I16, each tied to a PDF page and to a game file) are in `~/rollic-case
   `contrast`), `src/cbj/reference.py` (`read_board`, `measure_board`, `mirror_iou`, `cluster_colours`, `palette`,
   `video_client`), `src/cbj/videoref.py` (`stated`, `board_size`, `board_blocks`, `board_colours`, `fit_captions`,
   `mechanic_lines`).
-- The test set and its truth: `~/rollic-case/req3-image-guided-2026-10-17/` (`TRUTH.md`, `PROMPTS.md`, `inputs/pic_w..pic_z.png`).
+- The test set and its truth: `~/cbj-work/req3-image-guided-2026-10-17/` (`TRUTH.md`, `PROMPTS.md`, `inputs/pic_w..pic_z.png`).
 
 ## 3. Facts
 
@@ -65,7 +65,7 @@ Two roles at once are normal ("its dark neon look and a board split into rooms")
 - No caption text from the picture unless the request quotes it or asks for "the same words".
 - No ending, length, difficulty or tempo from a picture: those are the prompt's (or the defaults).
 - No exact cell layout; no gate placement (the generator places gates where the block can reach).
-- Nothing the game does not have: "<it>: not used: not in Color Block Jam".
+- Nothing the game does not have: "<it>: not used: not in CBJ".
 
 ### 3.4 Colours
 - The seven rendered block colours: Red #FF3B2A, Orange #FF8000, Yellow #FFCC04, Green #14FF17, DarkGreen #065C13,
@@ -211,7 +211,7 @@ filled from the picture and marked "filled from the image" (info rows, never mis
 
 
 ## 3b. The board IS the picture's (2026-10-19)
-**Reading.** `imagecells.read_cells` runs after the type reading when the picture is a Color Block Jam board (`imageread.with_cells`):
+**Reading.** `imagecells.read_cells` runs after the type reading when the picture is a CBJ board (`imageread.with_cells`):
 the grid's four corners (Opus), a perspective warp to a square grid with one cell of margin, a lettered overlay (columns
 A.., rows 1.. from the top), one strict-JSON ask for every block (colour + cells), hole, empty cell, gate (board cells +
 the way out) and thin wall line; code verifies every cell against the warped pixels (the floor is what the reader called
@@ -239,7 +239,7 @@ after the transforms, plus the reading's doubts), `more or fewer colours than th
 viewer model compares the picture and the first play frame side by side (`likeness_sheet.png`); `coverage_rows`: every
 ask the parsers read has a row, else `Coverage: not measured` names it. The loop (`image_guided.feedback`,
 `loop_verdict`) drops a viewer's point only when every ask is measured and that control's rows pass. The full contract:
-`~/rollic-case/IMAGE-GUIDED-EVAL-CHECKS-2026-10-19.md`. Tests: `tests/test_imagecells.py`.
+`~/cbj-work/IMAGE-GUIDED-EVAL-CHECKS-2026-10-19.md`. Tests: `tests/test_imagecells.py`.
 
 **Common to every workflow (2026-10-19).** The translation once, the rules rows and the shared case rows on every version,
 the best version kept, the stated values kept, the length guard, the viewer-only rule, the repeated-miss limit, the fixed
@@ -299,8 +299,8 @@ section 3 ("Common to every workflow") and in `src/cbj/workflows/__init__.py`.
   is info with the numbers when the crowdedness is the picture's ("as crowded as this picture").
 - Pre-take notes in the log: `level:` (the pieces check, the playable-ending dry run), `fill:`, `cut:`; a stopped loop
   writes `limit_note` on the versions it compared.
-- The reading's accuracy on the four test pictures: `~/rollic-case/req3-image-guided-2026-10-17/READING-ACCURACY.md`.
-- The end-to-end set and the findings: `~/rollic-case/req3-image-guided-2026-10-17/REPORT.md`.
+- The reading's accuracy on the four test pictures: `~/cbj-work/req3-image-guided-2026-10-17/READING-ACCURACY.md`.
+- The end-to-end set and the findings: `~/cbj-work/req3-image-guided-2026-10-17/REPORT.md`.
 
 ## 7. Change rules
 

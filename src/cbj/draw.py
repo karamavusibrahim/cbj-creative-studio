@@ -3,7 +3,7 @@ and exact alpha blending onto video frames.
 
 Fonts and sprites are read at run time from the provided Unity project (../CBJ by default) and are
 never copied into this repo: the game's font (Tobi, Rodrigotypo) is "all rights reserved" and
-licensed to Rollic for the game. Without the project, an open fallback font is used.
+licensed to the publisher for the game. Without the project, an open fallback font is used.
 """
 
 from __future__ import annotations

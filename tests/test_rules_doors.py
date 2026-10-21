@@ -10,7 +10,7 @@ from cbj import audit
 from cbj import brief as B
 from cbj.level import door_problems, fits_door, level_from_dict, load_level, validate
 
-SHIPPED = sorted(Path("/Users/ibrahimkaramavus/rollic-case/CBJ/Assets/Levels").glob("Level_*.json"))
+SHIPPED = sorted((Path.home() / "cbj-work" / "CBJ" / "Assets" / "Levels").glob("Level_*.json"))
 
 
 def small(blocks, exits, w=4, h=4, inactive=()):

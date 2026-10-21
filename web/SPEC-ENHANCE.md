@@ -53,7 +53,7 @@ here. The workflow line reads "Will be read as: an edit of this creative…".
 ## 2. Ideas from trends ("Start from a trend", optional)
 
 **What it is.** Live signals (Google's trending searches, news search) turned by the planner's model into 4-6
-Color Block Jam ad ideas, each a complete prompt in the engine's vocabulary with its trend, why it is current, its
+CBJ ad ideas, each a complete prompt in the engine's vocabulary with its trend, why it is current, its
 source URL or search term, how the trend maps to the game's levers, and a hook. Brand-safe by rule (no names of
 people, brands, titles; tragic or political trends skipped). Cached on the engine for 6 hours per theme and region.
 

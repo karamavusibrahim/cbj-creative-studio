@@ -795,11 +795,11 @@
     "direct_op": null,
     "feasible": true,
     "notes": [
-     "the attached video (cbj_trailer_2.mp4) is read as a whole: its structure, pacing, hook and ending are adapted with the game's own gameplay (case p.6)"
+     "the attached video (cbj_trailer_2.mp4) is read as a whole: its structure, pacing, hook and ending are adapted with the game's own gameplay (brief p.6)"
     ],
     "matched": null,
     "level_name": "Level 2, full (a video the tool did not make is read with a multimodal model)",
-    "why": "the attached video (cbj_trailer_2.mp4) is read as a whole: its structure, pacing, hook and ending are adapted with the game's own gameplay (case p.6)"
+    "why": "the attached video (cbj_trailer_2.mp4) is read as a whole: its structure, pacing, hook and ending are adapted with the game's own gameplay (brief p.6)"
    },
    "workflow": "guided"
   },

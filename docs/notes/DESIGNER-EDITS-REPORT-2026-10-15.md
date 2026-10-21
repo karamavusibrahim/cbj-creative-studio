@@ -4,7 +4,7 @@ Question: a designer has a creative they like and asks for one change ("change t
 "change the background colour"). Does the tool do it without regenerating, and does it prove that nothing else moved?
 
 ## 1. Set-up
-- Base creative `1015-074810-create-a-hard-color-block` v1: "Create a hard Color Block Jam level on a crowded board with
+- Base creative `1015-074810-create-a-hard-color-block` v1: "Create a hard CBJ level on a crowded board with
   several walls and red, blue, green and yellow blocks. The player makes one wrong move, then clears the board with one
   second left on the clock. A 30-second portrait creative with our logo asset_a_logo.png in the top-left corner and the
   stopwatch icon beside the hook. Keep the game's own look." Made in 49 s; viewer review: ship.

@@ -3,7 +3,7 @@
 Date: 2026-10-12. Plan, with Fable 5.1's decisions: `CONTROLLED-EDITING-PLAN-2026-10-12.md`.
 How to try it yourself: `CONTROLLED-EDITING-CHECK-STEPS.md`.
 
-The case (p.7): "If a user likes an existing creative and asks for one specific change, the
+The brief (p.7): "If a user likes an existing creative and asks for one specific change, the
 system should avoid unnecessarily changing everything else ... Preserve the original: Gameplay,
 Timing, Camera, Composition, Sequence, Visual structure, Other assets. Only the requested element
 should change where reasonably possible." And on p.10: "Controllability: can the user make
@@ -16,14 +16,14 @@ the brief (what was asked, as data), the level file, the play script, the record
 game, ad.json (the ad's parts and layers) and the video. An edit changes the brief only where the
 prompt asks; each stage then runs again only if its inputs changed, and a stage that must run
 again picks the result closest to the original (the closest board, the closest play). The ad
-keeps the original's timing. Then an edit report checks the case's seven items one by one and
+keeps the original's timing. Then an edit report checks the brief's seven items one by one and
 fails the edit if anything changed that was not asked for.
 
 ## 2. What was built
 
 (sections 2.1-2.7 below; numbers from the live runs in section 3)
 
-### 2.1 The edit report: the case's seven items, plus captions and sound
+### 2.1 The edit report: the brief's seven items, plus captions and sound
 
 `src/cbj/editreport.py`. For each edit, nine rows. Each row has a status and the measured facts:
 
@@ -109,7 +109,7 @@ An edit applies to the version on screen; the new version records which one it c
 ## 3. Results (live: real planner, real game)
 
 Three edit chains were run through the UI's API, as the page does it (plan, then make). Chains 1
-and 2 found defects (section 4); chain 3 is the final code. All on the case's own p.4 prompt as
+and 2 found defects (section 4); chain 3 is the final code. All on the brief's own p.4 prompt as
 the starting creative.
 
 ### 3.1 Chain 3 (final code): one creative, 12 versions
@@ -139,7 +139,7 @@ and kept every frame outside the edited layer byte for byte.
 
 | Found live | Fix |
 |---|---|
-| The case's p.4 prompt got a "packed, symmetric, colourful" board: the evidence check read "jam" in "Color Block **Jam**" as asking for a packed board (and "color", "block" for colours and events). A requirement-2 bug | the game's name is removed before the word checks |
+| The brief's p.4 prompt got a "packed, symmetric, colourful" board: the evidence check read "jam" in "Color Block **Jam**" as asking for a packed board (and "color", "block" for colours and events). A requirement-2 bug | the game's name is removed before the word checks |
 | "Make the level harder" on a level already rated hard became a new take of the same level (a different play, not harder), reported as "as asked" | "harder"/"easier" edit the board itself (2.6); a new take needs words that ask for one |
 | The closest-play search tried 1 plan in 9 s | solved positions cached in the planner: 24 plans in under 1 s once warm |
 | Two different "moves in common" counts for one edit | one definition (block, last cell, leaves) for the search and the report |

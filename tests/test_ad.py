@@ -183,7 +183,7 @@ def test_same_ad_gives_identical_frames_and_bytes(rendered, tmp_path):
 
 
 def test_editing_one_text_changes_only_its_frames(rendered, edited):
-    """Case p.7: change one thing, keep everything else. Only the hook's frames may change."""
+    """Brief p.7: change one thing, keep everything else. Only the hook's frames may change."""
     _, first = rendered
     _, r = edited
     f0, f1 = first["layers"]["hook"]["frames"]

@@ -1,4 +1,4 @@
-"""Creative generation: text, image or video in, a new creative out (the case's core requirements
+"""Creative generation: text, image or video in, a new creative out (the brief's core requirements
 1-4), with its own evaluate / feed back / revise loop. See workflows/__init__.py."""
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ WORKFLOW = "create"
 
 def plan(log: studio.Log, prompt: str, uploads: list[str]) -> dict:
     """The brief of a new creative. Attached videos are always references; attached images are when
-    the prompt says so ("inspired by", "like this"); both are analysed before planning (case p.6)."""
+    the prompt says so ("inspired by", "like this"); both are analysed before planning (brief p.6)."""
     all_ups, vids = studio.uploads(), studio.videos()
     ups = {n: all_ups[n] for n in uploads if n in all_ups}
     refs = {n: vids[n] for n in uploads if n in vids}
@@ -123,7 +123,7 @@ def keep_asked(prompt: str, before: dict, after: dict) -> list[str]:
 
 
 def revise_once(log: studio.Log, prompt: str, v: dict, review_on: bool) -> dict:
-    """One round of the loop (the case p.10: generate, review, request a modification, generate
+    """One round of the loop (the brief p.10: generate, review, request a modification, generate
     the revised version), run by the tool itself. A miss in the board or the play makes the revised
     version a new take (another seed); a miss in the ad changes the ad only. The planner reads the
     feedback against the current brief; no edit routing is involved (that is the edit workflow)."""

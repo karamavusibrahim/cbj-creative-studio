@@ -1,13 +1,13 @@
 ---
 name: cbj-game-rules
-description: Color Block Jam as implemented in the provided Unity project (~/rollic-case/CBJ) and ported to cbj-creative/src/cbj/rules.py - the board, polyomino blocks, the seven colours, colour gates and the exact exit rule, free 2D drag and collision, the countdown clock, win and fail, the camera, the level JSON, the six shipped levels, and the list of mechanics the game does NOT have (no boosters, bombs, ice, keys, chains, locks, hints, undo, audio). Use when deciding whether a prompt, a level, a move, an edit or a test expectation is possible in this game, before planning gameplay, and before judging a recording for gameplay consistency.
+description: CBJ as implemented in the provided Unity project (~/cbj-work/CBJ) and ported to cbj-creative/src/cbj/rules.py - the board, polyomino blocks, the seven colours, colour gates and the exact exit rule, free 2D drag and collision, the countdown clock, win and fail, the camera, the level JSON, the six shipped levels, and the list of mechanics the game does NOT have (no boosters, bombs, ice, keys, chains, locks, hints, undo, audio). Use when deciding whether a prompt, a level, a move, an edit or a test expectation is possible in this game, before planning gameplay, and before judging a recording for gameplay consistency.
 metadata:
   spec-version: "1"
   last-verified: "2026-10-14"
   game-version: "CBJ Unity 6000.3.5f1, six levels"
 ---
 
-# Color Block Jam: the rules as implemented
+# CBJ: the rules as implemented
 
 ## 1. Purpose
 One set of facts about the game, taken from its C# source, so that every agent plans, generates, edits and judges
@@ -15,7 +15,7 @@ against the same mechanics. If a prompt or an expectation needs something not li
 say so, do not invent it (see section 5).
 
 ## 2. Source of truth
-- Unity project `~/rollic-case/CBJ` (not part of this repo): `Assets/Scripts/**` (movement, exits, grid, input, timer,
+- Unity project `~/cbj-work/CBJ` (not part of this repo): `Assets/Scripts/**` (movement, exits, grid, input, timer,
   UI), `Assets/Levels/Level_01..06.json`. Line-cited extract: [references/mechanics.md](references/mechanics.md).
 - Port, tested against the C#: `src/cbj/rules.py` (occupancy, valid position, exit check), `src/cbj/level.py` (the level
   file), `src/cbj/solver.py`, `src/cbj/difficulty.py`. `docs/ENGINE-NOTES.md` (the former root README) section "Rules as implemented".

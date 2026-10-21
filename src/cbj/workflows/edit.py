@@ -1,5 +1,5 @@
 """Controlled editing: an existing creative and a request in, a new version of that creative out,
-with the edit report as its proof and its own evaluate / feed back / revise loop (the case's core
+with the edit report as its proof and its own evaluate / feed back / revise loop (the brief's core
 requirement 5, p.7). See workflows/__init__.py."""
 from __future__ import annotations
 

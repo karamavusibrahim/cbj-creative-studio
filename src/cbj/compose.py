@@ -134,7 +134,7 @@ def block_quads(rec: Recording, block_id: int, frame: int, shrink: float = 0.84)
     cell homography (so a lifted, mid-drag block lands where it is drawn), and each cell of its
     shape is projected forward, shrunk a little to stay on the brick's flat top. [] once the block
     has left or when the frame has no record of it. A texture drawn on these follows the block
-    exactly, frame by frame (case p.6 "use this object"; research note of 2026-10-15)."""
+    exactly, frame by frame (brief p.6 "use this object"; research note of 2026-10-15)."""
     H = cell_homography(rec)
     if H is None or rec.level is None or block_id >= len(rec.level.blocks) or frame >= len(rec.frames):
         return []
@@ -510,7 +510,7 @@ class Prepared:
         return None
 
     def _check_locked(self):
-        """`locked` parts must match the digests written when the ad was made (case p.3: elements
+        """`locked` parts must match the digests written when the ad was made (brief p.3: elements
         that must stay unchanged). To change one on purpose, remove it from `locked` first."""
         from .ad import locked_digests
         origin = self.ad.get("origin", {}).get("locked")

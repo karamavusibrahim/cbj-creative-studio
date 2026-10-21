@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 /* ─────────────────────────────────────────────────────────────
-   Color Block Jam Studio — tokens mapped 1:1 from the Stitch
-   project "Color Block Jam Studio" (design/*.html tailwind.config).
+   CBJ Studio — tokens mapped 1:1 from the Stitch
+   project "CBJ Studio" (design/*.html tailwind.config).
    Depth: white cards on the pale blue-violet ground, shadow-sm at most.
    ───────────────────────────────────────────────────────────── */
 @theme {

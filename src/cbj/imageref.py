@@ -1,6 +1,6 @@
-"""Image-guided creative generation (case p.6): what an attached image is FOR, and what it gives.
+"""Image-guided creative generation (brief p.6): what an attached image is FOR, and what it gives.
 
-The case lists four roles for an image: a visual reference, an asset to insert, a style or
+The brief lists four roles for an image: a visual reference, an asset to insert, a style or
 composition reference, and an input for modifying an existing creative. The tool decides the role
 from the request's words and from what the multimodal model saw (reference.analyse), and then
 takes from the image exactly what that role needs, in code:

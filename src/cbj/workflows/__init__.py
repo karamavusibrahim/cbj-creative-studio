@@ -5,7 +5,7 @@
   becomes a new creative: plan, level, play, ad, the viewer's review, then the loop (evaluate against
   the request, feed the misses back, make a revised take, up to create.MAX_REVISIONS rounds). Its
   evaluation is the text-to-creative profile (audit.workflow: the board, the play, the rules, every
-  fact the prompt asks for, the case's rows).
+  fact the prompt asks for, the brief's rows).
 - guided.py: guided creative generation: a prompt plus media (a reference video, or a reference
   image) becomes a new creative (core requirements 3 and 4). The prompt drives the reading and wins
   over the reference wherever it states a value; the media is what gets read: for a video, the

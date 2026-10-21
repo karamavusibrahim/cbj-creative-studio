@@ -1,6 +1,6 @@
 """The parts manifest: the metadata of a finished creative that an edit is routed on.
 
-The case (p.7) asks that an edit of an existing creative change only the requested element and
+The brief (p.7) asks that an edit of an existing creative change only the requested element and
 keep the rest. A flat MP4 cannot tell which pixels are the opening caption; this file can. It is
 written with every version (parts.json) from what the tool already stored, with no model and no
 look at the pixels:

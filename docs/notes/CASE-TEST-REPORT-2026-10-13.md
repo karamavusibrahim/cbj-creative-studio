@@ -1,25 +1,25 @@
 # Case-requirement test of the CBJ Creative Studio UI (2026-10-13)
 
 What was tested: the running tool at http://127.0.0.1:8765 (commit 9c90b63, server started 11:24 on
-2026-10-12), against the five core requirements of Rollic's "AI Engineer, Creative" case
-(~/Downloads/AI Engineer, Creative Case Study.pdf, 14 pages). Every scenario below was run for
+2026-10-12), against the five core requirements of the publisher's "AI Engineer, Creative" case
+(the brief, 14 pages). Every scenario below was run for
 real through the UI's own API (the same calls the page makes), with the real planner
 (nemotron-3-ultra) and real game recordings. A few checks were done in a browser (Playwright).
 
-Runner and raw results (re-runnable): `~/rollic-case/case-test-2026-10-13/`
+Runner and raw results (re-runnable): `~/cbj-work/case-test-2026-10-13/`
 (`scenarios.py` = the 75 scenarios, `extra.py` = 7 follow-ups, `results/*.json` = one file per
 scenario with the brief, the log lines, the version record and the edit report).
-Run: `cd ~/rollic-case/cbj-creative && uv run python ~/rollic-case/case-test-2026-10-13/scenarios.py [ids]`
+Run: `cd ~/cbj-work/cbj-creative && uv run python ~/cbj-work/case-test-2026-10-13/scenarios.py [ids]`
 (the UI must be running). Total wall time: 61 min for the 75, plus ~10 min for the extras.
 
-## 1. The case, read as requirements
+## 1. The brief, read as requirements
 
 | # | Core requirement (PDF page) | What a reviewer will type / do |
 |---|---|---|
 | R1 | Text-to-creative (p.3): prompts about the level's structure, gameplay behaviour, difficulty or pacing, visual elements, creative concept, sequence of events, assets to use, elements that must stay unchanged | the p.4 prompt; one prompt per control; several controls in one prompt; odd prompts |
 | R2 | Level & gameplay generation (p.5): a specific type of level, a visually interesting board, difficult or easy, a progression, a near-fail, a satisfying solve, a specific sequence of interactions | each item, checked against the recording, not the plan |
 | R3 | Image inputs (p.6): visual reference, asset to insert, style or composition reference, input for modifying an existing creative; "use this object instead of the current obstacle"; "a creative inspired by this image" | both p.6 prompts verbatim, an asset, a style reference, bad files |
-| R4 | Video inputs (p.6): "Create a Color Block Jam version of this concept" from a creative of another game, an ad, or an existing CBJ creative | attach an mp4; the p.4/p.6 prompts |
+| R4 | Video inputs (p.6): "Create a CBJ version of this concept" from a creative of another game, an ad, or an existing CBJ creative | attach an mp4; the p.4/p.6 prompts |
 | R5 | Controlled editing (p.7, "one of the most important parts"): preserve gameplay, timing, camera, composition, sequence, visual structure, other assets; only the requested element changes | the p.4/p.7 "keep everything, replace this asset"; copy, sound, language, theme, length, difficulty edits; edits of older versions; conflicts; concurrency |
 
 Cross-cutting constraints: 30-60 s output (p.2 twice), a non-technical user (p.2, p.10), the
@@ -52,11 +52,11 @@ were missed every time the recording was short.
 |---|---|---|---|
 | T1.04 "easy level, calm pace, 45 seconds" | 45 s | 18 s | planner picked the game's Level 1 (2 blocks, 5 s of play); end card may not exceed 8 s, so the ad was cut to 18 s |
 | T1.08 "a quick clean win" + logo | 30 s (default) | 29 s | "quick" = fast tempo = 15 s recording; cap on the end card |
-| T1.12 UI example "20 seconds" | 20 s | 15 s | the UI's own example chip asks for a length outside the case; engine shrank it further |
+| T1.12 UI example "20 seconds" | 20 s | 15 s | the UI's own example chip asks for a length outside the brief; engine shrank it further |
 | T2.09 "one move frees everything" | 30 s | 27 s | short win recording |
 | T5.11 edit "keep everything, make it 45 s" | 45 s | 41 s | re-recorded with longer pauses, still 27.6 s of play |
 | X5.19 edit "without the replay" on the 18 s ad | 18 s | 12 s | the replay's time was dropped, not given to the card |
-| X1.26 "a 60 second ad, hard, almost fails" | 60 s | 47 s | the biggest level the generator makes (8x9, 10 blocks, 13 drags) records 32.7 s of play; the case's upper bound is unreachable |
+| X1.26 "a 60 second ad, hard, almost fails" | 60 s | 47 s | the biggest level the generator makes (8x9, 10 blocks, 13 drags) records 32.7 s of play; the brief's upper bound is unreachable |
 
 Mechanism: `ensure_recording` fits the clock and the pacing, but the ad's length is fitted only
 by the end card (3-8 s) and an intro hold (up to 2 s). When the recording is short the compositor
@@ -67,8 +67,8 @@ planner already knows the length), or stretch with hesitations/pauses on the sam
 mark the pacing row "adjusted" with the real length.
 
 ### F2 (high) Image inputs: the planner cannot see images, and says it can
-Case p.6: images as visual references, style or composition references.
-- T3.03 "Create a Color Block Jam creative inspired by this image" (candy_reference.jpg, pink/mint/lemon):
+Brief p.6: images as visual references, style or composition references.
+- T3.03 "Create a CBJ creative inspired by this image" (candy_reference.jpg, pink/mint/lemon):
   the brief says "derive the candy colour palette from candy_reference.jpg" and picks #4ECDC4, #FFE66D,
   #FF6B6B. None of those is in the image; the words "candy" came from the FILE NAME. It also
   pasted the reference photo itself onto the end card.
@@ -85,11 +85,11 @@ case, or a local palette extraction with PIL for colours) is needed for the "ref
 
 ### F3 (high) Video inputs (core requirement 4) do not exist
 - T4.01 / browser: an mp4 is refused: "reference_clip.mp4: only PNG, JPG or WebP images".
-- T4.02 "Create a Color Block Jam version of this concept": made the default ad, no word that no
+- T4.02 "Create a CBJ version of this concept": made the default ad, no word that no
   concept was given.
 - T4.03 "Create a creative similar to this reference video, but adapt the concept to Color Block
   Jam" (the p.4 prompt): assumption "No reference video was provided", then a default ad anyway.
-The case asks for at least one video-reference-driven example (p.12). Planned for Oct 14.
+The brief asks for at least one video-reference-driven example (p.12). Planned for Oct 14.
 
 ### F4 (high) Controlled edit regression on the game's own levels: the HUD badge changes and the play is re-filmed
 X5.19: on the creative made from the game's Level 1, "Same ad without the slow-motion replay"
@@ -120,10 +120,10 @@ from an English allow-list (`brief.PRONE`, `_evidence`). Two real misses:
 Fix: when a declared change is dropped, set that control row to "adjusted" with the reason, and
 either extend evidence to the prompt's language or trust the planner for non-English prompts.
 
-### F7 (medium) Silent misreads of the case's own wording
+### F7 (medium) Silent misreads of the brief's own wording
 - T3.02 "Use this object instead of the current obstacle" (p.6 verbatim): the game has no
   obstacles. The planner mapped "obstacle" to the hook sticker, which already held the same
-  file, and reported "Nothing changed". Nothing tells the user that Color Block Jam has no
+  file, and reported "Nothing changed". Nothing tells the user that CBJ has no
   obstacle to replace, or offers the two places the object could go.
 - T5.09 "Change this." and T5.10 (a repeated edit): a new, byte-identical version is made
   (51 s each, "Nothing changed") instead of asking what to change. Versions pile up.
@@ -133,11 +133,11 @@ either extend evidence to the prompt's language or trust the planner for non-Eng
 ### F8 (medium) Upload accepts a non-image; the failure surfaces as a raw traceback much later
 T3.05f: a text file named `fake.png` is accepted (extension check only). X3.10: a prompt that
 uses it as the logo plans for 37 s, then dies in compose with "cannot identify image file
-'/Users/ibrahimkaramavus/rollic-case/cbj-creative/studio/uploads/fake.png'": a filesystem path
+'~/cbj-work/cbj-creative/studio/uploads/fake.png'": a filesystem path
 and a PIL message shown to a marketing user. Fix: `Image.open().verify()` at upload.
 
 ### F9 (medium) Non-technical UX: internals leak into "What I understood" and the edit report
-Case p.2/p.10: "The complexity of the underlying system should be hidden". Seen in the browser:
+Brief p.2/p.10: "The complexity of the underlying system should be hidden". Seen in the browser:
 - control rows: "Replace the end_art asset (role 'end_art', when 'end_card')", "cap_mistake starts
   at 2.20 s", "the existing seed", "level.difficulty: not among the changes the prompt asked for";
 - the level line: "naive player 3.34x -> 1.08x", "9 -> 7 drags, 3 -> 1 repositioning";
@@ -233,7 +233,7 @@ recording 30-81 s; a re-filmed edit 63-85 s.
 ## 6. Suggested order of fixes before submission (Oct 17)
 
 1. F4 label carry-over (one line in `studio.make`): without it, any edit of a shipped-level
-   creative fails the case's headline requirement.
+   creative fails the brief's headline requirement.
 2. F1 length: refuse to go under the requested length; size the play to it; mark adjustments.
 3. F5 hesitation crash: clamp in `brief.check` per ending.
 4. F6: mark dropped changes "adjusted"; non-English evidence.
@@ -252,7 +252,7 @@ credit was used: the image and video reading runs on the NVIDIA key the planner 
 |---|---|---|
 | F1 length | Ads are 30-60 s (`LENGTH_RANGE_S`), shorter asks raised to 30 with a reason; the UI example now says 30 s. A level too short for the length is swapped for a generated one of the same difficulty sized to it (unless the prompt named a level number). A short recording is filled before the card may grow: longer replay (to 8 s), first-frame hold (to 3 s), result held (to 4 s), card to 10 s. Ads of 50 s or more with a mistake ending plan two mistakes and say so. | T1.08 29 s -> 30 s; T1.12 15 s -> 30 s; T2.09 27 s -> 30 s; T5.11 41 s -> 45 s; T1.04 18 s -> 38 s (an easy, calm, mistake-free play of 10 drags records 14 s; 45 s is out of reach with one level, and the brief says so); X1.26 47 s -> 57 s (see the second re-run below) |
 | F2 images | `reference.py`: a reference image gets a measured palette (PIL) and a multimodal description (nemotron omni, about 11 s); the notes go to the planner and into the brief, shown on the page as "Read from the attached image ...". The image is placed only when asked to; a failed read is said so. A repainted block the colour of the background keeps the game's colour. | T3.03: palette light pink, mint, lilac, lemon read from the pixels, blocks repainted with them, nothing pasted; X3.11 (neutral file name): the same palette, so pixels are read, not names; T3.04 and V3.12: colours from the image |
-| F3 videos | MP4/MOV/WebM accepted (content-checked, 80 MB); shrunk with ffmpeg and described by the multimodal model (structure, hook, ending, pacing, look); never placed in the ad | V4.01: the existing time-out creative, uploaded as the reference with "Create a Color Block Jam version of this concept": read as a time-out concept and remade as a 30-60 s ad; V4.02: a meaningless clip handled without guessing |
+| F3 videos | MP4/MOV/WebM accepted (content-checked, 80 MB); shrunk with ffmpeg and described by the multimodal model (structure, hook, ending, pacing, look); never placed in the ad | V4.01: the existing time-out creative, uploaded as the reference with "Create a CBJ version of this concept": read as a time-out concept and remade as a 30-60 s ad; V4.02: a meaningless clip handled without guessing |
 | F4 shipped-level edits | An edit keeps the level FILE the version was made from (`_level_source`), so the game's own levels keep their name and HUD number; the parent's HUD number is carried on every edit | N5.19: recording reused, "Visual structure: kept", HUD unchanged (first re-run); the same edit also exposed that the pinned path shortened the ad to 16.5 s, fixed next (second re-run: fixed, see below) |
 | F5 hesitation crash | Clamped per ending in `brief.check` with a reason | T1.03: "a win shows at most 1 hesitation (more looks staged); 1 is used, not 2", level-only runs |
 | F6 evidence filter | "speeding up", "slowing down", "faster", "slower" added; a prompt in another language skips the English word lists; a declared change the merge drops is shown as "adjusted" with the reason | T1.10: curve kept; T1.13: Turkish "zor" and "son saniyede" kept |
@@ -279,7 +279,7 @@ Still open after the fixes: "easy + calm + 45 s" reaches 38 s (one easy level ca
 a two-level ad would); the generator's hard band on big boards; the planner's own translations
 (Turkish) are not proofread; the two assumptions in T3.02 name different places for the object.
 
-## 8. Page-by-page check of the case (every requirement, every "should not" and "avoid")
+## 8. Page-by-page check of the brief (every requirement, every "should not" and "avoid")
 
 Status: MET (with evidence), PART (works with a stated limit), OPEN (not done), N/A (not a requirement).
 
@@ -337,7 +337,7 @@ Status: MET (with evidence), PART (works with a stated limit), OPEN (not done), 
 | "a creative inspired by this image" | MET | T3.03; the image example creative is listed in section 9 |
 | understand the role of the image | MET | reference vs asset decided from the words (reference.is_reference_prompt / asks_placement), and said in the rows |
 | video: a creative from another game, an advertisement, or an existing CBJ creative | PART | existing CBJ creative: MET (V4.01); an advertisement: see the reel check below; another game's ad: not tested with a real sample (none on this machine; the path is the same) |
-| "Create a Color Block Jam version of this concept" | MET | V4.01 |
+| "Create a CBJ version of this concept" | MET | V4.01 |
 | not frame by frame; understand structure, idea, pacing, visual concept | MET | the model returns structure (from/to seconds), hook, ending, pacing, pace change, mood, colours, CTA, "how to adapt"; the planner maps them to ending, mistakes, tempo, curve, theme and copy |
 
 ### p.7 Core requirement 5: controlled editing
@@ -408,7 +408,7 @@ Status: MET (with evidence), PART (works with a stated limit), OPEN (not done), 
 | Check | Result |
 |---|---|
 | hidden clock with the rebuilt player ("Hide the clock. A clean win on a medium level.") | the purple HUD bar is gone, only the Level badge remains (studio/1013-061404-hide-the-clock-a-clean/v1), QA clean |
-| an advertisement from another product as the video reference (a 16 s pet-care ad, used as a foreign-concept probe) with "Create a Color Block Jam version of this concept." | read in 69 s: structure in four parts with seconds, its own hook line, seven captions, ending win, calm, heartwarming, CTA "link in bio"; adapted as "One move unlocks a calm cascade" with hook "So satisfying to watch.", end title "Oddly satisfying.", a calm win with a cascade, nothing from the reel placed in the ad. (The first pass kept the default captions; a reference's idea now counts as a request for copy in its spirit, re-planned: results_rerun/reel_plan2.json) |
+| an advertisement from another product as the video reference (a 16 s pet-care ad, used as a foreign-concept probe) with "Create a CBJ version of this concept." | read in 69 s: structure in four parts with seconds, its own hook line, seven captions, ending win, calm, heartwarming, CTA "link in bio"; adapted as "One move unlocks a calm cascade" with hook "So satisfying to watch.", end title "Oddly satisfying.", a calm win with a cascade, nothing from the reel placed in the ad. (The first pass kept the default captions; a reference's idea now counts as a request for copy in its spirit, re-planned: results_rerun/reel_plan2.json) |
 | the page resumes a running job after a reload | "Picking up the plan that was running before the page was reloaded…" with the log streaming |
 | image-driven example made | 30 s, QA clean, blocks repainted mint, lemon, lilac on the reference's pink; see section 9 |
 
@@ -416,10 +416,10 @@ Status: MET (with evidence), PART (works with a stated limit), OPEN (not done), 
 
 | Type | Prompt | File (under cbj-creative/studio/) | Length |
 |---|---|---|---|
-| text-driven (the case's p.4 prompt) | Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost fails before solving it. | 1012-235537-create-a-difficult-color-block/v1/ad/ad.mp4 | 30 s |
+| text-driven (the brief's p.4 prompt) | Create a difficult CBJ level with a narrow center section and show gameplay where the player almost fails before solving it. | 1012-235537-create-a-difficult-color-block/v1/ad/ad.mp4 | 30 s |
 | text-driven, 60 s | A 60 second ad: a hard level where the player almost fails before solving it. | 1013-055745-a-60-second-ad-a/v1/ad/ad.mp4 | 60 s |
-| image-driven | Create a Color Block Jam creative inspired by this image. (candy_reference.jpg) | 1013-061812-create-a-color-block-jam/v1/ad/ad.mp4 | 30 s |
-| video-reference-driven | Create a Color Block Jam version of this concept. (an existing time-out creative) | 1013-054739-create-a-color-block-jam/v1/ad/ad.mp4 | 30 s |
+| image-driven | Create a CBJ creative inspired by this image. (candy_reference.jpg) | 1013-061812-create-a-color-block-jam/v1/ad/ad.mp4 | 30 s |
+| video-reference-driven | Create a CBJ version of this concept. (an existing time-out creative) | 1013-054739-create-a-color-block-jam/v1/ad/ad.mp4 | 30 s |
 | controlled modification | Keep this creative exactly the same, but replace this object with the attached asset. | 1012-235537-create-a-difficult-color-block/v2/ad/ad.mp4 (v1 -> v2, 72 frames inside the icon's box) | 30 s |
 | controlled modification, sequence | Same ad without the slow-motion replay. (on the game's Level 4) | 1013-054422-use-the-game-s-own/v3/ad/ad.mp4 (v1 -> v3, recording reused, HUD kept) | 30 s |
 | controlled modification, length | Keep everything, but make it 45 seconds long. | 1012-235537-create-a-difficult-color-block/v23/ad/ad.mp4 | 45 s |

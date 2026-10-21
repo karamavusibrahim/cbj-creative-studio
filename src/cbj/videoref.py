@@ -1,4 +1,4 @@
-"""Video-guided creative generation (core requirement 4, case p.6): what a reference video gives the brief.
+"""Video-guided creative generation (core requirement 4, brief p.6): what a reference video gives the brief.
 
 The video has been read for the request before this runs (reference.read_video: the reading plan
 from the request, the whole clip read by NVIDIA's multimodal model, the checks in code, the parts
@@ -43,7 +43,7 @@ ENDING_OF = {"win": "victory", "victory": "victory", "near-fail": "near_fail", "
              "stops mid-level": "cliffhanger", "mid-level": "cliffhanger", "stopped mid-level": "cliffhanger"}
 # A mechanic the game does not have is never created, drawn, simulated or used (2026-10-17, the owner). A row here only
 # names the game's OWN parameter the reference's moment shares (the ending, the finish), and its line says the ad keeps
-# that one when the brief has it; the mechanic itself is "not used: not in Color Block Jam" either way. (Before
+# that one when the brief has it; the mechanic itself is "not used: not in CBJ" either way. (Before
 # 2026-10-17 ice became "a blocked route" and keys "a key move": lines that read as if the foreign thing were kept.)
 MECHANICS = (
     (re.compile(r"\b(boosters?|hammers?|power[- ]?ups?|bombs?|extra time|time bonus|time freeze)\b", re.I),
@@ -60,7 +60,7 @@ FOREIGN = re.compile(r"\b(bubbles?|ice|icy|frozen|freez\w*|keys?|locks?|locked|p
 # Mechanics the game has under another name.
 NATIVE = (
     # the game's own screens and HUD (2026-10-16 creative run: "Level complete screen" and "Level indicator" were
-    # written up as "not in Color Block Jam")
+    # written up as "not in CBJ")
     (re.compile(r"\b(level\s+(complete|completed|cleared|completion|failed)|results?\s+screen|win\s+screen|victory\s+screen|"
                 r"out\s+of\s+time|fail(ure)?\s+screen|game\s+over)\b", re.I), "{m}: the game's own result screen"),
     (re.compile(r"\b(level\s+(indicator|number|label|counter|progression)|hud|score|coins?|rewards?)\b|(^|\s)\+\s*\d+", re.I),
@@ -149,7 +149,7 @@ SAME_TEXT = re.compile(r"\bsame (text|texts|captions?|words|wording|copy|lines)\
 REPEAT = re.compile(r"\b(replay\w*|again|repeat\w*|slow[- ]?mo\w*|slow motion|rewind\w*|second time|once more)\b", re.I)
 FAST_FINISH = re.compile(r"\b(fast|quick|rapid|rush\w*|cascade|in a row|one after another|chain|streak|all (fly|leave|clear)\w*|"
                          r"frees? (them all|everything))\b", re.I)
-# What a caption does, from its words (2026-10-16: the case's captions are challenges, instructions,
+# What a caption does, from its words (2026-10-16: the brief's captions are challenges, instructions,
 # urgency, results and calls to action).
 CTA_RX = re.compile(r"\b(play now|download|install|get it|play (for )?free|try (it )?now|tap to play|play today)\b", re.I)
 # In this order: a question or a dare is a challenge before anything else (2026-10-16 creative run, case 07: "Can you
@@ -216,7 +216,7 @@ def stated(prompt: str, constraints=(), video: bool = False) -> set[str]:
     reading plan's constraints: length, ending, mistakes, difficulty, finish, tempo, curve, moves,
     replay, end_card, result_screen, hold, background, caption_colours, no_captions; and the level
     (2026-10-17): shape, size, blocks, colours, pieces, level (the game's own level, or a level number).
-    `video` (the video-reference workflow only; round 3): the case's 30-60 s range is no length, the solve phrases
+    `video` (the video-reference workflow only; round 3): the brief's 30-60 s range is no length, the solve phrases
     (SOLVE_PHRASES) state the ending, the breathe words (BREATHE) the hold and the replay, and the relative words for the
     moves or the blocks ("fewer moves", "a few moves", "fewer blocks": RELATIVE_MOVES, RELATIVE_BLOCKS) the moves. The image workflow, which
     reads this too, keeps the rules it had (the owner, 2026-10-17)."""
@@ -1700,7 +1700,7 @@ def fit_length(brief: dict, fixed: set, segs: list[dict], line: str, rec: dict, 
     play seconds with no lever left, the length drops (down to 30 s) by what the play misses, and the levers run again
     there from the same start (`state`, lever_state), a few times; the length whose play misses least wins (a short play
     costs more, as in play_levers' score; on a tie the longer). It never rises: the first length is the reference's own
-    brought into the case's range, or the plan's. Returns the play line and record, with rec["length"] {from, to, why}
+    brought into the brief's range, or the plan's. Returns the play line and record, with rec["length"] {from, to, why}
     when the length changed."""
     import math
     pc, lo = brief["pacing"], B.LENGTH_RANGE_S[0]
@@ -1734,7 +1734,7 @@ def fit_length(brief: dict, fixed: set, segs: list[dict], line: str, rec: dict, 
     why = (f"at {L0:g} s the play fills about {first[0]:.0f} of {first[1]:g} s and no lever is left"
            + (f" ({first[2]})" if first[2] else ""))
     rec["length"] = {"from": L0, "to": best, "why": why}
-    line += (f"; the ad is {best:g} s, not {L0:g} s: {why}, so the length drops (the case's 30 s at the least) "
+    line += (f"; the ad is {best:g} s, not {L0:g} s: {why}, so the length drops (the brief's 30 s at the least) "
              f"instead of the end card growing")
     return line, rec
 
@@ -1848,7 +1848,7 @@ def _copy_board(brief: dict, prompt: str, a: dict, fixed: set, did: list, prov: 
     from .audit import asked as _asked
     own_look = bool(_asked(prompt).get("original"))  # "in the game's own look" (V2, 2026-10-19): the build's colours, mapped and said
     if cc.get("cbj") and cells.get("colours") and not BLOCK_COLOUR_WORDS.search(_words_of(prompt)) and not own_look:
-        # the video is Color Block Jam itself: its board is shown in the colours the footage shows (the live game's palette
+        # the video is CBJ itself: its board is shown in the colours the footage shows (the live game's palette
         # differs from the build's; 2026-10-19 V0: the viewer called the build's colours "swapped"), each slot's block and
         # door together; the mapping is said. A request naming block colours keeps its own.
         shown, lines = IP.repaint([{"read": c["name"], "rgb": c["rgb"], "slot": c["slot"]} for c in cells["colours"] if c.get("rgb")])
@@ -1961,7 +1961,7 @@ def _apply_board(brief: dict, prompt: str, a: dict, notes: dict, fixed: set, did
     level, the board's shape, size, block count, colours and piece sizes come from the reference). Each part the
     request states itself stays the request's; a request naming the game's own level ("level 3", "a shipped level")
     takes nothing. The level is then generated and solved by the generator's own rules; the cells are not copied (a
-    sampled reading cannot place them, and the case asks for no frame-by-frame copy), and another game's obstacles
+    sampled reading cannot place them, and the brief asks for no frame-by-frame copy), and another game's obstacles
     never add a block, a wall or a shape. How busy the board looks is info only: the difficulty stays the request's,
     the ending rule's (hard for a near-fail) or the generator's default (R10: it read 1-2 of 12)."""
     f, lv, gp = a["file"], brief["level"], brief["gameplay"]
@@ -2126,7 +2126,7 @@ def hud_of(notes: dict) -> dict:
     clock = _clock_s(hud.get("clock")) if hud.get("clock") else next((_clock_s(x) for x in texts if _clock_s(x) is not None), None)
     clock = clock or None  # a clock at 00:00 when play starts is no clock (refs-v8: LolTap's invented one)
     game = str(notes.get("game_or_product") or "").strip()
-    # Color Block Jam itself: the model says so, or the HUD reads the game's "LEVEL n" with its clock and no OTHER game is
+    # CBJ itself: the model says so, or the HUD reads the game's "LEVEL n" with its clock and no OTHER game is
     # named (refs-v8: another game was given "LEVEL 25" and "00:00", copied from the schema's own example; round 2:
     # trailer 2 read as "Another puzzle game", a description, not a name, must not lose its Level 25)
     cbj = bool(CBJ_NAME.search(game)) or (level is not None and clock is not None and not named_game(game))
@@ -2620,7 +2620,7 @@ def _apply_one(brief: dict, prompt: str, a: dict) -> dict:
             length = float(min(B.LENGTH_RANGE_S[1], max(B.LENGTH_RANGE_S[0], round(dur))))
             pc["length_s"] = length
             _changed(brief, "pacing.length")
-            did.append(f"the length ({length:g} s" + (")" if length == round(dur) else f"; the reference's {dur:g} s brought into the case's 30-60 s)"))
+            did.append(f"the length ({length:g} s" + (")" if length == round(dur) else f"; the reference's {dur:g} s brought into the brief's 30-60 s)"))
             _row(brief, "difficulty_pacing", f"{length:g} s long", prompt, f)
         repeats = any(s.get("purpose") == "replay" for s in segs) or \
             any(REPEAT.search(f"{s.get('what', '')} {s.get('emphasis', '')}") for s in segs)
@@ -2738,7 +2738,7 @@ def _apply_one(brief: dict, prompt: str, a: dict) -> dict:
     fills = covers(use, "structure") and fill_kind(brief, a, segs) is not None
     # every guided creative gets the play decision (round 4, case 29: a screen, look and colours read made no play
     # decision; a 40 s win played 20.6 s and studio filled it with an 11 s slow replay): with no pace taken, the play
-    # seconds for the brief's length are filled with moves and blocks, before studio's own filling (R6, case p.2)
+    # seconds for the brief's length are filled with moves and blocks, before studio's own filling (R6, brief p.2)
     fill_all = pace_target is None and not fills and lv.get("source") in (None, "auto", "generate") and "level" not in fixed \
         and bool(focus)  # a plan that takes nothing from the clip ("ignore the clip") changes nothing
     if pace_target is not None or fills or fill_all:

@@ -129,7 +129,7 @@ async function step(name, fn) {
 }
 
 const PROMPT_A = "Zor bir seviye, 45 saniye, bir bomba kırmızı blokları temizlesin, hook 'Can you beat it?'";
-const PROMPT_B = "An easy Color Block Jam level on a small open board with four blocks in three colours. The player almost fails and solves it with two seconds left. The hook says 'Can you beat it?'. 30 seconds.";
+const PROMPT_B = "An easy CBJ level on a small open board with four blocks in three colours. The player almost fails and solves it with two seconds left. The hook says 'Can you beat it?'. 30 seconds.";
 const LINK = "https://mapendo.co/blog/best-mobile-games-ads";
 
 // ── the walkthrough (v2: every function) ─────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 """The asked-facts audit (2026-10-15): what the prompt measurably asks for, read from the prompt
 itself (never from the plan), against the brief (planned) and the made creative (made).
 
-The case's own rubric is the list: the eight prompt controls (p.3), the requested gameplay (p.5: a
+The brief's own rubric is the list: the eight prompt controls (p.3), the requested gameplay (p.5: a
 type of level, a visually interesting board, a difficult or easy level, a gameplay progression, a
 near-fail moment, a satisfying solve, a sequence of interactions), 30-60 s (p.2), and for an edit
 the preserved elements (p.7, proven by the edit report). The viewer's review judges the soft side;
@@ -59,7 +59,7 @@ _CLOCK_LEFT = (re.compile(rf"\b(?P<n>{_NUM})\s*(s|sec|secs|seconds?)\s+(left|rem
                re.compile(rf"\b(with|and)\s+(approximately |about |roughly |around |only )?(?P<n>{_NUM})\s*(s|sec|secs|seconds?)\s+(left|remaining)\b", re.I))
 _LENGTH = re.compile(rf"\b(\d{{2}})[\s-]*(s|sec|secs|second|seconds)\b(?!\s*(left|remaining|to spare|on the|clock|timer|time limit))", re.I)
 # A range ("a new 30–60 second ad", "30-60s", "30 to 60 seconds", "between 30 and 60 seconds"): on the video-reference
-# path (asked(..., case_range=True)) one whose ends lie in the case's own 30-60 s restates the case and is no stated
+# path (asked(..., case_range=True)) one whose ends lie in the brief's own 30-60 s restates the brief and is no stated
 # length (round 3, 2026-10-17: "30–60 second" was read as 60 s, and three ads were made 60 s long with 10-41 s end cards);
 # it is kept as length_range (info). The text and image workflows read it as before (the owner: they keep their behaviour)
 _LENGTH_RANGE = re.compile(r"\b(?:between\s+)?(\d{2})\s*(?:s|sec|secs|seconds?)?\s*(?:-|–|—|to|and)\s*(\d{2})[\s-]*"
@@ -100,7 +100,7 @@ _SETUP = re.compile(r"\b(at the start|at first|initially|to begin with|sits in|s
 _MOVE_VERB = re.compile(r"\b(moves?|moved|moving|slides?|slid|sends?|sent|puts?|pushes|pushed|drags?|dragged|shifts?|parks?|ends up)\b", re.I)
 _ATTEMPT = re.compile(r"\b(tries|tried|trying|attempts?|drags?|dragged|is stopped|gets stopped|bumps?|pulls?)\b", re.I)
 _SATISFY = re.compile(r"satisfying|cascade|chain|one after another|quick sequence of (successful )?exits|in a row|flow", re.I)
-# ---- added 2026-10-16: the case's controls the audit did not measure (visuals, assets, sequence, unchanged),
+# ---- added 2026-10-16: the brief's controls the audit did not measure (visuals, assets, sequence, unchanged),
 # the hesitations, the clock, the walls, the HUD number, per-colour counts and a caption's moment
 _NO_HES = re.compile(r"\b(no|without( any)?|zero) (hesitations?|pauses)\b", re.I)
 _HES_N = ((re.compile(r"\b(hesitates|pauses|stops to think|doubts)\s+(?P<n>once|twice|three times|two times|\d)\b", re.I), None),
@@ -158,7 +158,7 @@ def _n(s: str) -> int:
 
 def asked(prompt: str, case_range: bool = False) -> dict:
     """The measurable facts in a prompt. Absent facts are None (not asked). `case_range` (the video-reference workflow
-    only): a range inside the case's 30-60 s is no length (length_s None, length_range kept)."""
+    only): a range inside the brief's 30-60 s is no length (length_s None, length_range kept)."""
     p = re.sub(r"\bcolou?r[\s-]*block[\s-]*jam\b", " ", prompt, flags=re.I)  # the game's name
     out: dict = {"blocks": None, "colours": None, "colour_names": [], "difficulty": None, "length_s": None,
                  "clock_left_s": None, "captions": [], "mistakes": None, "shape": None, "style": [], "ending": None,
@@ -497,7 +497,7 @@ def _components(cells) -> int:
 
 def _level_rows_more(a: dict, brief: dict, f: dict) -> list[dict]:
     """The rows added on 2026-10-16: walls, the clock, per-colour counts, and the board's interest
-    (the case p.5: "a visually interesting board")."""
+    (the brief p.5: "a visually interesting board")."""
     from .describe import color_name
     lv_, gp = f["level"], brief["gameplay"]
     rows = []
@@ -526,7 +526,7 @@ def _level_rows_more(a: dict, brief: dict, f: dict) -> list[dict]:
         kinds = sorted(piece_kinds(lv_))
     except Exception:
         kinds = []
-    rows.append(_row("a visually interesting board (the case)", None,
+    rows.append(_row("a visually interesting board (the brief)", None,
                      f"{lv_.width}x{lv_.height}, {len(lv_.blocks)} blocks in {f['colours']} colours, "
                      f"{', '.join(kinds) or 'mixed'} pieces, {len(lv_.inactive)} wall cell(s), {len(lv_.exits)} doors"))
     return rows
@@ -538,7 +538,7 @@ def level_misses(prompt: str, brief: dict, level_path: Path, checks: list[dict] 
 
 
 def ad_rows(prompt: str, brief: dict, record: dict, vdir: Path, rec_dir: Path | None = None) -> list[dict]:
-    """The rows judged on the recording and the finished ad. A video-reference version reads the case's range as no
+    """The rows judged on the recording and the finished ad. A video-reference version reads the brief's range as no
     length (asked(..., case_range=True)); every other workflow as before."""
     a = asked(prompt, case_range=_ref_video(brief) is not None)
     checks = record.get("checks") or []
@@ -546,7 +546,7 @@ def ad_rows(prompt: str, brief: dict, record: dict, vdir: Path, rec_dir: Path | 
     rows = []
     length = record.get("length_s")
     if length is not None:
-        rows.append(_row("30-60 s (the case)", 29.5 <= length <= 60.5, f"the ad is {length} s", "ad"))
+        rows.append(_row("30-60 s (the brief)", 29.5 <= length <= 60.5, f"the ad is {length} s", "ad"))
         if a["length_s"] is not None:
             if brief["pacing"]["length_s"] != a["length_s"]:
                 rows.append(_row("length", False, f"{a['length_s']:g} s asked, the plan says {brief['pacing']['length_s']:g} s", "plan"))
@@ -554,7 +554,7 @@ def ad_rows(prompt: str, brief: dict, record: dict, vdir: Path, rec_dir: Path | 
                 rows.append(_row("length", abs(length - a["length_s"]) <= 1.0, f"{a['length_s']:g} s asked, the ad is {length} s", "ad"))
         elif a.get("length_range"):
             lo, hi = a["length_range"]
-            rows.append(_row("length range", None, f"{lo:g}-{hi:g} s restates the case's range, so no single length is asked; "
+            rows.append(_row("length range", None, f"{lo:g}-{hi:g} s restates the brief's range, so no single length is asked; "
                                                    f"the ad is {length} s", None))
     if a["clock_left_s"] is not None:
         c = by_name.get("Ending")
@@ -648,9 +648,9 @@ def poster_background(poster: Path):
 
 
 def _ad_rows_more(a: dict, brief: dict, record: dict, vdir: Path, rec_dir: Path | None) -> list[dict]:
-    """The rows added on 2026-10-16 for the case's controls the audit did not measure: visual elements
+    """The rows added on 2026-10-16 for the brief's controls the audit did not measure: visual elements
     (cursor, background), assets (music), the sequence of events, what should stay the game's own, a
-    caption's moment (from the parts manifest), the hesitations, the HUD number, and the case's
+    caption's moment (from the parts manifest), the hesitations, the HUD number, and the brief's
     "gameplay at the centre" (p.2)."""
     rows = []
     gp = brief["gameplay"]
@@ -769,7 +769,7 @@ def _ad_rows_more(a: dict, brief: dict, record: dict, vdir: Path, rec_dir: Path 
     if parts and total:
         gameplay = sum((p["to_s"] or 0) - (p["from_s"] or 0) for p in parts if p.get("gameplay") or p["id"] == "result")
         share = gameplay / total
-        rows.append(_row("gameplay at the centre (the case)", share >= 0.4,
+        rows.append(_row("gameplay at the centre (the brief)", share >= 0.4,
                          f"gameplay (play, replay, the result clip) is {gameplay:.1f} s of {total:g} s ({share:.0%}); the rest is "
                          f"held screens and the end card" + ("" if share >= 0.4 else "; shorter held screens or a replay would put the game back at the centre"),
                          "plan"))
@@ -786,7 +786,7 @@ def facts_read(a: dict) -> list[str]:
         if a.get(k) is not None:
             out.append(fmt.format(a[k]))
     if a.get("length_range") and a.get("length_s") is None:
-        out.append(f"{a['length_range'][0]:g}-{a['length_range'][1]:g} s (the case's range, not a stated length)")
+        out.append(f"{a['length_range'][0]:g}-{a['length_range'][1]:g} s (the brief's range, not a stated length)")
     if a.get("colour_names"):
         out.append("colours " + ", ".join(c.lower() for c in a["colour_names"]))
     if a.get("colour_counts"):
@@ -916,7 +916,7 @@ def colour_rows(level_path: Path, brief: dict) -> list[dict]:
 
 
 def rules_rows(level_path: Path, rec_dir: Path) -> list[dict]:
-    """Game dynamics and rules, replayed on the game's own record of the drags (the case's
+    """Game dynamics and rules, replayed on the game's own record of the drags (the brief's
     "gameplay consistency": CBJ behaves like the game, not like an animation). The rules are the
     Unity project's, re-read in the C# on 2026-10-15: InputHandler drags ONE block at a time and
     checks the exit only while dragging, each time the pivot enters a new cell; releasing never
@@ -1000,7 +1000,7 @@ def rules_rows(level_path: Path, rec_dir: Path) -> list[dict]:
 
 
 WORKFLOWS = {
-    "text": "text-to-creative: the board, the play, the game's rules, every fact the prompt asks for, the case's rows",
+    "text": "text-to-creative: the board, the play, the game's rules, every fact the prompt asks for, the brief's rows",
     "image": "image-guided: as text-to-creative, plus the image's role (style, composition, asset, modify)",
     "video": "video-guided: as text-to-creative, plus the reference rows (the ending, the pacing, the hook, the purposes "
              "in order, the part lengths, the captions, the look, nothing copied, the reading's confidence)",
@@ -1040,7 +1040,7 @@ def rows(prompt: str, brief: dict, level_path: Path, record: dict, vdir: Path, r
     wf = workflow(brief, record)
     out = level_rows(prompt, brief, level_path, record.get("checks")) + ad_rows(prompt, brief, record, vdir, rec_dir)
     if "case" not in wf["groups"]:
-        out = [r for r in out if "(the case)" not in r["check"]]
+        out = [r for r in out if "(the brief)" not in r["check"]]
     if rec_dir is not None and "rules" in wf["groups"]:
         out += rules_rows(level_path, rec_dir)
     else:

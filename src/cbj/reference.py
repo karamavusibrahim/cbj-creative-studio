@@ -1,6 +1,6 @@
 """Reference analysis: what an attached image or video is, measured and described, for the planner.
 
-The case (p.6) asks for images as visual, style or composition references and for videos whose
+The brief (p.6) asks for images as visual, style or composition references and for videos whose
 concept, structure and pacing the tool should understand. The planner is a text model: it only
 ever sees file names. So before it plans, each reference file is analysed here:
 - an image: its palette is measured in code (PIL, no model) and a multimodal model describes it;
@@ -133,7 +133,7 @@ def asks_placement(prompt: str) -> bool:
     return any(re.search(rf"\b{re.escape(w)}\b", text) for w in PLACE_WORDS)
 
 
-MAX_VIDEO_S = 120.0  # longer clips are refused at upload: the case's references are 30-60 s ads
+MAX_VIDEO_S = 120.0  # longer clips are refused at upload: the brief's references are 30-60 s ads
 MAX_FRAMES = 200  # the model sees the whole clip in at most about this many frames
 COPY_FPS = (2.0, 8.0)  # the copy's frame rate stays in this range: fps = max(2, min(8, 200 / duration))
 
@@ -572,7 +572,7 @@ def _unit(x) -> float | None:
 
 def structure(raw, duration_s=None) -> list[dict]:
     """The reference's segments as the brief keeps them: {from_s, to_s, purpose, what, captions,
-    emphasis, evidence_s, confidence}, in order, purposes from PURPOSES (the case p.6: the creative
+    emphasis, evidence_s, confidence}, in order, purposes from PURPOSES (the brief p.6: the creative
     structure and pacing to adapt). The model's own label, when it is not the purpose's name, is
     kept as purpose_raw (the card shows it); a confidence outside 0-1 is clamped."""
     out = []

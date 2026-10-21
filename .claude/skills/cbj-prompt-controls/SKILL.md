@@ -1,6 +1,6 @@
 ---
 name: cbj-prompt-controls
-description: The case's eight prompt controls for a Color Block Jam ad (type or structure of the level, gameplay behaviour, difficulty or pacing, visual elements, creative concept, sequence of events, assets to use, elements that should remain unchanged) as cbj-creative reads them into a brief - the vocabulary each control understands, its defaults, the concept-to-gameplay mapping, what must not be invented, and the limits the tool answers with "adjusted" or "not supported". Use when improving or completing a user's prompt before planning, when reading a prompt into a brief, when explaining a plan row to a marketer, or when writing test prompts that the game and the tool can honour.
+description: The brief's eight prompt controls for a CBJ ad (type or structure of the level, gameplay behaviour, difficulty or pacing, visual elements, creative concept, sequence of events, assets to use, elements that should remain unchanged) as cbj-creative reads them into a brief - the vocabulary each control understands, its defaults, the concept-to-gameplay mapping, what must not be invented, and the limits the tool answers with "adjusted" or "not supported". Use when improving or completing a user's prompt before planning, when reading a prompt into a brief, when explaining a plan row to a marketer, or when writing test prompts that the game and the tool can honour.
 metadata:
   spec-version: "1"
   last-verified: "2026-10-19"
@@ -84,9 +84,9 @@ writes which words it read that way in its assumptions.
 - An uploaded file is used only when the prompt refers to it (by name, "our logo", "the attached picture"); a file the
   prompt names but did not attach stops the make with a question (`needs`: attach, or make without), never guessed
   from earlier uploads; a reference video is never an asset.
-- "Color Block Jam" in a prompt is the game's name, not a request for a jam-packed board.
+- "CBJ" in a prompt is the game's name, not a request for a jam-packed board.
 
-**An attached image's role (case p.6, `imageref.py`, 2026-10-15).** style (a measured style kit: background from the two
+**An attached image's role (brief p.6, `imageref.py`, 2026-10-15).** style (a measured style kit: background from the two
 dominant soft colours, captions contrast-checked, blocks mapped to the game's slots by hue only when the words want the
 blocks or the whole look and the image has 2+ distinct hues; "inspired by", "use its colours", "design transfer", "same
 style"), composition (a board the model read becomes the level spec: size, blocks, colours, packed/spacious/symmetric,

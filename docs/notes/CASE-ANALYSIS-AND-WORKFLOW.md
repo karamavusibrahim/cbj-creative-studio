@@ -1,8 +1,8 @@
-# Rollic "AI Engineer, Creative" case: analysis and 10-day workflow
+# the creative-production brief: analysis and 10-day workflow
 
-Prepared 2026-10-08 from the PDF in ~/Downloads ("AI Engineer, Creative Case Study.pdf", 14 pages),
-the CBJ Unity project in the Drive folder (downloaded to ~/rollic-case/CBJ), and research on
-Rollic's live creatives, Higgsfield, NVIDIA build and Unity tooling. Everything marked VERIFIED was
+Prepared 2026-10-08 from the PDF in ~/Downloads (14 pages),
+the CBJ Unity project in the Drive folder (downloaded to ~/cbj-work/CBJ), and research on
+the publisher's live creatives, Higgsfield, NVIDIA build and Unity tooling. Everything marked VERIFIED was
 read in the code or tested on your machine today. The deadline is 10 days from receipt; the PDF
 landed 2026-10-08 00:02, so plan for submission on 2026-10-17 and confirm the exact date from the
 email.
@@ -12,7 +12,7 @@ email.
 ## 1. What they are actually asking
 
 Build a tool where a marketer types a sentence (optionally drops an image or a video) and gets a
-30-60 s Color Block Jam (CBJ) ad creative back, then asks for one change and gets a revised version
+30-60 s CBJ ad creative back, then asks for one change and gets a revised version
 where only that one thing changed.
 
 The PDF repeats one idea on five of its fourteen pages: consistency and controlled editing matter
@@ -30,7 +30,7 @@ lists ten grading criteria. Read together, the hidden rubric is:
 | AI usage | AI where it adds value (intent, planning, level generation, asset generation, reference analysis, QA), not where it hurts (rendering gameplay) |
 | Engineering quality | Typed spec, tests for the solver, reproducible renders, clear repo |
 | User experience | One prompt box, one drop zone, Generate, Review, Request change |
-| Extensibility | The same spec and pipeline could serve other Rollic games and playables |
+| Extensibility | The same spec and pipeline could serve the publisher's other games and playables |
 | Decision making | Honest limitations and a production roadmap |
 
 Required deliverables (p.12): working prototype, source + setup, at least one text-driven, one
@@ -42,7 +42,7 @@ consistency, controlled editing, limitations and production next steps.
 
 ## 2. What is in the Unity project (VERIFIED from code)
 
-Location: ~/rollic-case/CBJ. Core scripts: 3,784 lines of C# in Assets/Scripts plus a
+Location: ~/cbj-work/CBJ. Core scripts: 3,784 lines of C# in Assets/Scripts plus a
 1,100-line Level Editor window. Six example levels in Assets/Levels.
 
 | Fact | Detail | Why it matters for you |
@@ -100,7 +100,7 @@ timer ends. The game has no audio.
                    MP4 9:16 + CreativeDoc + render manifest (hashes)
 ```
 
-**The single idea that wins the case:** every creative is fully described by one typed document,
+**The single idea that wins the brief:** every creative is fully described by one typed document,
 the CreativeDoc. Generation writes a CreativeDoc. Editing writes a diff to the CreativeDoc.
 Rendering is a pure function of the CreativeDoc. So "keep everything the same but replace this
 asset" is a one-field change followed by a re-render in which every untouched layer is
@@ -128,12 +128,12 @@ proof in the UI and in the write-up.
 ### Concept library (makes text-to-creative reliable)
 
 Build six to eight named templates and let the planner choose and parameterise one. Based on what
-Rollic's own CBJ ads do (Segwise teardown: unresolved level endings, "no ads" message in text and
+the publisher's own CBJ ads do (Segwise teardown: unresolved level endings, "no ads" message in text and
 voice-over, tactile click SFX instead of music, low-poly characters walking in, slight camera shakes
 and zooms) and what UA teams ask for:
 
 1. near_fail_solve: hesitation, wrong moves, timer under 3 s, last block exits at 1 s.
-2. unresolved_cliffhanger: cut before the last two blocks (Zeigarnik ending Rollic uses).
+2. unresolved_cliffhanger: cut before the last two blocks (Zeigarnik ending the publisher uses).
 3. satisfying_clear: clean, fast solve, exit particles, "satisfying" pacing.
 4. fail_bait: a deliberately wrong move sequence that jams the board, "can you do better?".
 5. level_reveal: camera tilts from top-down to the game angle while the board builds.
@@ -306,7 +306,7 @@ ads, audio generation. Name each in "limitations and next steps".
 
 | Day | Goal | Done when |
 |---|---|---|
-| 1 (Oct 8) | Environment. Install Unity 6000.3.5f1 (Unity Hub or `brew install --cask unity-cli` then `unity install 6000.3.5f1`), Personal licence, open CBJ, play the six levels, record a screen capture of each. Finish the project download (background job writes to ~/rollic-case/download-full.log; check all folders including .meta files exist). Repo skeleton, CreativeDoc schema v0. | Game runs on your Mac; schema committed |
+| 1 (Oct 8) | Environment. Install Unity 6000.3.5f1 (Unity Hub or `brew install --cask unity-cli` then `unity install 6000.3.5f1`), Personal licence, open CBJ, play the six levels, record a screen capture of each. Finish the project download (background job writes to ~/cbj-work/download-full.log; check all folders including .meta files exist). Repo skeleton, CreativeDoc schema v0. | Game runs on your Mac; schema committed |
 | 2 | Solver. Port the exit and movement rules to Python, BFS solver, tests on the six levels, difficulty metrics. | All six shipped levels solve and the solution replays in the editor by hand |
 | 3 | Unity CreativeRunner. Scripted move playback, fixed timestep, PNG capture, event log, CLI args, standalone build. ffmpeg assembly to MP4. | A level JSON + moves JSON → 9:16 MP4 with no human input |
 | 4 | Generator + planner. Procedural level generator with constraints, planner prompt → CreativeDoc, three templates working end to end (near_fail_solve, satisfying_clear, unresolved_cliffhanger). | Prompt from p.4 ("difficult, narrow center, almost fails") produces a correct video |
@@ -330,13 +330,13 @@ Done so far:
 | 2 (Oct 9) | Research on repos, papers, MCPs and skills; Unity 6000.3.5f1 installed and licensed | RESEARCH-TOOLS-PAPERS-2026-10-09.md |
 | 3 (Oct 10) | Project fixed and running, standalone build works. Solver repo: exact game rules, minimum-drag solver, replay checker, 3 Fable 5.1 reviews plus adversarial failure testing. Competitor ad research | cbj-creative/, SOLVER-REPORT-2026-10-10.md, SOLVER-CHECK-STEPS.md, COMPETITOR-ADS-2026-10-10.md |
 | 4 (also Oct 10) | Unity CreativeRunner: `cbj render` records a move script in the real game as 1080x1920 video (win / cut / fail endings), all six levels cleared in-game, `cbj compare`, Fable 5.1 review fixed | cbj-creative/unity/, RUNNER-REPORT-2026-10-10.md, RUNNER-CHECK-STEPS.md |
-| 4c (also Oct 10) | Decisions with Fable 5.1. (1) The game's fail-then-win bug is fixed in the game code by a 31-line patch (`unity/game-patch`) that `build-player` applies to its copy only; Rollic's project stays byte-identical, and `--stock` builds and records the unpatched game for a before/after. (2) Fail endings: S5 opt-in, S6 timeboxed, default endings S3/S4/S1. 195 fast tests + 22 that start Unity | RUNNER-REPORT "Decisions" |
+| 4c (also Oct 10) | Decisions with Fable 5.1. (1) The game's fail-then-win bug is fixed in the game code by a 31-line patch (`unity/game-patch`) that `build-player` applies to its copy only; the publisher's project stays byte-identical, and `--stock` builds and records the unpatched game for a before/after. (2) Fail endings: S5 opt-in, S6 timeboxed, default endings S3/S4/S1. 195 fast tests + 22 that start Unity | RUNNER-REPORT "Decisions" |
 | 4b (also Oct 10) | Case re-check with Fable 5.1: difficulty rating (`cbj difficulty`), camera zoom/pan/keys, pacing flags, timer override, HUD hiding, compositor event data, the game's fail-then-win bug fixed in the recorder, stale statements in these documents corrected. 190 fast tests + 20 that start Unity at that point | same files, updated |
 | 5 (also Oct 10, planned for Oct 11) | Scenario scripts: `cbj scenario LEVEL --ending win\|near_fail\|cliffhanger\|time_out`. Believable mistakes (blocked, wrong way, one fidget; each costs 1-2 drags), hesitations, frame-exact pacing, clock and length fitted by moving pauses only from one dry run; every recording lands on the predicted frames. All four endings recorded on the narrow-centre level (the p.4 example as a near-fail with 00:01 left). A* solver (`solve_fast`, same minimum, 160x faster there). Two Fable 5.1 checks: all its rules applied; 9 + 10 findings fixed (incl. cliffhanger puzzles and mistake reactions on Levels 4-6, time-out 00:01 at the grab, `cbj rerun FOLDER` reproduces a recording), plus a --length bug found while writing the check guide. 309 fast tests + 28 that start Unity | SCENARIO-REPORT-2026-10-10.md, SCENARIO-CHECK-STEPS.md |
 | 6 (Oct 11) | Compositor: `cbj ad RECORDING` makes a finished 30 s ad (hook on frame 0, captions from recorded facts only, tap ring from the finger log, synthesized sound effects, a slow-motion replay, the game's result screen, a "PLAY NOW" end card) as editable data (`ad.json`: named segments and layers anchored to gameplay events, a `locked` list that QA enforces, a copy guard against invented odds). `cbj compose` renders any `ad.json` byte-identically; `cbj ad-diff A B --decode` proves an edit stays in its layer's frames and box, in the delivered MP4 too (an IDR keyframe at every boundary, constant quantizer). All four endings rendered as 30 s ads, QA clean (the win's end card is long: 7.3 s). Fable 5.1: plan discussion, two checks, one confirmation; 12 + 12 + 2 findings fixed. 359 fast tests + 28 that start Unity | COMPOSITOR-REPORT-2026-10-11.md, COMPOSITOR-CHECK-STEPS.md, COMPOSITOR-PLAN-2026-10-11.md |
-| 7 (also Oct 11, planned for Oct 13) | Text to creative + the test UI (asked for by the user): `cbj ui` (http://127.0.0.1:8765): a prompt (plus images) -> an LLM brief (NVIDIA Nemotron 3 Ultra, JSON schema) shown control by control for the case's 8 prompt controls (applied / default / adjusted / not supported, with reasons) -> the engine makes the ad. New engine pieces: a level generator (open, narrow centre, door, pillars; easy/medium/hard bands; sized to the ad), recolouring inside the real game, ad options (result first, no replay/result screen, copy, caption colours, logo/mascot/end-card art, hand cursor, no sound, hidden HUD). Edits change only what they ask about, with three proofs (recording reused + ad-diff; the stored job re-filmed + identical game state; new gameplay said plainly). Unity MCP not used at run time (Fable agreed). Fable 5.1: plan discussion, a check (20 defects fixed), a confirmation (keep fixed). 420 fast + 28 Unity tests | TEXT-TO-CREATIVE-REPORT-2026-10-11.md, TEXT-TO-CREATIVE-CHECK-STEPS.md, TEXT-TO-CREATIVE-PLAN-2026-10-11.md |
-| 8 (Oct 11-12, asked for by the user) | Core requirement 2, level & gameplay generation: the case's seven asks each a brief field that code builds, plays and checks on the recording. Ordered steps (leaves/moves/stuck/hesitates, first/last/all, biggest/smallest/longest) with an exact A* solver; a satisfying finish (one key move, then every block in a row, never longer than the minimum); near-fail 00:01-00:03; pacing curves; shapes cross/ring/lanes, piece sets, symmetric/packed/colourful boards; gates only where their block can reach; local search; a fairer naive player. Checks per version from result.json; UI card with board picture, moves and checks; Level only button; `cbj generate`. Generator 24/24 in band (23/24 before), hard up to 3 repositioning. 20 prompts end to end: all made creatives played as planned; 2 honest adjustments, 1 refusal. Fable 5.1: plan review, a check (15 findings fixed), a confirmation (its 7 follow-ups fixed). 493 fast + 28 Unity tests. Multi-level ads cut (designed, not built) | LEVEL-GAMEPLAY-REPORT-2026-10-11.md, LEVEL-GAMEPLAY-CHECK-STEPS.md, LEVEL-GAMEPLAY-PLAN-2026-10-11.md |
-| 9 (Oct 12, asked for by the user) | Core requirement 5, controlled editing: an edit changes the stored creative, not a new generation. The edit report checks the case's seven preserve items plus captions and sound, each difference asked / explained by a check on the measured difference / NOT ASKED (fails the edit). The pin keeps the original's intro, replay and length when the gameplay frames are kept. Asset inventory ("this asset", the coin pile...) for the planner and the UI's *Things in this ad* (Replace / Add / Remove / Edit, no planner); replacements drawn in the original's box and place; assets merged per slot. Gameplay edits keep the closest play (24 plans, solver cache); "harder"/"easier" edit the same board (at most 3 changes) and keep the HUD number. Edit any version, compare any two. Fable 5.1: plan discussion, check (11 defects fixed), confirmation ("done"; 4 edge cases fixed). Also fixed a requirement-2 bug found live: "Color Block Jam" in a prompt read as asking for a jam-packed board. 538 fast + 28 Unity tests | CONTROLLED-EDITING-REPORT-2026-10-12.md, CONTROLLED-EDITING-CHECK-STEPS.md, CONTROLLED-EDITING-PLAN-2026-10-12.md |
+| 7 (also Oct 11, planned for Oct 13) | Text to creative + the test UI (asked for by the user): `cbj ui` (http://127.0.0.1:8765): a prompt (plus images) -> an LLM brief (NVIDIA Nemotron 3 Ultra, JSON schema) shown control by control for the brief's 8 prompt controls (applied / default / adjusted / not supported, with reasons) -> the engine makes the ad. New engine pieces: a level generator (open, narrow centre, door, pillars; easy/medium/hard bands; sized to the ad), recolouring inside the real game, ad options (result first, no replay/result screen, copy, caption colours, logo/mascot/end-card art, hand cursor, no sound, hidden HUD). Edits change only what they ask about, with three proofs (recording reused + ad-diff; the stored job re-filmed + identical game state; new gameplay said plainly). Unity MCP not used at run time (Fable agreed). Fable 5.1: plan discussion, a check (20 defects fixed), a confirmation (keep fixed). 420 fast + 28 Unity tests | TEXT-TO-CREATIVE-REPORT-2026-10-11.md, TEXT-TO-CREATIVE-CHECK-STEPS.md, TEXT-TO-CREATIVE-PLAN-2026-10-11.md |
+| 8 (Oct 11-12, asked for by the user) | Core requirement 2, level & gameplay generation: the brief's seven asks each a brief field that code builds, plays and checks on the recording. Ordered steps (leaves/moves/stuck/hesitates, first/last/all, biggest/smallest/longest) with an exact A* solver; a satisfying finish (one key move, then every block in a row, never longer than the minimum); near-fail 00:01-00:03; pacing curves; shapes cross/ring/lanes, piece sets, symmetric/packed/colourful boards; gates only where their block can reach; local search; a fairer naive player. Checks per version from result.json; UI card with board picture, moves and checks; Level only button; `cbj generate`. Generator 24/24 in band (23/24 before), hard up to 3 repositioning. 20 prompts end to end: all made creatives played as planned; 2 honest adjustments, 1 refusal. Fable 5.1: plan review, a check (15 findings fixed), a confirmation (its 7 follow-ups fixed). 493 fast + 28 Unity tests. Multi-level ads cut (designed, not built) | LEVEL-GAMEPLAY-REPORT-2026-10-11.md, LEVEL-GAMEPLAY-CHECK-STEPS.md, LEVEL-GAMEPLAY-PLAN-2026-10-11.md |
+| 9 (Oct 12, asked for by the user) | Core requirement 5, controlled editing: an edit changes the stored creative, not a new generation. The edit report checks the brief's seven preserve items plus captions and sound, each difference asked / explained by a check on the measured difference / NOT ASKED (fails the edit). The pin keeps the original's intro, replay and length when the gameplay frames are kept. Asset inventory ("this asset", the coin pile...) for the planner and the UI's *Things in this ad* (Replace / Add / Remove / Edit, no planner); replacements drawn in the original's box and place; assets merged per slot. Gameplay edits keep the closest play (24 plans, solver cache); "harder"/"easier" edit the same board (at most 3 changes) and keep the HUD number. Edit any version, compare any two. Fable 5.1: plan discussion, check (11 defects fixed), confirmation ("done"; 4 edge cases fixed). Also fixed a requirement-2 bug found live: "CBJ" in a prompt read as asking for a jam-packed board. 538 fast + 28 Unity tests | CONTROLLED-EDITING-REPORT-2026-10-12.md, CONTROLLED-EDITING-CHECK-STEPS.md, CONTROLLED-EDITING-PLAN-2026-10-12.md |
 
 Days 3, 4 and the scenario step were all done on Oct 10, so Oct 11 is free. Fable's first priority
 for it: the compositor and the first finished 30 s ad (the compositor is where "creative quality"
@@ -441,7 +441,7 @@ checks every cell.)
 
 ## 10. Research notes and sources
 
-* Rollic CBJ creative strategy (Segwise teardown): unresolved levels as the ending, "no ads" hook
+* the publisher CBJ creative strategy (Segwise teardown): unresolved levels as the ending, "no ads" hook
   in VO and text, tactile SFX over music, low-poly characters, light camera shakes and zooms;
   fail offers are about a fifth of revenue but ads do not show failing or monetisation.
   https://segwise.ai/blog/color-block-jam-creative-strategy-breakdown
@@ -464,4 +464,3 @@ checks every cell.)
   Nemotron Nano Omni accepts base64 mp4 on the hosted endpoint (tested); model card lists mp4 up
   to 2 minutes.
   https://build.nvidia.com/nvidia/cosmos-reason2-8b , https://build.nvidia.com/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-* Rollic company and interview notes you already have: ~/Downloads/rollic_interview_prep_2026-10-06.md

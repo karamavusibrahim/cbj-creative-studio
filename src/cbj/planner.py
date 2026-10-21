@@ -814,7 +814,7 @@ def _reference_carries(brief: dict, prompt: str, analyses: list[dict]) -> None:
 
 def _obstacle_picture(brief: dict, prompt: str, attached: list[str]) -> None:
     """"Use this object instead of the current obstacle": an attached picture the request puts on
-    the obstacle (the board's walls) gets the obstacle role, wherever the model put it (case p.6)."""
+    the obstacle (the board's walls) gets the obstacle role, wherever the model put it (brief p.6)."""
     if not attached or not _asks_obstacle_picture(prompt):
         return
     pics = [a for a in brief["assets"] if a["file"] in attached and not B.is_audio(a["file"])]
@@ -837,7 +837,7 @@ _STYLE_USE = re.compile(r"\b(colou?rs?|palette|tones?|shades?|hues?|style|look|m
 
 def _place_unplaced(brief: dict, prompt: str, attached: list[str], current: dict | None) -> None:
     """An edit that attaches a picture and asks to use it, which the model placed nowhere, puts it
-    in the slot the prompt names, else in the end-card picture, and says which (case p.4: "replace
+    in the slot the prompt names, else in the end-card picture, and says which (brief p.4: "replace
     this object with the attached asset")."""
     from . import edits
     text = prompt.lower()
@@ -885,7 +885,7 @@ def _place_unplaced(brief: dict, prompt: str, attached: list[str], current: dict
 
 
 def _note_guessed_slot(brief: dict, prompt: str, attached: list[str], current: dict | None) -> None:
-    """"Keep this creative exactly the same, but replace this object with the attached asset" (case p.4) names
+    """"Keep this creative exactly the same, but replace this object with the attached asset" (brief p.4) names
     no thing: when the model placed the one attached picture in a slot by itself, the guess is written as an
     assumption with the alternatives (2026-10-18: a gold star became the PLAY NOW button without a word)."""
     from . import edits
@@ -1344,7 +1344,7 @@ def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprit
     """A checked brief for a prompt. With `current`, the prompt edits that brief: only what the
     prompt asks to change may change. uploads: the image files attached to this prompt (offered
     to the model as assets); available: every uploaded image (an edit keeps the ones its version
-    uses); references: attached files to analyse first (reference images and videos, case p.6),
+    uses); references: attached files to analyse first (reference images and videos, brief p.6),
     with `analyser` (reference.analyse) reading each one. route: the edit's route as text (route.text),
     decided in code before the model; it is given to the model with the edit. Returns the brief,
     with `planner` notes."""
@@ -1429,7 +1429,7 @@ def plan(prompt: str, client=None, uploads: dict[str, Path] | None = None, sprit
     _reference_files(brief, prompt, analyses, current)
     if analyses:
         from . import imageref
-        image_roles = imageref.apply(brief, prompt, analyses, current)  # the image's role and what it gives (case p.6)
+        image_roles = imageref.apply(brief, prompt, analyses, current)  # the image's role and what it gives (brief p.6)
         if current is None and any(a.get("kind") == "video" for a in analyses):
             from . import videoref
             videoref.apply(brief, prompt, analyses)  # what the video's reading focus allows (core requirement 4)

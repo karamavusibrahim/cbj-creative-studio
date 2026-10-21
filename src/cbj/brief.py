@@ -4,7 +4,7 @@ A planner (an LLM, see planner.py) turns a prompt into a brief. This module defi
 checks it against what the engine can really do, and records every adjustment in the brief
 itself, so nothing a prompt asks for is dropped silently.
 
-The brief follows the case's eight prompt controls (p.3). Each one gets a row in `controls`:
+The brief follows the eight prompt controls (p.3). Each one gets a row in `controls`:
 what the prompt asked, what the tool will do, and a status:
 - applied: asked for, and done as asked;
 - default: the prompt said nothing, so the tool's default is used;
@@ -69,7 +69,7 @@ AUDIO_EXT = (".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac")  # music files an 
 
 def is_audio(name) -> bool:
     return str(name).lower().endswith(AUDIO_EXT)
-LENGTH_RANGE_S = (30.0, 60.0)  # the case asks for 30-60 second creatives (p.2)
+LENGTH_RANGE_S = (30.0, 60.0)  # the brief asks for 30-60 second creatives (p.2)
 # Hesitations a believable play can show per ending (play.plan refuses more).
 MAX_HESITATIONS = {"win": 1, "near_fail": 2, "cliffhanger": 1, "time_out": 1}
 ZOOM_RANGE = (1.0, 1.12)  # closer crops the side gates of a typical board out of frame
@@ -349,7 +349,7 @@ def _complete(b: dict) -> dict:
     for c in CONTROLS:
         if c not in seen:
             control(b, c)
-    # one row per control, in the case's order
+    # one row per control, in the brief's order
     rows = {}
     for c in b["controls"]:
         rows.setdefault(c["control"], c)
@@ -1003,7 +1003,7 @@ def _evidence(group: str, prompt: str, new: dict) -> str | None:
     """None if the prompt's words support changing this group, else the reason it is not used."""
     if foreign(prompt):
         return None
-    # The game's name is not a request: "Color Block Jam" says nothing about a "jam"-packed board.
+    # The game's name is not a request: "CBJ" says nothing about a "jam"-packed board.
     text = re.sub(r"\bcolou?r[\s-]*block[\s-]*jam\b", " ", prompt.lower())
     # numbers that are lengths, clocks or counts of other things are not board sizes
     sized = re.sub(r"\d+(\.\d+)?\s*-?\s*(s|sec|secs|second|seconds|min|minute|minutes|%|percent)\b", " ", text)
@@ -1189,7 +1189,7 @@ def _merge_assets(base: list, new: list, prompt: str, declared: bool, attached) 
 
 def merge(base: dict, new: dict, prompt: str, attached=()) -> tuple[dict, list[str]]:
     """The planner's brief, keeping only what the prompt asked to change: every other field keeps
-    its value in `base` (the defaults for a new ad, the current version for an edit). The case:
+    its value in `base` (the defaults for a new ad, the current version for an edit). The brief:
     "only the requested element should change" (p.7). Returns the brief and what was not taken,
     with the reason."""
     merged = copy.deepcopy(base)
@@ -1237,7 +1237,7 @@ def changed_groups(old: dict, new: dict) -> list[str]:
 
 
 def changed_controls(old: dict, new: dict) -> list[str]:
-    """The controls whose fields differ between two briefs, in the case's order."""
+    """The controls whose fields differ between two briefs, in the brief's order."""
     out = []
     for group, (ctl, paths) in GROUPS.items():
         if any(_get(old, p) != _get(new, p) for p in paths) and ctl not in out:

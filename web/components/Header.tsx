@@ -118,11 +118,11 @@ export default function Header() {
     <header className="sticky top-0 z-40 border-b border-outline-variant/30 bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.02)]">
       <div className="mx-auto flex h-16 max-w-[1560px] items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-6 lg:gap-8">
-          <Link href="/" className="flex min-w-0 select-none items-center gap-3" aria-label="Color Block Jam Studio, home">
+          <Link href="/" className="flex min-w-0 select-none items-center gap-3" aria-label="CBJ Studio, home">
             <LogoMark className="size-8 shrink-0" />
             <span className="flex min-w-0 flex-col">
               <span className="truncate font-headline text-[1.05rem] font-bold leading-tight tracking-tight text-on-surface sm:text-headline-md sm:font-bold">
-                Color Block Jam Studio
+                CBJ Studio
               </span>
               <span className="truncate text-[0.65rem] font-semibold uppercase leading-none tracking-wider text-outline sm:text-label-sm sm:font-semibold">
                 Creative Studio

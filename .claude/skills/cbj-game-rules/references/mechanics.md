@@ -1,6 +1,6 @@
 # Mechanics as implemented, with source lines
 
-Extracted 2026-10-14 from `~/rollic-case/CBJ/Assets/` (paths relative to `Assets/`). Inspector values in
+Extracted 2026-10-14 from `~/cbj-work/CBJ/Assets/` (paths relative to `Assets/`). Inspector values in
 `Scenes/GameScene.unity` and `Scripts/MovementSettings.asset` override the defaults written in code.
 
 ## Board

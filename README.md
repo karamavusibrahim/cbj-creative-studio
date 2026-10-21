@@ -1,8 +1,8 @@
-# Color Block Jam Creative Studio
+# CBJ Creative Studio
 
-A tool that turns a sentence, optionally with a picture or a video, into a 30-60 second **Color Block Jam** ad
+A tool that turns a sentence, optionally with a picture or a video, into a 30-60 second **CBJ** ad
 creative whose gameplay is played and recorded inside the real Unity game, and that edits a finished creative one
-change at a time with a measured proof of what was kept. Built for Rollic's "AI Engineer, Creative" case.
+change at a time with a measured proof of what was kept. Built as a complete creative-production tool for the game.
 
 - **Live app:** https://cbj-creative-studio.vercel.app
 - **Passcode** (needed once per browser to make or edit; browsing needs none): `geV0rjLVte`
@@ -27,7 +27,7 @@ site) is **online**. When it is offline, the Showcase still works; making and ed
    reference video, or an asset to place. Press **Enhance prompt** to see your request rewritten in the words the
    planner reads best (nothing is added; suggestions come as questions you can tap), or open **Start from a trend**
    for prompts written from today's trends. Press **Generate creative**. The first time, enter the passcode.
-2. **Read what the tool understood.** A table of the case's eight prompt controls shows how each was read
+2. **Read what the tool understood.** A table of the eight prompt controls shows how each was read
    (applied, default, adjusted, not supported), then the progress through plan, level, play, record, compose, review.
 3. **Review the result.** The player, the level and its checks (measured from the game's own log), and the viewer's
    review (a model's opinion, its measured scores marked apart). Under it, **Was this what you asked?** sends feedback
@@ -38,7 +38,7 @@ site) is **online**. When it is offline, the Showcase still works; making and ed
    the frames that changed, and **Compare** between any two versions.
 5. **Showcase.** Finished creatives with their full evidence, available with the engine off.
 
-Test inputs (the Color Block Jam trailers, reference pictures, objects, textures, logos, stickers) can be attached from
+Test inputs (the CBJ trailers, reference pictures, objects, textures, logos, stickers) can be attached from
 the Create page's sample assets; they are also listed in `docs/TEST-ASSETS.md`.
 
 ## 2. Using the app with your own Claude account
@@ -65,8 +65,8 @@ takes a Gemini key alone.
 ## 3. Running everything yourself
 
 Requirements: macOS, [Unity](https://unity.com) 6000.3.5f1 (the version of the provided project), `ffmpeg`,
-[`uv`](https://docs.astral.sh/uv/), Node 20+, and the Color Block Jam Unity project from the case placed next to this
-folder as `../CBJ` (it is Rollic's material and is not part of this repository).
+[`uv`](https://docs.astral.sh/uv/), Node 20+, and the CBJ Unity project from the brief placed next to this
+folder as `../CBJ` (it is the publisher's material and is not part of this repository).
 
 ```bash
 uv sync                                   # the Python engine
@@ -111,7 +111,7 @@ the production roadmap.
 2. The live app: one creative of each kind in the Showcase with its evidence page; make one yourself with the passcode.
 3. [.claude/skills/](.claude/skills/README.md): the rules every agent works from (the game as implemented, the eight
    prompt controls, each workflow's contract).
-4. [docs/README.md](docs/README.md): the working notes in order, from the case analysis and the competitor-ad study to
+4. [docs/README.md](docs/README.md): the working notes in order, from the brief analysis and the competitor-ad study to
    the component reports, the evaluation coverage and the last test sets.
 5. `src/cbj/workflows/`: the four agentic workflows; `src/cbj/audit.py`, `checks.py`, `editreport.py`: the evaluation;
    `tests/`: 1,481 tests.

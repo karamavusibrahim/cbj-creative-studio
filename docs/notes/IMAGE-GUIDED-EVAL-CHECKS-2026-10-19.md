@@ -1,6 +1,6 @@
 # What an image-guided creative is checked on, and how (2026-10-19)
 
-Written after re-reading the case ("AI Engineer, Creative Case Study.pdf", 14 pages), the Unity project
+Written after re-reading the brief (14 pages), the Unity project
 (`~/Downloads/CBJ/Assets`: `Scripts/*`, `Levels/Level_01..06.json`, `Materials/{Block,Exit}Materials/*.mat`,
 `Sprites/UI/*`) and the competitor-ad research (`COMPETITOR-ADS-2026-10-10.md`). It is general: it does not depend on
 any test prompt. It is the contract the evaluation code (`audit.py`, `imageaudit.py`, `review.py`, the loop in
@@ -26,12 +26,12 @@ measured, and never let an unmeasured ask pass silently.
 
 | source | what it fixes |
 |---|---|
-| case p.2 | 30-60 s; Color Block Jam gameplay at the centre; different creative concepts |
-| case p.3 (prompt controls) | the level's type or structure; gameplay behaviour; difficulty or pacing; visual elements; creative concept; sequence of events; assets to use; elements that remain unchanged |
-| case p.5 (requested gameplay) | a specific type of level; a visually interesting board; difficult or easy; a progression; a near-fail; a satisfying solve; a specific sequence of interactions |
-| case p.6 (image roles) | visual reference; asset to insert; style or composition reference; input for modifying a creative; "the system should understand the role of the provided image and incorporate it appropriately" |
-| case p.7 (preserve) | gameplay, timing, camera, composition, sequence, visual structure, other assets stay unless asked |
-| case p.11 (criteria) | creative quality (coherent, engaging, usable); controllability; gameplay consistency ("behave like a game"); multimodal understanding ("meaningfully use ... image inputs") |
+| brief p.2 | 30-60 s; CBJ gameplay at the centre; different creative concepts |
+| brief p.3 (prompt controls) | the level's type or structure; gameplay behaviour; difficulty or pacing; visual elements; creative concept; sequence of events; assets to use; elements that remain unchanged |
+| brief p.5 (requested gameplay) | a specific type of level; a visually interesting board; difficult or easy; a progression; a near-fail; a satisfying solve; a specific sequence of interactions |
+| brief p.6 (image roles) | visual reference; asset to insert; style or composition reference; input for modifying a creative; "the system should understand the role of the provided image and incorporate it appropriately" |
+| brief p.7 (preserve) | gameplay, timing, camera, composition, sequence, visual structure, other assets stay unless asked |
+| brief p.11 (criteria) | creative quality (coherent, engaging, usable); controllability; gameplay consistency ("behave like a game"); multimodal understanding ("meaningfully use ... image inputs") |
 | the game (`cbj-game-rules`) | 7 block colours and their gates (`BlockMaterials`, `ExitMaterials`); polyomino blocks on a grid up to 12x12; holes (`inactiveCells`) are the only obstacle; one gate per cell side; the exit rule; the clock; "Level n" badge and "Time" bar (`MainBarCircle`, `TimerBackground`, `stopwatch`); the win and fail screens (`LevelCompleted.png`, `OutOfTimeText.png`); no sound, no boosters, no characters in play |
 | the ads (competitor research) | the hook in 0-3 s; a readable caption at a time; the ending beat (win / near-fail / fail / cliffhanger) in the last seconds before the end card; a CTA on the end card; the real timer and the real result screen |
 
@@ -42,7 +42,7 @@ not ask it and the picture filled it in), **not measured** (the tool knows the r
 reported as a gap, never silent). `where` names the stage that missed (plan / level / play / ad). A row marked *loop*
 feeds the revision when it fails.
 
-### A. The request's own asks (every control of case p.3), measured on the made files, never on the plan's prose
+### A. The request's own asks (every control of brief p.3), measured on the made files, never on the plan's prose
 | # | check | measured on | bar | loop |
 |---|---|---|---|---|
 | A1 | length | `parts.json` duration | within 0.5 s of a stated length; 30-60 s always | yes |
@@ -60,7 +60,7 @@ feeds the revision when it fails.
 | A12 | tempo and pacing words | the play's drags per second, the parts' lengths | calm < 0.25 drags/s, fast > 0.6 | yes |
 | A13 | **coverage**: every phrase of the request the tool parsed as an ask has one of the rows above | the set of asks vs the rows | a missing row is a `not measured` row naming the phrase | report |
 
-### B. What the picture gave (case p.6), only when its role took it
+### B. What the picture gave (brief p.6), only when its role took it
 | # | check | measured on | bar | loop |
 |---|---|---|---|---|
 | B1 | the role | the decision + the reading plan | info: the roles, why, which reader, the seconds | no |
@@ -85,7 +85,7 @@ feeds the revision when it fails.
 | B'5 | the colours read are all the colours | the cell reading against the whole-frame read | fewer colour names than colours counted is a doubt and a re-ask; one name over two hue clusters is split by the nearest free game colour (`imagecells.split_hues`; V3: the yellow plus among the orange) |
 | B'6 | a copied board's play fits the stated length | the plan | the solution's drags at the planner's tempo against the room the length leaves; the fastest fitting tempo is set, or the overrun is said and the loop does not try to shorten a fixed board (`videoref.copied_board_pace`) |
 
-### C. The game behaves like the game (case p.11, every version)
+### C. The game behaves like the game (brief p.11, every version)
 | # | check | measured on | bar |
 |---|---|---|---|
 | C1 | the level loads | `level.json` | a grid the Level Editor allows, blocks on active cells, no overlaps, every door on an edge, one door per cell side (`level.validate`; row "Rules: the level"). Until 2026-10-19 12:00 this row's text CLAIMED "every block has a door of its colour" without a check |
@@ -97,7 +97,7 @@ feeds the revision when it fails.
 | C4 | the planned moves were played | the play script vs the recording | the same block, cells and outcome for every drag |
 | C5 | nothing the game does not have | `ad.json`, the plan | boosters, bombs, ice, keys, characters on the board, doors that change: listed as "not used", never drawn |
 
-### D. The ad works as an ad (case p.2, p.11; the research)
+### D. The ad works as an ad (brief p.2, p.11; the research)
 | # | check | measured on | bar |
 |---|---|---|---|
 | D1 | gameplay at the centre | `parts.json` | play + replay + result >= 60 % of the ad |
@@ -113,7 +113,7 @@ Shared since 2026-10-19 afternoon (every workflow, `audit.rows`): "blocks left a
 recording; a time-out's one-block limit said, never silent: V5 "two blocks left") and "the end card is a card, not padding"
 (D5, at most 8 s), both from `imageaudit`, named without the "Image:" prefix outside the image workflow.
 
-### E. The loop uses the checks (case p.10)
+### E. The loop uses the checks (brief p.10)
 | # | rule |
 |---|---|
 | E1 | a failed row with `loop = yes` starts a revision (at most 2 rounds); the revised version is measured against the ORIGINAL request |

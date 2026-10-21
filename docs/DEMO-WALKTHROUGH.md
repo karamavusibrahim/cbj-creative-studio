@@ -1,4 +1,4 @@
-# Recording script: every function of Color Block Jam Studio, with narration
+# Recording script: every function of CBJ Studio, with narration
 
 For the demo video that accompanies the technical report. Site: https://cbj-creative-studio.vercel.app with the Mac
 engine online (header pill "Engine online"). Record at 1440×900, 30 fps. Browser recordings carry no sound, so the
@@ -28,7 +28,7 @@ ready (a sticker PNG, a texture PNG, a reference picture of a board, the Trailer
 bubble, the key icon, **Help**, the lock. Open **Help → "How it works"** and scroll its four sections and "The edit
 contract" (Locked / Allowed / Forbidden). Close it. Click the lock, type the passcode (masked), Unlock.
 
-**Say** "This is Color Block Jam Studio. The website is a thin client; the engine behind it runs on a Mac with the
+**Say** "This is CBJ Studio. The website is a thin client; the engine behind it runs on a Mac with the
 provided Unity game and ffmpeg. The header shows whether that engine is online or busy. Making and editing are behind a
 passcode. The Help sheet states the one rule every edit obeys: what is not named is locked."
 
@@ -74,7 +74,7 @@ seconds, the fact chips; **Level & gameplay**: the board picture, the moves list
 **Checks** rows with where each was measured; **As a viewer**: Ready to ship / Worth a fix, the score tiles marked
 *measured* or *model*, "Does it match the request?" rows, the fixes, the suggested edit.
 
-**Say** "The planner writes only data: one row per control of the case, nothing else. The level is generated and
+**Say** "The planner writes only data: one row per control of the brief, nothing else. The level is generated and
 proved solvable by an exact solver; the play is scripted for a near-fail; then the real game plays it, frame by frame,
 at a fixed time step, and records itself. The compositor adds the hook, the captions and the end card. Every check is
 measured from the game's own log: each drag, the clock, the rules. The viewer's review is the one opinion from a
@@ -116,7 +116,7 @@ in its own colours. The rows prove the board is the picture's."
 **Do** attach the Trailer 2 MP4; type `Use the same game design and the same scenario, just use fewer blocks`. Show the
 badge "reference video, read whole, never placed in the ad". Generate. Show the Reference card with **The
 reference's timeline** (hook / gameplay / near-fail / end card), "Board read", "Mechanics translated", "Not used: not
-in Color Block Jam"; then the result and the **Reference:** rows (the ending, the pacing, the hook, the part lengths,
+in CBJ"; then the result and the **Reference:** rows (the ending, the pacing, the hook, the part lengths,
 nothing copied).
 
 **Say** "A reference video is reduced to one small copy and read whole for its structure, hook, ending, pacing and

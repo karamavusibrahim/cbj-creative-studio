@@ -1,4 +1,4 @@
-"""Controlled editing (case p.7): an edit changes only what it asks for, keeps the original's
+"""Controlled editing (brief p.7): an edit changes only what it asks for, keeps the original's
 gameplay, timing, camera, composition, sequence, look and other assets, and proves it item by
 item. Runs on a small synthetic recording (no Unity, no network)."""
 
@@ -297,7 +297,7 @@ def test_inventory_names_every_picture_and_caption(versions):
 
 def test_the_games_name_is_not_evidence():
     """'Color Block Jam' in a prompt is the game's name, not a request for a jam-packed board, colours
-    or blocks (the case's own p.4 prompt got a packed, symmetric, colourful board from it)."""
+    or blocks (the brief's own p.4 prompt got a packed, symmetric, colourful board from it)."""
     p4 = ("Create a difficult Color Block Jam level with a narrow center section and show gameplay where the "
           "player almost fails before solving it.")
     for group in ("level.style", "level.colours", "gameplay.events"):
@@ -373,7 +373,7 @@ def test_the_pinned_intro_note_gives_the_cut():
     notes = []
     card, intro, hold, total = _pinned_card(60, 30, 0, 900, lambda ctl, text, status="adjusted": notes.append(text))
     assert (intro, hold, card, total) == (0, 0, 90, 930) and "1.0 s shorter" in notes[0] and "longer" in notes[1]
-    # an ad of the case's length is never shortened under 30 s: the freed time fills the card instead
+    # an ad of the brief's length is never shortened under 30 s: the freed time fills the card instead
     notes = []
     card, intro, hold, total = _pinned_card(600, 0, 0, 930, lambda ctl, text, status="adjusted": notes.append(text))
     assert total == 900 and card > 300 and any("not shortened under 30" in n for n in notes)

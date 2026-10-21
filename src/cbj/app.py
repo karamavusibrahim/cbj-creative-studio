@@ -1,6 +1,6 @@
 """The test UI: `cbj ui` serves one page at http://127.0.0.1:8765.
 
-Type a prompt (and attach images), see what the planner understood for each of the case's eight
+Type a prompt (and attach images), see what the planner understood for each of the brief's eight
 prompt controls, make the creative, watch it, then write a follow-up prompt to edit it. Every
 version keeps its brief, its recording and the proof of what an edit changed.
 
@@ -68,7 +68,7 @@ if _ORIGINS:  # added last, so it is the outermost layer and a 401 still carries
 JOBS: dict[str, dict] = {}
 LOCK = threading.Lock()  # one job at a time
 UPLOAD_EXT = {".png", ".jpg", ".jpeg", ".webp"}
-VIDEO_EXT = {".mp4", ".mov", ".webm", ".m4v"}  # reference videos (case p.6): analysed, never placed in the ad
+VIDEO_EXT = {".mp4", ".mov", ".webm", ".m4v"}  # reference videos (brief p.6): analysed, never placed in the ad
 AUDIO_EXT = set(B.AUDIO_EXT)  # music for the ad
 MAX_IMAGE_MB, MAX_VIDEO_MB = 15, 80
 
@@ -616,7 +616,7 @@ def _too_long(data: bytes, ext: str, name: str) -> str | None:
             return None
     if d > reference.MAX_VIDEO_S:
         return (f"{name}: the video is {d:.0f} s long; a reference video is read whole and may be at most "
-                f"{reference.MAX_VIDEO_S:.0f} s (the case's references are 30-60 s ads): trim it and upload it again")
+                f"{reference.MAX_VIDEO_S:.0f} s (the brief's references are 30-60 s ads): trim it and upload it again")
     return None
 
 

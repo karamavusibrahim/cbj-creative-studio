@@ -1,4 +1,4 @@
-"""The evaluation rows added on 2026-10-16 for the case's controls the audit did not measure (p.3:
+"""The evaluation rows added on 2026-10-16 for the brief's controls the audit did not measure (p.3:
 visual elements, assets, the sequence of events, what should remain unchanged; p.5: a visually
 interesting board; p.2: gameplay at the centre), the hesitations, the clock, the walls, the HUD
 number, per-colour counts, a caption's moment, and the one-evaluation-per-workflow rule."""
@@ -89,7 +89,7 @@ def test_level_rows_walls_clock_and_colour_counts(tmp_path):
     assert rows["Asked: walls"]["status"] == "pass" and "2 separate group" in rows["Asked: walls"]["detail"]
     assert "Asked: the clock" not in rows  # the clock is read from the recording (ad rows), not the level file
     assert rows["Asked: blocks per colour"]["status"] == "pass"
-    assert rows["Asked: a visually interesting board (the case)"]["status"] == "info"
+    assert rows["Asked: a visually interesting board (the brief)"]["status"] == "info"
     path.write_text(json.dumps(_level(walls=((0, 5), (1, 5)), timer=45, colours=(0, 0, 2, 3))))
     rows = {r["check"]: r for r in audit.level_rows(
         "several separate walls, a 60-second clock, one block each of green, yellow, blue and red, a clean solve", b, path)}
@@ -151,9 +151,9 @@ def test_ad_rows_cursor_music_sequence_original_and_the_case(tmp_path):
               "preserve the original game rules, HUD and block assets")
     rows = {r["check"]: r for r in audit.ad_rows(prompt, b, record, vdir, rec)}
     for k in ("Asked: cursor", "Asked: music", "Asked: the replay", "Asked: the end card", "Asked: HUD level number",
-              "Asked: hesitations", "Asked: the game's own look", "Asked: gameplay at the centre (the case)"):
+              "Asked: hesitations", "Asked: the game's own look", "Asked: gameplay at the centre (the brief)"):
         assert rows[k]["status"] == "pass", (k, rows[k])
-    assert "55%" in rows["Asked: gameplay at the centre (the case)"]["detail"]
+    assert "55%" in rows["Asked: gameplay at the centre (the brief)"]["detail"]
     # the same ad against the opposite asks
     b["visuals"].update(cursor="ring", theme="neon", blocks=[{"slot": "Red", "hex": "#FF0000", "name": "red"}])
     b["sequence"].update(replay=True)
@@ -208,7 +208,7 @@ def test_one_evaluation_per_workflow():
     assert "rules" in wf["groups"]
     # a revision made inside a creation stays a creation (it is a new take, not an edit)
     assert audit.workflow(b, {"workflow": "create", "edit": True})["kind"] == "video"
-    assert audit.misses([{"check": "Asked: gameplay at the centre (the case)", "status": "failed", "from": "case"}])
+    assert audit.misses([{"check": "Asked: gameplay at the centre (the brief)", "status": "failed", "from": "case"}])
 
 
 # ---- the time-out's hidden last step (2026-10-16): the generator must fit it, the play must not drop the order

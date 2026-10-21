@@ -1,11 +1,11 @@
-# Color Block Jam Creative Generation Tool: technical explanation
+# CBJ Creative Generation Tool: technical explanation
 
-Prepared for the Rollic "AI Engineer, Creative" case. Every statement below was checked against the code in
-`cbj-creative/`, the test logs and the working notes in `~/rollic-case/` at the time of writing. Numbers are from
+Prepared as the technical explanation of the tool. Every statement below was checked against the code in
+`cbj-creative/`, the test logs and the working notes in `~/cbj-work/` at the time of writing. Numbers are from
 the files named next to them; nothing was estimated.
 
 **In one paragraph.** A tool was built in which a marketer types a request, optionally attaches a picture or a video,
-and receives a 30-60 s Color Block Jam creative whose gameplay was played and recorded inside the provided Unity game.
+and receives a 30-60 s CBJ creative whose gameplay was played and recorded inside the provided Unity game.
 A large language model is allowed to write only *data* (a typed brief, a reading of a reference, a review); every
 pixel of gameplay is produced by the game itself from a level the solver proved solvable and a drag script the game
 replayed one frame at a time. A follow-up request is treated as a patch to that data, not as a new generation, and a
@@ -28,7 +28,7 @@ versions, and becomes more consistent with the team's intent over time.
 
 ## 1. How the problem was analysed before anything was built
 
-### 1.1 The case document
+### 1.1 The brief document
 
 The 14-page brief was read first and reduced to its grading rubric (p.11) and its deliverables (p.12). One idea was
 found repeated on five pages: *consistency and controlled editing matter more than spectacle*. Page 8 says it plainly
@@ -36,7 +36,7 @@ found repeated on five pages: *consistency and controlled editing matter more th
 broad, flaky one. The eight prompt controls of page 3 (type or structure of the level, gameplay behaviour, difficulty
 or pacing, visual elements, creative concept, sequence of events, assets to use, elements that should remain
 unchanged) were adopted verbatim as the schema of the tool's brief, so that every request is read against the same
-eight rows the case names (`brief.py:28-38`).
+eight rows the brief names (`brief.py:28-38`).
 
 ### 1.2 The game
 
@@ -53,11 +53,11 @@ The Unity project (Unity 6000.3.5f1, 3,784 lines of C#) was read script by scrip
 
 ### 1.3 The market
 
-Before writing concepts, about 136 real video ads of Color Block Jam and its rivals (Block Out!, Pixel Flow!, Magic
+Before writing concepts, about 136 real video ads of CBJ and its rivals (Block Out!, Pixel Flow!, Magic
 Sort! and others) were downloaded from the Meta Ad Library and tagged frame by frame by how they end. Findings
 that were used:
 
-- Color Block Jam's own ads are real gameplay; the dominant ending across the market is *unresolved* (a cut mid-level).
+- CBJ's own ads are real gameplay; the dominant ending across the market is *unresolved* (a cut mid-level).
 - Only one rival shows an explicit fail; nobody runs a real near-fail win with the timer visible. This became the
   tool's default ending (`near_fail`) and its strongest concept.
 - Channel evidence (AppsFlyer 2025; a field test of 9,993 viewers) shows the best ending depends on the channel, so
@@ -106,12 +106,12 @@ The intended next step is one orchestrator that routes to these four as tools, w
 
 ### 1.7 Order of work
 
-1. The case analysed, the game's C# read, the plan written.
+1. The brief analysed, the game's C# read, the plan written.
 2. Research on papers, repositories and tools; Unity installed.
 3. Level model, exact rules, exhaustive solver, the Unity CreativeRunner, competitor ad research.
 4. Scenario scripts (endings, mistakes, pacing), compositor, text-to-creative, controlled editing.
 5. 82 case scenarios run and the 13 failure groups fixed; ending test sets.
-6. 48-prompt edit audit; evaluation coverage mapped to the case; the create/edit split; video-guided specification.
+6. 48-prompt edit audit; evaluation coverage mapped to the brief; the create/edit split; video-guided specification.
 7. Image-guided workflow; the final editing approach; hard test sets.
 8. Prompt enhancer and trend ideas; soundtrack and narration; designer feedback and the owner's lessons; website live.
 9. Video boards copied cell by cell; door and colour rules on every workflow; edit set 2; feedback tied to steps,
@@ -191,7 +191,7 @@ one row per prompt control with a status (*applied / default / adjusted / not su
 typed fields (`level`, `gameplay`, `pacing`, `visuals`, `concept`, `sequence`, `assets`, `audio`, `keep`,
 `changed`). The rule of the system prompt is that a field is filled only from what the request says; everything else
 stays at its default. `brief.check` then completes the brief and writes every adjustment into the matching control row
-with the engine's reason, so the user sees "what the tool understood" as a table of the case's eight controls, not
+with the engine's reason, so the user sees "what the tool understood" as a table of the brief's eight controls, not
 as prose. Non-English requests are translated once, in a separate call, before routing, and the original is kept next
 to the translation.
 
@@ -356,18 +356,18 @@ inventing a fact.
 
 ## 4. Why this approach was chosen
 
-1. **The case's own evidence pointed at it.** Page 8 names the failure modes of pure generative video (objects change,
+1. **The brief's own evidence pointed at it.** Page 8 names the failure modes of pure generative video (objects change,
    rules break, layouts drift, edits are hard to control) and offers Unity as the fix. The competitor research found
-   Color Block Jam's own ads to be real gameplay, and the ad rulings require it.
+   CBJ's own ads to be real gameplay, and the ad rulings require it.
 2. **Published results ruled out the alternatives.** LLM-written puzzle levels are solvable 20-47% of the time;
    generative object replacement costs minutes per clip and leaves artefacts; absolute video judges are near chance.
    So the solver owns solvability, the game owns the pixels, and the judge is a set of measured yes/no rows with a
    model only for taste.
-3. **A typed brief makes every control measurable.** Because the planner may only fill the case's eight controls, the
+3. **A typed brief makes every control measurable.** Because the planner may only fill the brief's eight controls, the
    audit can read the prompt independently and check each fact against the recording. A plan that quietly dropped
    something is caught, and the user sees the eight rows, not a paragraph.
 4. **A document, not a video, is what gets edited.** Keeping every stage as a file makes "change only this" a change
-   to one field followed by the smallest re-run, with proof from the files (§7). This is the property the case weights
+   to one field followed by the smallest re-run, with proof from the files (§7). This is the property the brief weights
    most, and it cannot be retrofitted onto a generated MP4.
 5. **Separate workflows first, one orchestrator later.** Each requirement was hardened in isolation on its own test
    set, with its own evaluation profile; what proved common was then shared. This gave measurable progress per
@@ -417,7 +417,7 @@ The invariant that was kept throughout: **a generative part writes data and neve
   anything the planner did not fill is the same default for every creative. The merge whitelist means a later prompt
   cannot change a field the words do not support.
 - **Shared vocabulary across workflows.** The eight controls, the seven colours, the four endings, the length range
-  and the case rows are the same in all four workflows; the rules rows, the door and colour rows and the shared case
+  and the brief rows are the same in all four workflows; the rules rows, the door and colour rows and the shared case
   rows run on every version regardless of the path that made it.
 - **Measured colours and looks.** Colours are checked to be at least 40 apart with distinct names on every board; a
   reference's colours map to the game's slots by hue family; a repaint that would make two gates look alike is
@@ -485,7 +485,7 @@ block") is resolved to a game slot through the shown colour names, the repaint a
 
 ### 7.5 The evidence report
 
-Nine rows, the case's seven preservation items plus captions and sound: **Gameplay, Timing, Camera, Composition,
+Nine rows, the brief's seven preservation items plus captions and sound: **Gameplay, Timing, Camera, Composition,
 Sequence, Visual structure, Other assets, Captions, Sound**. Each is measured from the stored files and marked *kept /
 changed as asked / changed because of the asked change (reason written) / changed without being asked (fails)*. Then
 the pixels: frames changed and their ranges, the changed-pixel box, and whether every changed pixel lies inside the
@@ -555,7 +555,7 @@ being asked, pixels contained, captions, colours and length kept) and needed no 
   bias, Panickssery et al. 2024, arXiv 2404.13076), so the review is a weaker check on the plan than an independent
   judge would be. The measured rows do not have this problem, which is one more reason they are the backbone.
 - **Not built.** The difference heatmap strip for edits (numbers and the before/after pair exist, no picture of the
-  difference); in-game textures; reconstruction of an external Color Block Jam creative into the document; accounts
+  difference); in-game textures; reconstruction of an external CBJ creative into the document; accounts
   (designer names are self-declared); automatic use of the lessons.
 - **The engine is a single Mac.** The website is static without it; a tunnel exposes it.
 
@@ -645,7 +645,7 @@ production steps follow the paper's lifecycle one step further while keeping the
 One orchestrator over the four workflows as tools, with the routing that exists today as its first step; a job queue
 with several Unity players (Linux batch builds) so that creatives are made in parallel; in-game textures on the slot
 materials and a user 3D object as a block piece (the mechanisms were identified in the game's `BlockPieceConfig`);
-the walls as in-game quads; the difference heatmap strip in the report; reconstruction of an external Color Block Jam
+the walls as in-game quads; the difference heatmap strip in the report; reconstruction of an external CBJ
 creative into the document (grid from the board's box, per-cell colour classifier, drags from rest-state differences,
 each candidate validated by the solver); accounts and roles on the site; a paid, regional model endpoint for client
 material.
@@ -660,7 +660,7 @@ material.
 | website | `cbj-creative/web/` (Next.js), live at https://cbj-creative-studio.vercel.app (passcode-gated for making and editing) |
 | skills | `cbj-creative/.claude/skills/` |
 | stored creatives and evidence | `cbj-creative/studio/<id>/v<n>/` |
-| working notes and test sets | `~/rollic-case/*.md` and the `req3-image-guided-*`, `req4-video-refs-*`, `req5-edits-*`, `case-test-*` folders |
+| working notes and test sets | `~/cbj-work/*.md` and the `req3-image-guided-*`, `req4-video-refs-*`, `req5-edits-*`, `case-test-*` folders |
 | setup | `README.md` ("Setup", "Run it on your own accounts"); `uv run cbj setup-check --live` |
 
 ## Appendix B. Papers referred to

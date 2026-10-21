@@ -1,4 +1,4 @@
-"""Image-guided creative generation (case p.6): the role of an attached image (style, composition,
+"""Image-guided creative generation (brief p.6): the role of an attached image (style, composition,
 asset, modify) and what each role takes from it: a measured style kit (background, captions,
 blocks by hue), a board read in the picture as a level spec, through the planner into the brief."""
 from pathlib import Path

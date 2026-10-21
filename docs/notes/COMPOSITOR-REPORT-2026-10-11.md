@@ -2,7 +2,7 @@
 
 ## In one paragraph
 
-Until this step the tool made **gameplay clips**: real Color Block Jam play with a planned
+Until this step the tool made **gameplay clips**: real CBJ play with a planned
 mistake and ending, recorded frame-exact. A clip is not an ad. This step adds the
 **compositor**, which turns a recording into a finished 30 s ad:
 - a hook on the first frame;
@@ -23,13 +23,13 @@ checked the code twice, then confirmed the fixes; everything it found is fixed.
 
 ## 1. Why this step
 
-- **The case asks for finished ads.** p.2: "30-60 second Color Block Jam creatives", "a final
+- **The brief asks for finished ads.** p.2: "30-60 second CBJ creatives", "a final
   creative". p.4: "receive a usable creative". p.11 scores "creative quality: visually coherent,
   engaging, usable" on finished ads, and until today there were none.
-- **The split the case describes.** p.5 asks for "deterministic gameplay rendering combined with
+- **The split the brief describes.** p.5 asks for "deterministic gameplay rendering combined with
   generative visual elements". The game makes the gameplay; the compositor builds everything
   around it.
-- **Controlled editing**, which the case calls one of the most important parts (p.7): "keep
+- **Controlled editing**, which the brief calls one of the most important parts (p.7): "keep
   everything exactly the same, but replace this asset", while gameplay, timing, camera,
   composition and the other assets stay. A flat video cannot do that. A layered ad, where every
   element is a named slot, can, and it never records the gameplay again.
@@ -223,7 +223,7 @@ failed QA, and refuses to compare a draft with a final render.
 
 Their digests are written when the ad is made. An edit that changes a locked part fails QA
 before anything is drawn. To change one on purpose, remove it from `locked` first; `ad-diff` then
-reports it as unlocked. **Why:** the case's "keep everything exactly the same" (p.7) has to be
+reports it as unlocked. **Why:** the brief's "keep everything exactly the same" (p.7) has to be
 something the tool enforces, not a promise.
 
 ### 2.11 QA on every render
@@ -294,7 +294,7 @@ Each edit was composed and compared with `ad-diff --decode`:
 
 ### 4.1 Plan discussion
 
-Fable read the plan and the case, and five decisions came out of it:
+Fable read the plan and the brief, and five decisions came out of it:
 - **Layout:** letterbox the whole frame at 75% and put all text in one top band. My plan had
   captions below the board, but the board reaches too far down. I sent Fable that correction
   with measured positions, and we settled on the band.
@@ -307,7 +307,7 @@ Fable read the plan and the case, and five decisions came out of it:
 The full list is in `COMPOSITOR-PLAN-2026-10-11.md`, under "Decisions after the Fable 5.1
 discussion".
 
-### 4.2 First check (code, the four ads, the case)
+### 4.2 First check (code, the four ads, the brief)
 
 | Found | Fixed |
 |---|---|
@@ -377,7 +377,7 @@ It found two small new problems, both fixed in `9d15c8a`:
 - **The sounds stand in for the game's own.** They are synthesized because the project ships no
   audio. A real sound bank would replace them through the same events.
 - **The font and sprites are read from the Unity project** at run time, never copied into the
-  repo: the font is "all rights reserved" and licensed to Rollic. Without the project, an open
+  repo: the font is "all rights reserved" and licensed to the publisher. Without the project, an open
   fallback font is used, so a fresh clone without `CBJ` looks different.
 - **The cursor is a ring, not a hand.** Its image slot is ready for Oct 14.
 - **Caption copy comes from templates** per ending. The language planner writes it from Oct 13.
@@ -414,11 +414,11 @@ The compositor was planned for Oct 11 and is done. Next:
 
 ## 8. How to reproduce
 
-The full guide is `~/rollic-case/COMPOSITOR-CHECK-STEPS.md`: each step with the exact output to
+The full guide is `~/cbj-work/COMPOSITOR-CHECK-STEPS.md`: each step with the exact output to
 expect. The short version:
 
 ```
-cd ~/rollic-case/cbj-creative
+cd ~/cbj-work/cbj-creative
 uv run pytest -q
 uv run cbj ad renders/nc01_near_fail -o ads/check_near_fail
 open ads/check_near_fail/ad.mp4

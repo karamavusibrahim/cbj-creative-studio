@@ -1,4 +1,4 @@
-# Color Block Jam competitors, their ads, and success/fail scenarios for our tool (2026-10-10)
+# CBJ competitors, their ads, and success/fail scenarios for our tool (2026-10-10)
 
 How this was researched:
 - Three research agents worked on it.
@@ -9,8 +9,8 @@ How this was researched:
 Every ad link opens in a browser. Ads that have stopped running may no longer open.
 
 Evidence files:
-- `~/rollic-case/ad-research/2026-10-10-meta-ad-library/` (notes and contact sheets)
-- `~/rollic-case/ad-research/2026-10-10-top3-competitors/` (frame sheets, screenshots, scrape data, scripts)
+- `~/cbj-work/ad-research/2026-10-10-meta-ad-library/` (notes and contact sheets)
+- `~/cbj-work/ad-research/2026-10-10-top3-competitors/` (frame sheets, screenshots, scrape data, scripts)
 
 ---
 
@@ -18,13 +18,13 @@ Evidence files:
 
 1. **The top 3 competitors are Block Out!, Pixel Flow! and Magic Sort!**
    - Block Out! and Magic Sort! are by Grand Games (Istanbul). Pixel Flow! is by Loom Games, which Scopely has majority-owned since February 2026.
-   - Block Out! is an almost exact copy of Color Block Jam (CBJ). It even copies CBJ's ad hooks.
+   - Block Out! is an almost exact copy of CBJ. It even copies CBJ's ad hooks.
 2. **Almost no one shows a real gameplay fail.**
    - Across about 136 ads from CBJ and its rivals, the dominant ending is **unresolved**: the video cuts mid-level and nobody wins or loses.
    - Only **Wool Crush** shows an explicit "FAIL".
    - Rivals often *say* "only 1% can solve this" but never show the fail.
 3. **CBJ itself avoids staged fails and rarely shows its timer.** In the CBJ ads we checked, exactly one gameplay ad shows the countdown, and it ends in a comfortable win.
-4. **A near-fail ending is unused territory.** That means a real level won at 0:01 with the timer red and shaking. No rival runs it, the research supports it, and CBJ's own YouTube brand film tells this story emotionally ("Frustratingly Fun!", 2.27M views). This is a strong differentiator for the case.
+4. **A near-fail ending is unused territory.** That means a real level won at 0:01 with the timer red and shaking. No rival runs it, the research supports it, and CBJ's own YouTube brand film tells this story emotionally ("Frustratingly Fun!", 2.27M views). This is a strong differentiator for the brief.
 5. **What works depends on the channel** (AppsFlyer 2025):
    - On **ad networks** (AppLovin, Unity Ads), **success** endings get more installs.
    - On **social** (Meta, TikTok), **failure** endings get more.
@@ -46,7 +46,7 @@ Evidence files:
 | All their ads | [Meta page](https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&view_all_page_id=759030133968216) | [Meta page](https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&view_all_page_id=762604410262352) | [Meta page](https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&view_all_page_id=270275292836352) |
 | Why chosen | Closest gameplay, fastest growth, most ads | The category's biggest new hit | Grand Games' cash cow; long-running winners are visible |
 
-**For comparison, Color Block Jam (Rollic / Gybe Games):**
+**For comparison, CBJ (its publisher):**
 - Store: [App Store](https://apps.apple.com/us/app/id6504332779) · Play `com.GybeGames.ColorBlockJam`, released 2024-06-28.
 - $42M revenue and 21.8M downloads in Q2 2025, about 75% of the block-puzzle subgenre.
 - All of its ads: [Meta page](https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&view_all_page_id=108573341889195) (about 530 active).
@@ -56,7 +56,7 @@ Evidence files:
 - **Wood Away** (iKame): identical gameplay including a timer, but small.
 - **Bus Escape**, **Screwdom** and **Block Blast!** are farther from CBJ's mechanic.
 
-**Clone alert.** A Meta page named "Color block Jam" (page `756222637565654`) is **not Rollic**; it links to "Block Color Mania". Its ads attack CBJ's timer with "NO TIMER! No timers. No stress. Just fun." Example: https://www.facebook.com/ads/library/?id=955285320353998
+**Clone alert.** A Meta page named "CBJ" (page `756222637565654`) is **not the publisher**; it links to "Block Color Mania". Its ads attack CBJ's timer with "NO TIMER! No timers. No stress. Just fun." Example: https://www.facebook.com/ads/library/?id=955285320353998
 
 ---
 
@@ -68,7 +68,7 @@ Evidence files:
 - **NEAR-FAIL WIN:** won with seconds left.
 - **FAIL:** a fail is shown.
 
-### Color Block Jam
+### CBJ
 | Ad | Hook | Ending |
 |---|---|---|
 | https://www.facebook.com/ads/library/?id=1252903916980534 | Real carpet-cleaning clip, then "I cannot reach green" | UNRESOLVED |
@@ -111,12 +111,12 @@ Evidence files:
 | Bus Go | https://www.facebook.com/ads/library/?id=1474062343880832 | An angry driver ("Hey, Move!!!") |
 | Hole People | https://www.facebook.com/ads/library/?id=1182498880353884 | "Before your board overflows!" in the text, but no fail in the video |
 | Block Blast! | https://www.facebook.com/ads/library/?id=850087581190001 | **WIN**: combo counters, "ALL CLEAR" |
-| Knit Out (Rollic) | https://www.facebook.com/ads/library/?id=2423890571454613 | An EASY / MEDIUM / HARD / PRO choice |
+| Knit Out (same publisher) | https://www.facebook.com/ads/library/?id=2423890571454613 | An EASY / MEDIUM / HARD / PRO choice |
 
 ### Endings compared
 | | WIN | NEAR-FAIL | FAIL | UNRESOLVED | Timer shown |
 |---|---|---|---|---|---|
-| Color Block Jam | 1 | 1 (brand film only) | 0 | **most** | 1 gameplay ad |
+| CBJ | 1 | 1 (brand film only) | 0 | **most** | 1 gameplay ad |
 | Block Out! | 0 | 0 | 0 | all | never |
 | Pixel Flow! | 1 | 0 | 0 | most | – |
 | Magic Sort! | 0 | 0 | 0 | all | never |
@@ -151,7 +151,7 @@ Evidence files:
 1. Open https://www.facebook.com/ads/library/, set **Country: All** and **Ad category: All ads**.
 2. Type the game name and **pick the official page from the dropdown**. Keyword results mix in clones.
 3. Or open a game's page directly by replacing the number in: `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&media_type=video&view_all_page_id=<PAGE ID>`. The IDs are:
-   - Color Block Jam: 108573341889195
+   - CBJ: 108573341889195
    - Block Out!: 759030133968216
    - Pixel Flow!: 762604410262352
    - Magic Sort!: 270275292836352
@@ -166,7 +166,7 @@ Evidence files:
 **Google Ads Transparency Center:** https://adstransparency.google.com/?region=anywhere
 - Search the companies' legal names: "GRAND GAMES OYUN VE YAZILIM ANONİM ŞİRKETİ", "Loom Games Oyun Yazilim Ve Pazarlama Anonim Şirketi", "Lessmore GmbH".
 - Filter Format = Video. Each ad shows its first and last shown dates.
-- Rollic didn't appear under its own name; it may be under "Zynga Inc." (unverified).
+- the publisher didn't appear under its own name; it may be under "Zynga Inc." (unverified).
 
 **YouTube:** search "<game> ad" and check the publisher's channel. A short brand video with millions of views is usually a paid ad.
 
@@ -225,7 +225,7 @@ The reasons are in RUNNER-REPORT-2026-10-10.md, "Decisions".
 
 ## 8. What could not be checked
 - TikTok Creative Center needs a login.
-- Rollic wasn't found under its own name in Google Ads Transparency.
+- the publisher wasn't found under its own name in Google Ads Transparency.
 - AppLovin and Mintegral ads can't be viewed publicly. They carry about 49% of CBJ's ad-network share.
 - Paid tools weren't used.
 - Ad audio wasn't transcribed, so voiceover lines are unverified.

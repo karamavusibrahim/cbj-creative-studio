@@ -1,6 +1,6 @@
 # Acceptance rules for an edit (what an auditor compares)
 
-Adapted from the case's control-and-consistency scenarios (2026-10-14) to what this tool stores. Apply every rule to the
+Adapted from the brief's control-and-consistency scenarios (2026-10-14) to what this tool stores. Apply every rule to the
 version against its immediate parent (`from`), and for a multi-step chain also against the original base.
 
 1. **Target correctness.** The requested element changed in the requested way. Lookalike things (a second picture of the

@@ -1,4 +1,4 @@
-# Rollic CBJ case: repos, papers, MCPs and skills worth using
+# the publisher CBJ case: repos, papers, MCPs and skills worth using
 
 Research run on 2026-10-09 (day 2 of 10). It has three parts:
 - a deep-research workflow: 105 agents, 23 sources, 25 claims checked by 3-vote adversarial verification (23 kept, 2 refuted);
@@ -15,7 +15,7 @@ Companion to `CASE-ANALYSIS-AND-WORKFLOW.md`. Section 1 lists what this research
 The research supports the "deterministic core, generative shell" architecture. Three kinds of evidence point the same way:
 - **LLMs make poor puzzle levels.** Only 20-47% of LLM-written puzzle levels were solvable (ScriptDoctor), and LLMs hit a target solution length 17% of the time (Todd et al.).
 - **Generative editing of gameplay is not reliable.** Every "replace this object" video model needs CUDA, takes minutes per 5 s clip, and still flickers or leaves shadows behind.
-- **The case itself rules out fakes.** Color Block Jam's own ads are 100% real gameplay, and the UK ASA has ruled that gameplay ads must show the real game.
+- **The brief itself rules out fakes.** CBJ's own ads are 100% real gameplay, and the UK ASA has ruled that gameplay ads must show the real game.
 
 So the plan stands. The useful output of the research is:
 - a short list of tools to install;
@@ -28,10 +28,10 @@ So the plan stands. The useful output of the research is:
 | # | What | For which component | Why |
 |---|---|---|---|
 | 1 | Hand-rolled capture: `Time.captureDeltaTime` + RenderTexture + `AsyncGPUReadback` (Unity Recorder as fallback) | Unity renderer | About 80 lines of C#, no package, works in a windowed standalone player. CBJ uses the built-in pipeline and all its timing reads `Time.deltaTime`, so every frame is reproducible (checked in the code) |
-| 2 | Solver/generator design from section 3 (flood-fill drag moves, greedy exit closure, farthest-state generation, Jarušek–Pelánek difficulty) | Solver/generator | Grounded in the only Color Block Jam-style prior art and in human-difficulty studies |
+| 2 | Solver/generator design from section 3 (flood-fill drag moves, greedy exit closure, farthest-state generation, Jarušek–Pelánek difficulty) | Solver/generator | Grounded in the only CBJ-style prior art and in human-difficulty studies |
 | 3 | `ffmpeg psnr/ssim stats_file` + numpy diff bounding box + scikit-image SSIM map | Controlled editing proof | Tested on this machine: unedited frames give PSNR inf and SSIM 1.000000, and the changed box is located exactly |
 | 4 | PySceneDetect (AdaptiveDetector) + Gemini video, static mode at raised fps | Reference analysis | Cuts come from the detector, accurate to the frame. The VLM only labels shots, because VLM timestamps are still unreliable |
-| 5 | Remotion (already installed as skills) driven by JSON props; HyperFrames as the Apache-2.0 swap | Compositor | You know Remotion. Its license is free for you but not for Rollic; say so in the roadmap |
+| 5 | Remotion (already installed as skills) driven by JSON props; HyperFrames as the Apache-2.0 swap | Compositor | You know Remotion. Its license is free for you but not for the publisher; say so in the roadmap |
 | 6 | pydantic v2 + `jsonpatch` + segments keyed by id (dict, not array) | Planner + controlled editing | RFC 6902 addresses array items by index, so keying by id keeps patch paths stable |
 | 7 | Gradio + Huey (SQLite) or a plain asyncio subprocess queue | UI | Built-in drop zones, video and JSON components. Unity renders one job at a time anyway |
 | 8 | rembg with `birefnet-general` (MIT) | Asset generation | Not BRIA RMBG-2.0, which is CC BY-NC (non-commercial) |
@@ -70,7 +70,7 @@ So the plan stands. The useful output of the research is:
    - Lower PySceneDetect's `min_scene_len` below 0.6 s, since ad hooks cut faster than that.
 7. **QA judge.** Ask atomic yes/no questions derived from the CreativeDoc, not 1-10 scores. Compare versions pairwise (A/B). Burn the timestamp and beat ID into each montage tile. Anything measurable is checked in code.
 8. **Formats.** CBJ's preferred Android size is 720×900 (4:5) per SocialPeta, and AppLovin and Unity Ads cap video at 60 s. A 9:16 master plus a re-laid-out 4:5 export is a cheap, credible extra.
-9. **Originality risk.** Other candidates' Rollic case repos are public: `RojenOnat/ColorBlockJam-Rollic-Case` and `bugrahnd/Rollic_Color_Block_Jam_Case`. Do not open them.
+9. **Originality risk.** Other public repositories on the same game exist; they were not opened.
 10. **Still open from day 1.** Unity is **not installed** on this Mac (no Hub editors, no `unity` CLI). That is the first blocker.
 
 ---
@@ -133,7 +133,7 @@ So the plan stands. The useful output of the research is:
 
 ## 4. Repos
 
-**Prior art specific to Color Block Jam.** None of these has a license, so they are all-rights-reserved: read for ideas, copy no code.
+**Prior art specific to CBJ.** None of these has a license, so they are all-rights-reserved: read for ideas, copy no code.
 
 | Repo | What to take |
 |---|---|
@@ -153,7 +153,7 @@ So the plan stands. The useful output of the research is:
 | [Breakthrough/PySceneDetect](https://github.com/Breakthrough/PySceneDetect) | 5.2k★, v0.7.1, BSD-3 | Reference-video cuts. Best swept settings `adaptive_threshold=3.5, window_width=3`; lower `min_scene_len` for ads |
 | [UVA-Computer-Vision-Lab/OmniShotCut](https://github.com/UVA-Computer-Vision-Lab/OmniShotCut) | 321★, 2026-09, MIT, arXiv 2604.24762 | Only if PySceneDetect misses transitions. Hard-codes CUDA, needs a patch for MPS |
 | [slhck/ffmpeg-quality-metrics](https://github.com/slhck/ffmpeg-quality-metrics) | 561★, v3.12.4, MIT | Per-frame PSNR/SSIM/VMAF to JSON for the diff report |
-| [remotion-dev/remotion](https://github.com/remotion-dev/remotion) | 62.6k★, v4.0.534 (2026-10-07), source-available | Compositor. Free for individuals, companies of up to 3 people, and evaluation; Rollic would need a Company License |
+| [remotion-dev/remotion](https://github.com/remotion-dev/remotion) | 62.6k★, v4.0.534 (2026-10-07), source-available | Compositor. Free for individuals, companies of up to 3 people, and evaluation; the publisher would need a Company License |
 | [vercel-labs/json-render](https://github.com/vercel-labs/json-render/tree/main/packages/remotion) | 18.6k★, v0.21 (pre-1.0), Apache-2.0 | Copy the TimelineSpec schema shape. Its built-in prompt hardcodes 1920×1080 |
 | [heygen-com/hyperframes](https://github.com/heygen-com/hyperframes) | 59.4k★, v0.8.143, Apache-2.0, Node 22+ | Remotion swap: HTML compositions, deterministic frame seeking, `--variables-file x.json`. Pin the version; it releases daily |
 | [Zulko/moviepy](https://github.com/Zulko/moviepy) | 15.0k★, v2.2.1, MIT | Pure-Python fallback, slow |
@@ -300,15 +300,15 @@ Not available until authorized via claude.ai connector settings or `/mcp`: apify
 
 ## 9. Industry facts for the "production roadmap" section
 
-- **How Rollic works:** ideates "more than a thousand games a month" and tests hundreds of prototypes monthly (PocketGamer 2025-07-16). CBJ's success is credited to "consistent creative rigor" (Mobidictum 2025-06-16).
-- **Not public:** Rollic's in-house creative tooling and team. Don't claim to know them.
+- **How the publisher works:** ideates "more than a thousand games a month" and tests hundreds of prototypes monthly (PocketGamer 2025-07-16). CBJ's success is credited to "consistent creative rigor" (Mobidictum 2025-06-16).
+- **Not public:** the publisher's in-house creative tooling and team. Don't claim to know them.
 - **Nearby Istanbul job posts describe your tool.**
   - Dream Games, AI Engineer, Performance Marketing: agentic creative workflows, playables from code generation plus multimodal assets, evaluation pipelines with human-in-the-loop review.
   - Bigger Games: "multiple creative routes per brief" plus "smart iterations" from performance signals.
 - **Other studios:**
   - **Voodoo:** about 30 of 85 growth staff on creatives; video first, playables only if the video works; job posts list Seedance, Kling, Veo and Runway, with After Effects required and Unity a plus.
   - **AppLovin** (2026-03): a multi-agent pipeline (brand context → concepts → image/video models → quality validation); automated 60 s video is in limited tests.
-  - **Reforged Labs** (an AI ad startup) shut down in 2026-08 because studios now build in-house. This supports building the tool inside Rollic.
+  - **Reforged Labs** (an AI ad startup) shut down in 2026-08 because studios now build in-house. This supports building the tool inside the publisher.
 - **Volume:** top spenders made 3,977 variants per app in Q1 2026, about 300 a week (AppsFlyer 2026-10-07). The top 2% of game videos take 60.7% of spend, so cloning a winner and changing one slot is the economical workflow. That is exactly the controllability requirement.
 - **Diversity:** Meta Andromeda rewards distinct concepts, and copycats fade in about 7 days (AppAgent). The roadmap needs a quota of new concepts next to variant cloning.
 - **Network specs:**
@@ -347,9 +347,9 @@ Not available until authorized via claude.ai connector settings or `/mcp`: apify
 
 ## 11. Gaps and unverified items
 
-- How Rollic's creative team works and which tools it uses: not public.
+- How the publisher's creative team works and which tools it uses: not public.
 - Whether `-batchmode` + Metal can capture frames on macOS: untested. Assume a windowed process.
 - How the hosted Nemotron Omni samples frames, and whether Kling v3.0 output follows the input aspect: unverified.
 - Platform crackdowns on fake ads in 2025-26, and the "9.2 vs 15.4 day" fatigue figures: secondary sources only.
 - Whether the official Unity `unity mcp` needs the paid AI tier: unverified.
-- Remotion's Company License cost for Rollic: not checked.
+- Remotion's Company License cost for the publisher: not checked.

@@ -268,7 +268,7 @@ export default async function feedbackChecks({ browser, base, label, check, feat
     await page.waitForTimeout(800);
     check(new URL(page.url()).search === "?tab=records" && (await rows.count()) >= 4, `${tag} filters cleared`);
     const creativeOpts = await page.getByLabel("This creative only").locator("option").allInnerTexts();
-    check(creativeOpts.some((o) => o.startsWith("An easy Color Block Jam level")), `${tag} the creative filter shows titles`);
+    check(creativeOpts.some((o) => o.startsWith("An easy CBJ level")), `${tag} the creative filter shows titles`);
     if (vpName === "1440") {
       const dl = page.waitForEvent("download");
       await page.getByRole("button", { name: "Download .md" }).click();

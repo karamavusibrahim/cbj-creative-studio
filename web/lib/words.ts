@@ -8,31 +8,31 @@ export const IDEAS: { label: string; tone: "error" | "secondary" | "outline" | "
     label: "Beat the clock",
     tone: "error",
     prompt:
-      "Make a dramatic 30-second portrait Color Block Jam creative: a near-fail where the player makes one wrong move, gets stuck for a moment, then recovers and the last block starts leaving with one second showing on the clock, followed by the win. Hard difficulty; the pace speeds up toward the end as the clock runs down. The game's own look with the clock visible. Concept: 'beat the clock'; hook caption 'Can you beat the clock?', a hurry caption in the last seconds, result caption 'Just in time!'. Sequence: hook, gameplay, slow-motion replay of the last moves, the game's Level Completed screen, end card.",
+      "Make a dramatic 30-second portrait CBJ creative: a near-fail where the player makes one wrong move, gets stuck for a moment, then recovers and the last block starts leaving with one second showing on the clock, followed by the win. Hard difficulty; the pace speeds up toward the end as the clock runs down. The game's own look with the clock visible. Concept: 'beat the clock'; hook caption 'Can you beat the clock?', a hurry caption in the last seconds, result caption 'Just in time!'. Sequence: hook, gameplay, slow-motion replay of the last moves, the game's Level Completed screen, end card.",
   },
   {
     label: "One move frees them all",
     tone: "secondary",
     prompt:
-      "Build a 30-second Color Block Jam creative whose first half sets up a clever solution on a medium board where one central blocking block holds four other blocks back from their doors. A satisfying solve: a few set-up moves, then the key move frees everything and the four remaining blocks leave through their correct doors one after another in quick succession; no wrong moves. Medium difficulty; the pace speeds up from the set-up to the cascade. Concept: 'one move frees them all'; hook caption 'One move frees them all', a cascade caption on the quick finish. Game assets and sound effects only.",
+      "Build a 30-second CBJ creative whose first half sets up a clever solution on a medium board where one central blocking block holds four other blocks back from their doors. A satisfying solve: a few set-up moves, then the key move frees everything and the four remaining blocks leave through their correct doors one after another in quick succession; no wrong moves. Medium difficulty; the pace speeds up from the set-up to the cascade. Concept: 'one move frees them all'; hook caption 'One move frees them all', a cascade caption on the quick finish. Game assets and sound effects only.",
   },
   {
     label: "One wrong move",
     tone: "outline",
     prompt:
-      "Create a 30-second portrait Color Block Jam gameplay advertisement. Start from a board that looks almost completed: three blocks left in two colours, one narrow corridor to the doors. The player makes a wrong move that blocks the remaining path and gets stuck; then the puzzle replays from the same starting position and shows the correct order of drags that clears every block. Concept: 'one wrong move'; caption 'Don't do this...' over the mistake and 'Do this' over the correct run. Sequence: hook, the mistake, the correct run, the game's win screen, then the end card with PLAY NOW. Game assets and sound effects only, no music.",
+      "Create a 30-second portrait CBJ gameplay advertisement. Start from a board that looks almost completed: three blocks left in two colours, one narrow corridor to the doors. The player makes a wrong move that blocks the remaining path and gets stuck; then the puzzle replays from the same starting position and shows the correct order of drags that clears every block. Concept: 'one wrong move'; caption 'Don't do this...' over the mistake and 'Do this' over the correct run. Sequence: hook, the mistake, the correct run, the game's win screen, then the end card with PLAY NOW. Game assets and sound effects only, no music.",
   },
   {
     label: "Beginner clean solve",
     tone: "tertiary",
     prompt:
-      "Create a beginner-friendly Color Block Jam level on a small open board: only 1x1 and 1x2 blocks in red, green and blue, each with a matching exit door on the board edge, and plenty of empty cells so every block has room to move. The player solves it in one clean pass with no wrong moves. Easy difficulty, a calm pace with a generous clock, a 30-second portrait ad. Do not change the game's rules, HUD or block shapes.",
+      "Create a beginner-friendly CBJ level on a small open board: only 1x1 and 1x2 blocks in red, green and blue, each with a matching exit door on the board edge, and plenty of empty cells so every block has room to move. The player solves it in one clean pass with no wrong moves. Easy difficulty, a calm pace with a generous clock, a 30-second portrait ad. Do not change the game's rules, HUD or block shapes.",
   },
   {
     label: "Which side first?",
     tone: "primary",
     prompt:
-      "Generate a visually striking 30-second portrait Color Block Jam creative: a mirror-symmetric narrow-centre (hourglass) board with red blocks on the left half and blue blocks on the right, their matching doors near their own edges, and the shared bottleneck in the middle. All the red blocks leave first, then all the blue ones, so one side is cleared before the other and the symmetry breaks naturally; no wrong moves. The game's own look, blocks in the game's red and blue. Concept: 'which side first?'; hook caption 'Which side goes first?'.",
+      "Generate a visually striking 30-second portrait CBJ creative: a mirror-symmetric narrow-centre (hourglass) board with red blocks on the left half and blue blocks on the right, their matching doors near their own edges, and the shared bottleneck in the middle. All the red blocks leave first, then all the blue ones, so one side is cleared before the other and the symmetry breaks naturally; no wrong moves. The game's own look, blocks in the game's red and blue. Concept: 'which side first?'; hook caption 'Which side goes first?'.",
   },
 ];
 

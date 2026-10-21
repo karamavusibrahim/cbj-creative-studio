@@ -391,7 +391,7 @@ export default function CreateStudio() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !working) void plan(true);
                     }}
-                    placeholder="e.g. Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost fails before solving it."
+                    placeholder="e.g. Create a difficult CBJ level with a narrow center section and show gameplay where the player almost fails before solving it."
                     className="block w-full resize-y rounded-lg bg-surface-container-lowest p-4 text-body-md text-on-surface shadow-inner outline-none placeholder:text-outline"
                   />
                   <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">

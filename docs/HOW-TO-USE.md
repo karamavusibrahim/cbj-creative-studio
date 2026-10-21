@@ -8,10 +8,10 @@ Mac running the Unity game, so when it is offline the Showcase still works and m
 
 ## Create a creative from text
 
-1. Type the request in plain words, English or Turkish. The eight things a prompt may control (page 3 of the case):
+1. Type the request in plain words, English or Turkish. The eight things a prompt may control (page 3 of the brief):
    the type or structure of the level, the gameplay behaviour, difficulty or pacing, visual elements, the creative
    concept, the sequence of events, assets to use, elements that should stay unchanged. Examples that work well:
-   - "Create a difficult Color Block Jam level with a narrow center section and show gameplay where the player almost
+   - "Create a difficult CBJ level with a narrow center section and show gameplay where the player almost
      fails before solving it."
    - "An easy level on a small open board with four blocks in three colours. The player almost fails and solves it
      with two seconds left. The hook says 'Can you beat it?'. 30 seconds."
@@ -50,11 +50,11 @@ under the file says how it will be used, which depends on your words:
   creative). The plan's **Reference to creative** card shows what was read, adapted and not copied.
 - A **reference video**: any attached video is read whole for its structure, hook, ending, pace and captions; "same
   game design" / "this board" copies its board from the first frame of play; another game's mechanics are never used.
-  "Create a Color Block Jam version of this concept" adapts the concept.
+  "Create a CBJ version of this concept" adapts the concept.
 - An **asset to place**: a picture without reference words ("put the attached logo in the corner", "use this object
   instead of the obstacle").
 
-Sample files (the Color Block Jam trailers, reference pictures, objects, textures, logos, stickers, a music track) are
+Sample files (the CBJ trailers, reference pictures, objects, textures, logos, stickers, a music track) are
 listed in [TEST-ASSETS.md](TEST-ASSETS.md) and offered on the attachment zones when the catalogue is on.
 
 ## Edit a creative (controlled editing)

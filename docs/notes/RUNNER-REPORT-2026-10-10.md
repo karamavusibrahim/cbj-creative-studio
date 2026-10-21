@@ -6,7 +6,7 @@ Turn a level file plus a move script into a 9:16 gameplay video **with no human
 input**, using the real game rather than a re-drawing of it. That was the "done
 when" line for this step of the plan: *Level 3 + its moves JSON → 9:16 MP4.*
 
-**Which part of the case this covers.** Every example the case asks for needs
+**Which part of the brief this covers.** Every example the brief asks for needs
 real gameplay video: text-driven, image-driven, video-reference-driven and the
 controlled edit. Two of the grading criteria hinge on it:
 - **Gameplay consistency:** blocks obey the game's rules in every frame. This is
@@ -106,7 +106,7 @@ again.
 
 ## Case re-check (later on Oct 10)
 
-You asked me to check days 3 and 4 against the case PDF and fix anything missing
+You asked me to check days 3 and 4 against the brief and fix anything missing
 or wrong, with Fable 5.1. I re-read all 14 pages; Fable checked the plan, the
 reports and the code independently against the PDF and the game's C#.
 
@@ -149,10 +149,10 @@ as shipped, bottom is fixed.
 - The generator must build levels forward with a state cap, because a full search on dense 6x6 boards can pass 60,000 states.
 - Generated levels get a spot check in Unity, since the recorder's cell-by-cell check is the only guard between the Python rules and the game.
 
-## Decisions (with Fable 5.1, after re-reading the case and the ad research)
+## Decisions (with Fable 5.1, after re-reading the brief and the ad research)
 
 **1. The game bug: fix it in the game code, applied to our build copy only.**
-- **What:** `cbj-creative/unity/game-patch` is a small patch to Rollic's game:
+- **What:** `cbj-creative/unity/game-patch` is a small patch to the publisher's game:
   31 added lines in `GameManager.cs`, `ExitService.cs` and `InputHandler.cs`,
   each marked `cbj-creative patch`. It does three things:
   - the clock stops when the last block starts its exit;
@@ -162,13 +162,13 @@ as shipped, bottom is fixed.
   accepted drags, so a player could clear the board behind the fail screen and
   get both screens that way too. The patch closes it.
 - **How it's applied:** `cbj build-player` applies the patch to its copy of the
-  project. Your `~/rollic-case/CBJ` stays byte-identical to what Rollic sent, and
+  project. Your `~/cbj-work/CBJ` stays byte-identical to what the publisher sent, and
   a test checks that.
-- **Why not leave it in the recorder only?** The case grades "does Color Block
+- **Why not leave it in the recorder only?** The brief grades "does Color Block
   Jam behave like a game" and engineering quality. A fix inside the game's own
   logic is cleaner than the recorder reaching into a private field, and it also
   closes the second path, which only the game can fix.
-- **Why not edit your project directly?** Rollic's files stay untouched, so they
+- **Why not edit your project directly?** the publisher's files stay untouched, so they
   can see exactly what we changed (`game.patch`, plus the originals saved next
   to it). If they meant the behaviour, they drop one folder.
 - **The proof:** `cbj build-player --stock` builds the game as shipped, and
@@ -183,8 +183,8 @@ as shipped, bottom is fixed.
   - the near-fail win (S4) when the prompt asks for "difficult" or "almost fails";
   - the cliffhanger (S1) on request.
 - **Why:**
-  - The case's own example asks for "almost fails before solving it", never a fail.
-  - Color Block Jam's own ads avoid staged fails: none of its ads among the
+  - The brief's own example asks for "almost fails before solving it", never a fail.
+  - CBJ's own ads avoid staged fails: none of its ads among the
     roughly 136 ads we pulled (CBJ and rivals) shows one.
   - Most of its ads run on ad networks (Insightrackr: AppLovin 26%, Mintegral
     23%, Facebook 10%), where success endings did better (AppsFlyer: +33% installs
@@ -216,13 +216,13 @@ Scenario scripts on top of this recorder (the generator and compositor follow on
   one block left (time-out);
 - cliffhanger cut points.
 
-The first target is S4, the near-fail win, from the case's own example prompt,
+The first target is S4, the near-fail win, from the brief's own example prompt,
 on a hand-made narrow-centre level until the generator exists.
 
 ## Files
 
-- Repo: `~/rollic-case/cbj-creative`. New: `unity/CreativeRunner/`,
+- Repo: `~/cbj-work/cbj-creative`. New: `unity/CreativeRunner/`,
   `src/cbj/render.py`, `tests/test_render.py`, `tests/test_unity_render.py`,
   `reports/runner/`.
-- Step-by-step check: `~/rollic-case/RUNNER-CHECK-STEPS.md`.
+- Step-by-step check: `~/cbj-work/RUNNER-CHECK-STEPS.md`.
 - Videos: `cbj-creative/renders/` (not in git).

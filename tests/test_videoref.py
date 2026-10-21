@@ -609,7 +609,7 @@ def test_the_request_wins_over_the_reference():
 def test_a_long_reference_is_brought_into_30_60_seconds():
     b = _fresh()
     V.apply(b, PROMPT, [{**_analysis(["structure"]), "facts": {"duration_s": 95.0}}])
-    assert any("the reference's 95 s brought into the case's 30-60 s" in x for x in b["reference"]["adapted"])
+    assert any("the reference's 95 s brought into the brief's 30-60 s" in x for x in b["reference"]["adapted"])
     # the play decision then fits the length to the play (R12; round 4, case 29: it runs for every guided creative)
     rec = b["reference"]["play"]
     assert b["pacing"]["length_s"] == (rec["length"]["to"] if rec.get("length") else 60.0) and 30.0 <= b["pacing"]["length_s"] <= 60.0
@@ -1803,7 +1803,7 @@ def test_the_trailers_single_gameplay_part_is_now_accepted():
     notes, facts = TRAILER2["rejected_notes"], TRAILER2["facts"]
     assert notes["structure"] == [{**notes["structure"][0], "from_s": 0, "to_s": 28.86, "purpose": "gameplay"}]
     assert R.validate_notes(notes, facts, ["board", "concept", "structure"], general=True) == []
-    # the case-10 wrong-unit structure is still rejected
+    # the brief-10 wrong-unit structure is still rejected
     case10 = [{"from_s": 0, "to_s": 0.2, "purpose": "hook"}, {"from_s": 0.3, "to_s": 0.8, "purpose": "gameplay"},
               {"from_s": 4.1, "to_s": 4.4, "purpose": "payoff"}, {"from_s": 4.5, "to_s": 45, "purpose": "end_card"}]
     assert R.validate_notes({"structure": case10}, {"duration_s": 45.0}, ["concept"], general=True)[0].startswith(
@@ -2421,7 +2421,7 @@ def test_a_board_too_small_to_fill_the_play_may_grow_in_a_revision():
     V.apply(before, SIMILAR, [_board_analysis(board={**LOLTAP_BOARD, "columns": 6, "rows": 6, "blocks": 4})])
     before["level"]["blocks"] = 4  # the board as round 1 read it (the play levers may raise it now)
     after = copy.deepcopy(before)
-    notes = guided.pin_reference(before, after, [{"check": "Asked: gameplay at the centre (the case)", "status": "failed",
+    notes = guided.pin_reference(before, after, [{"check": "Asked: gameplay at the centre (the brief)", "status": "failed",
                                                   "detail": "gameplay is 3.5 s of 30 s (12%)"}])
     assert after["level"]["blocks"] == 7 and abs(after["level"]["width"] - 6) <= 1 and abs(after["level"]["height"] - 6) <= 1
     assert any("the reference's board was too small to fill the play" in n for n in notes)
@@ -3388,7 +3388,7 @@ def test_the_taken_pace_wins_over_the_fill():
     assert "slower than play.py's longest look allows" in rec["cap"]
     line = next(x for x in prov["adapted"] if x.startswith("the play fills about"))
     assert "it stops there: the reference's calm pace (0.24 drags a second) is slower than play.py's longest look" in line
-    # in the class, the fill still decides (the case-05 normal reading)
+    # in the class, the fill still decides (the brief-05 normal reading)
     a2, b2 = _case05_brief()
     assert V.tempo_class(b2["reference"]["play"]["rate"]) == "normal"
 
@@ -3419,7 +3419,7 @@ def test_a_rule_that_changes_a_planned_field_corrects_its_text():
     assert after["controls"][0]["plan"] == "Dark look. From the reference video x.mp4: the screen: no HUD."
 
 
-# ---------- round 3 (2026-10-17): the case's range, the length from the play, long hooks, solve and breathe words,
+# ---------- round 3 (2026-10-17): the brief's range, the length from the play, long hooks, solve and breathe words,
 # mistakes from parts only, NVIDIA's still budget ----------
 
 R3_P1 = ("Analyze the attached reference video and generate a new 30–60 second Color Block Jam ad inspired by its main "
@@ -3445,18 +3445,18 @@ SMALL_BOARD = {"columns": 4, "rows": 4, "shape": "open", "blocks": 3, "colours":
     "a 30–60s creative", "between 30 and 60 seconds", R3_P1])
 def test_a_range_inside_the_cases_30_to_60_is_no_stated_length(prompt):
     """Round 3, cases 16-18: "a new 30–60 second ad" was read as 60 s, and three ads were made 60 s long with 10-41 s end
-    cards. A range whose ends lie in the case's 30-60 s restates the case: no length, kept as length_range (info)."""
+    cards. A range whose ends lie in the brief's 30-60 s restates the brief: no length, kept as length_range (info)."""
     a = audit.asked(prompt, case_range=True)  # the video-reference workflow's reading
     assert a["length_s"] is None and a["length_range"] == (30.0, 60.0)
     assert "length" not in V.stated(prompt, [], video=True)
-    assert "30-60 s (the case's range, not a stated length)" in audit.facts_read(a)
+    assert "30-60 s (the brief's range, not a stated length)" in audit.facts_read(a)
     # the text and image workflows read it as before (the owner, 2026-10-17): the range's top as a stated length
     if "30 and 60" not in prompt:
         d = audit.asked(prompt)
         assert d["length_s"] == 60.0 and "length_range" not in d and "length" in V.stated(prompt, [])
 
 
-@pytest.mark.parametrize("prompt, length", [("a 45 second ad", 45.0), ("a 45 second ad within the case's 30-60 s", 45.0),
+@pytest.mark.parametrize("prompt, length", [("a 45 second ad", 45.0), ("a 45 second ad within the brief's 30-60 s", 45.0),
                                             ("a 40-second Color Block Jam creative", 40.0)])
 def test_a_single_length_is_still_stated(prompt, length):
     assert audit.asked(prompt, case_range=True)["length_s"] == length and "length" in V.stated(prompt, [], video=True)

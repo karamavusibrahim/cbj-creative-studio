@@ -4,7 +4,7 @@ Two additions to `cbj-creative`, both with zero effect on the agentic workflows:
 designers who will use the site, and a distillation of that feedback into a versioned document for the owner,
 after reading COLLEAGUE.SKILL (Zhou, Liu, Yuan, Shao, Hu; Shanghai AI Laboratory; arXiv:2605.31264, 29 May 2026).
 
-## 1. The paper, and whether it fits the case
+## 1. The paper, and whether it fits the brief
 
 **What it proposes.** Person-grounded *skill distillation*: take heterogeneous traces of a person or role (chat
 logs, documents, reviews, incident notes), run two extraction tracks, and write a versioned package an agent can
@@ -15,7 +15,7 @@ that") and become either a Markdown patch to a section or a normalized correctio
 (§4.2); every correction increments the version, archives the previous one, and can be rolled back (Fig. 3). The
 paper claims only the artifact format and lifecycle, not behavioural fidelity (§8, "Behavioral fidelity frontier").
 
-**What fits here.** The case tool will be used by many designers and its workflows are prompt-as-contract code the
+**What fits here.** The brief tool will be used by many designers and its workflows are prompt-as-contract code the
 owner tunes by hand. What the owner needs from the designers is exactly the paper's correction record: the scene
 (which creative, which version, which prompt, which workflow), what was wrong, what was expected. And what the owner
 needs from a pile of such records is the paper's dual track: *what the system should do differently* (capability)

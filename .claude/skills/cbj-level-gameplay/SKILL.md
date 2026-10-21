@@ -1,6 +1,6 @@
 ---
 name: cbj-level-gameplay
-description: Core requirement 2 of the Color Block Jam case in cbj-creative - how a prompt about the level or the play becomes a generated, solvable level and a recorded playthrough in the real game: the seven board shapes, piece sets, looks (symmetric, packed, colourful), size and block ranges, the easy/medium/hard bands from the exact solver and a naive player, the four endings and their defaults, mistakes, hesitations, the grammar of an order of interactions, the streak finish, near-fail seconds, pacing tempo and curve, one level per ad, and the checks measured on the recording. Use when a prompt asks for a type of level, a visually interesting board, a difficulty, a progression, a near-fail, a satisfying solve or a specific sequence of interactions, and when judging whether generated gameplay matches what was asked.
+description: Core requirement 2 of the CBJ brief in cbj-creative - how a prompt about the level or the play becomes a generated, solvable level and a recorded playthrough in the real game: the seven board shapes, piece sets, looks (symmetric, packed, colourful), size and block ranges, the easy/medium/hard bands from the exact solver and a naive player, the four endings and their defaults, mistakes, hesitations, the grammar of an order of interactions, the streak finish, near-fail seconds, pacing tempo and curve, one level per ad, and the checks measured on the recording. Use when a prompt asks for a type of level, a visually interesting board, a difficulty, a progression, a near-fail, a satisfying solve or a specific sequence of interactions, and when judging whether generated gameplay matches what was asked.
 metadata:
   spec-version: "1"
   last-verified: "2026-10-19"
@@ -9,7 +9,7 @@ metadata:
 # Level and gameplay generation
 
 ## 1. Purpose
-The case asks for gameplay "appropriate for the requested concept". Here the model never makes a level or a move: it
+The brief asks for gameplay "appropriate for the requested concept". Here the model never makes a level or a move: it
 fills brief fields; the generator builds a board the game's rules accept, the solver proves it, the scenario planner
 plans human-looking play toward the asked ending, the real game records it, and checks measure the result. This skill
 lists what can be asked, what each ask produces, and how to tell that it did.
@@ -18,8 +18,8 @@ lists what can be asked, what each ask produces, and how to tell that it did.
 - `src/cbj/generate.py` (SHAPES, PIECES, PIECE_SETS, STYLES, size tables, local search, `band_of`), `src/cbj/difficulty.py`,
   `src/cbj/solver.py`, `src/cbj/events.py` (ordered steps, A* over position + steps done), `src/cbj/play.py` (endings,
   mistakes, hesitations, pacing), `src/cbj/checks.py` (`gameplay_checks`, `level_checks`).
-- `docs/ENGINE-NOTES.md` (the former root README) "Level & gameplay generation", "Difficulty", "Length". Reports: `~/rollic-case/LEVEL-GAMEPLAY-REPORT-2026-10-11.md`,
-  `~/rollic-case/LG-SCENARIOS-REPORT-2026-10-13.md` (30 scenarios, 19 run, 11 skipped as not in the game).
+- `docs/ENGINE-NOTES.md` (the former root README) "Level & gameplay generation", "Difficulty", "Length". Reports: `~/cbj-work/LEVEL-GAMEPLAY-REPORT-2026-10-11.md`,
+  `~/cbj-work/LG-SCENARIOS-REPORT-2026-10-13.md` (30 scenarios, 19 run, 11 skipped as not in the game).
 - Rules of the game: `cbj-game-rules`.
 
 ## 3. Facts

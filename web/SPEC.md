@@ -1,7 +1,7 @@
 # CBJ Creative Studio — web app spec (Vercel front end for the cbj-creative engine)
 
 Written 2026-10-18. This folder (`cbj-creative/web/`) is a Next.js app deployed to Vercel. It is the public,
-user-friendly face of the tool in this repo: a Color Block Jam ad-creative generator with four agentic
+user-friendly face of the tool in this repo: a CBJ ad-creative generator with four agentic
 workflows (create from text, create guided by a reference video, create guided by a reference image,
 controlled edit of an existing creative). The workflows run in the Python engine (`src/cbj/app.py`, FastAPI,
 started with `uv run cbj ui`) on a Mac that has Unity and ffmpeg. The web app does NOT reimplement any
@@ -139,7 +139,7 @@ only under a fold).
 
 ## 5. Design: the Stitch screens are the visual source of truth
 
-Stitch project "Color Block Jam Studio" (`projects/7494116701124235404`), four desktop screens. Their HTML and
+Stitch project "CBJ Studio" (`projects/7494116701124235404`), four desktop screens. Their HTML and
 screenshots are saved in `design/` next to this file (`create-brief.html/.png` = the Create page before
 generating; `create-refs.html/.png` = Create with two references attached; `create-ready.html/.png` = Create
 after generation; `edit-workspace.html/.png` = the Edit workspace). Read the HTML: it carries the exact
@@ -164,7 +164,7 @@ Tokens (from the Stitch config; map 1:1 into Tailwind v4 `@theme` in `app/global
   adjusted/side-effect = amber (`#a86400` on `#fff1d9`), fail/not-asked = error, default/info = outline grey.
 
 Layout per screen (keep the composition; the content comes from the engine, not from the mock):
-- **Header** (all pages): logo mark + "Color Block Jam Studio / CREATIVE STUDIO", a pill nav **Create · Edit ·
+- **Header** (all pages): logo mark + "CBJ Studio / CREATIVE STUDIO", a pill nav **Create · Edit ·
   Showcase**, right side: the engine status pill (replaces the mock's "All changes saved": green dot "Engine online",
   amber "Engine busy: making another creative", grey "Engine offline: showcase only"), a Help button that opens a
   short "How it works" sheet (the four workflows in one paragraph each, what the edit contract means), and the
@@ -193,7 +193,7 @@ Layout per screen (keep the composition; the content comes from the engine, not 
   (video: a film icon + name + size), its role as the engine will read it (image: "asset to place" unless the
   prompt has reference words, then "reference image"; video: "reference video, read whole, never placed in the
   ad"; audio: "music for the ad"), and a delete. The info line: "Attachments guide the look, the board and the
-  pacing. Color Block Jam's rules and block mechanics are always preserved."
+  pacing. CBJ's rules and block mechanics are always preserved."
 - **Create, generation running / ready** (`create-ready`): on Generate, the left column becomes the
   **plan + progress**: "What the tool understood" (summary line, the facts line, the eight-row table Prompt
   control / Asked / What the tool does / Status; assumptions; "Read from the attached …" lines; the
@@ -289,7 +289,7 @@ Motion: `motion` (framer-motion's package) for card entrances and the progress s
   Reserve aspect ratios (9:16) to avoid layout shift; `preload="metadata"`; posters always set.
 - Accessibility: labelled form controls, keyboard-usable chips and tabs, focus rings, `aria-live="polite"` on
   the progress log and the status pill, colour never the only signal (status words are always written).
-- Page `<title>`: "Color Block Jam Studio"; description: "Text, image or video in, a 30-60 second Color Block Jam
+- Page `<title>`: "CBJ Studio"; description: "Text, image or video in, a 30-60 second CBJ
   ad out: a deterministic game pipeline with an agentic planner and controlled, proven edits." Favicon: an SVG
   mark (four coloured blocks).
 - Write `web/README.md`: how to run locally (`npm i`, `.env.local` with `ENGINE_URL=http://127.0.0.1:8765`, `npm run

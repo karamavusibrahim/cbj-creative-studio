@@ -22,7 +22,7 @@ are untouched and the edit report proves what changed.
   `cbj-controlled-editing` for the manifest.
 - `src/cbj/app.py`: `POST /api/soundtrack`, `features.soundtrack`; `src/cbj/cli.py`: `cbj soundtrack`. Tests:
   `tests/test_soundtrack.py`. The site: `web/SPEC-SOUNDTRACK.md`. Why and the measurements:
-  `~/rollic-case/SOUNDTRACK-2026-10-18.md`.
+  `~/cbj-work/SOUNDTRACK-2026-10-18.md`.
 
 ## 3. Facts
 **What the bed follows, and nothing else.** Theme → mode and root (game, candy, pastel, custom: major pentatonic; neon,

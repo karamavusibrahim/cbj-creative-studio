@@ -2,7 +2,7 @@
 
 A recording (cbj scenario) is gameplay. An ad puts a hook, captions, a cursor, a replay, sound
 and an end card around it. ad.json describes all of that as named parts, so a later edit can
-change one part and leave everything else exactly as it was (case p.7):
+change one part and leave everything else exactly as it was (brief p.7):
 
     segments  what plays, in `order`: a range of a recording (`clip`, any speed), a frozen frame
               (`hold`) or a card. Each clip has a `fit`: the whole recorded frame scaled and
@@ -48,7 +48,7 @@ REPLAY_MAX_S = 5.0  # the replay is a payoff, not filler: the last one or two be
 REPLAY_MAX_BEATS = 2
 INTRO_MAX_S = 0.5  # a frozen first frame under the hook: the ad must be moving within its first second
 # (the recording itself starts 1 s before the first touch; a 3 s frozen opening lost viewers, 2026-10-14)
-# When the play is short for the asked length (the case asks for 30-60 s), the ad is filled in
+# When the play is short for the asked length (the brief asks for 30-60 s), the ad is filled in
 # this order before the end card may grow past END_CARD_MAX_S: a longer replay (more beats), a
 # longer intro hold, the result (or the cliffhanger's question) held longer.
 REPLAY_FILL_S = 16.0  # filling: the replay may show the whole solve at half speed (a labelled screen-time device)
@@ -454,7 +454,7 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
                              f"{END_CARD_S[0]:g} s end card; record a shorter scenario or ask for a longer ad")
         if card > END_CARD_FILL_FROM_S * FPS and not allow_long_card:
             # The play is short for the asked length: fill it with a longer replay first, then a
-            # short held result, before the end card may grow (the case asks for 30-60 s). The
+            # short held result, before the end card may grow (the brief asks for 30-60 s). The
             # play itself was paced deliberately before recording when it was short (studio).
             # A result-first ad (teaser) is filled the same way, minus the frozen intro (2026-10-14).
             limit = int(END_CARD_FILL_FROM_S * FPS)
@@ -867,7 +867,7 @@ def build_ad(rec: Recording, length_s: float = 30, src: str = "main", allow_long
     return ad
 
 
-# The game sprites the default ad draws (Rollic's files; their sizes do not change).
+# The game sprites the default ad draws (the publisher's files; their sizes do not change).
 SPRITE_SIZES = {"CoinPile.png": (669, 561), "stopwatch.png": (512, 512), "ContinueButtonEmpty.png": (739, 258)}
 PINNED_CARD_MAX_S = 10.0  # an edit may leave a long end card rather than move the gameplay
 
@@ -878,7 +878,7 @@ def drawn_box(sprite_name: str, scale: float) -> list[int]:
     return [round(w * scale), round(h * scale)]
 
 
-MIN_AD_S = 30.0  # the case's shortest creative (brief.LENGTH_RANGE_S[0]); an edit never goes under it
+MIN_AD_S = 30.0  # the brief's shortest creative (brief.LENGTH_RANGE_S[0]); an edit never goes under it
 
 
 def _pinned_card(card: int, intro: int, hold: int, total: int, note, has_result: bool = True,

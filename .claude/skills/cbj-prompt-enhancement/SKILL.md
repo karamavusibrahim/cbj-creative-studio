@@ -19,7 +19,7 @@ may accept. Trend ideas are prompts written from live signals; they never touch 
   and `added_facts()` (the code checks), `enhance()` (the loop and the fallback), `workflow_for()`.
 - `src/cbj/trends.py`: `UNSAFE`, `GENERIC`, `TREND_SYSTEM`, `_check_idea()`, `discover()` (signals, cache).
 - The readers the checks reuse: `audit.asked` (the measurable facts of a prompt), `brief.QUOTED`, `brief.plain_text`.
-- Why it is built this way, with live results: `~/rollic-case/PROMPT-ENHANCEMENT-AND-TRENDS-2026-10-18.md`.
+- Why it is built this way, with live results: `~/cbj-work/PROMPT-ENHANCEMENT-AND-TRENDS-2026-10-18.md`.
 - Vocabulary in depth: `cbj-prompt-controls`; the game's limits: `cbj-game-rules`; edits: `cbj-controlled-editing`.
 
 ## 3. Facts
@@ -88,7 +88,7 @@ brief schema, the workflows or the evaluation.
   the questions, the notes and the workflow line; `--json` writes the result.
 - `CBJ_PLANNER=claude uv run cbj trends -n 4 [--theme X] [--refresh]` prints the ideas, the skipped trends and the
   signal counts; the cache file is `studio/_trends/<date>-<region>-<theme>.json`.
-- Live cases of 2026-10-18 (bomb, Turkish, the case prompt, an edit pointer, an image reference) are in the design
+- Live cases of 2026-10-18 (bomb, Turkish, the brief prompt, an edit pointer, an image reference) are in the design
   document named in section 2.
 
 ## 7. Change rules

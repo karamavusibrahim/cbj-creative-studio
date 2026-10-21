@@ -1,4 +1,4 @@
-"""Fixes from the case-requirement test of 2026-10-13 (CASE-TEST-REPORT-2026-10-13.md): ads never
+"""Fixes from the brief-requirement test of 2026-10-13 (CASE-TEST-REPORT-2026-10-13.md): ads never
 under 30 s, a short play filled rather than the ad shrunk, hesitations clamped per ending, edits
 keeping the game's own level file (and its HUD number), reference images and videos read before
 planning, uploads checked by content, and plain words in what the user reads."""

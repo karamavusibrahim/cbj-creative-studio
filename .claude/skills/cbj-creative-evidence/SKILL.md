@@ -1,6 +1,6 @@
 ---
 name: cbj-creative-evidence
-description: Where every fact about a Color Block Jam creative made by cbj-creative lives and how to verify it - the studio layout (studio/ID/vN: version.json, brief.json, level.json, board.png, ad/ad.json, ad.mp4, compose.json, audio.wav, poster.png), the recording folder and its result.json, the checks, the edit proof, the UI's API, the CLI commands, the unit-test suite and the two case-test harnesses - plus the reporting standard (baseline, fixes, final table, honest limits). Use when auditing a creative or an edit, reproducing a test case, writing a test report, or answering "how do we know" about any claim the tool makes.
+description: Where every fact about a CBJ creative made by cbj-creative lives and how to verify it - the studio layout (studio/ID/vN: version.json, brief.json, level.json, board.png, ad/ad.json, ad.mp4, compose.json, audio.wav, poster.png), the recording folder and its result.json, the checks, the edit proof, the UI's API, the CLI commands, the unit-test suite and the two case-test harnesses - plus the reporting standard (baseline, fixes, final table, honest limits). Use when auditing a creative or an edit, reproducing a test case, writing a test report, or answering "how do we know" about any claim the tool makes.
 metadata:
   spec-version: "1"
   last-verified: "2026-10-19"
@@ -16,7 +16,7 @@ plan's prose, to decide pass or fail.
 ## 2. Source of truth
 - `src/cbj/studio.py` (what a version stores), `src/cbj/checks.py`, `src/cbj/editreport.py`, `src/cbj/compose.py`
   (`compose.json`), `src/cbj/render.py` (the recording and `result.json`), `src/cbj/app.py` (the API).
-- Reports and harnesses in `~/rollic-case/`: `CASE-TEST-REPORT-2026-10-13.md` (82 scenarios), `USER-CASES-REPORT-2026-10-13.md`,
+- Reports and harnesses in `~/cbj-work/`: `CASE-TEST-REPORT-2026-10-13.md` (82 scenarios), `USER-CASES-REPORT-2026-10-13.md`,
   `LG-SCENARIOS-REPORT-2026-10-13.md`, `CC-SCENARIOS-REPORT-2026-10-14.md`; `case-test-2026-10-13/harness.py`,
   `case-test-2026-10-14/{fixtures.py, cc_cases.py, summarize.py, make_cc_assets.py}`.
 
@@ -46,7 +46,7 @@ through the first door of its colour it touches with a clear lane, during the dr
 the result consistent with the blocks gone. The rules were re-read in the C# (InputHandler, BlockMovementService,
 ExitService, GameManager) on 2026-10-15.
 
-**The loop** (case p.10: generate, review, request a modification, generate the revised version):
+**The loop** (brief p.10: generate, review, request a modification, generate the revised version):
 1. the level gate (`studio._level_gate`): a level-stage miss the generator can fix makes it generate again with
    other seeds (2 tries, 20 s each) and use the board with the fewest misses; the log says so;
 2. the audit rows and the rules rows join the checks, so the UI shows them and the review gets them as facts;
@@ -84,7 +84,7 @@ counts_dropped}, `validation` {status passed / passed after one re-ask / rejecte
 only the seconds and an empty structure reject a reading, never a label or the confidence},
 `separated` {ran, why, boundaries, snapped, at_a_cut}, `confidence`, `low_confidence`, or `error` / `skipped`. The
 provenance is `brief.reference` {file, focus, level, analysed_s, adapted, not_copied, stated, mechanics (the game's own
-under another name), not_used (another game's mechanics and obstacles: "<it>: not used: not in Color Block Jam", never
+under another name), not_used (another game's mechanics and obstacles: "<it>: not used: not in CBJ", never
 created, drawn or simulated), board {read, text, took, kept, busy (info only, never the difficulty)}}; the board taken
 shows in `brief.level` (source generate, shape, width, height, blocks, colours, pieces) and the level row's plan. The checks gain
 the **reference rows** (from "reference", `audit.reference_rows`): Reference: the ending, the pacing (drags per second
@@ -101,7 +101,7 @@ board, ... (read on a still at 0.3 s, 1280x720)") and the parts lines.
 
 **Edit proof** (`version.proof`): asked, asked_names, rows (nine: Gameplay, Timing, Camera, Composition, Sequence, Visual
 structure, Other assets, Captions, Sound; each kept / asked / side_effect / not_asked with its explanation), `changes` +
-`preserves` (the same in the case's words: "changes the hook; preserves Gameplay, Timing, ..."), `checklist` (ten flat
+`preserves` (the same in the brief's words: "changes the hook; preserves Gameplay, Timing, ..."), `checklist` (ten flat
 facts, each {ok, evidence}: level_unchanged, moves_unchanged, move_timing_unchanged, gameplay_render_reused (with the
 recording hash), duration_unchanged, camera_unchanged, hud_unchanged, captions_unchanged, pictures_unchanged,
 audio_unchanged; 2026-10-15), the Timing row's `numbers` {before, after}: fps, duration, the play window, the first
@@ -163,7 +163,7 @@ then the "Reference: ..." rows in `checks`; screenshot the "Reference to creativ
 Auditing an edit: `cbj-controlled-editing` section 4 plus `references/acceptance-rules.md` there.
 Reproducing a case: `CBJ_OUT=<folder> uv run python <harness>.py <ids>` with the UI running; read `<folder>/<id>.json`;
 `python3 summarize.py <folder>` prints one fact line per case.
-Reporting (the standard of the four reports in `~/rollic-case/`): 1 which cases fit the game and the tool, skipped with
+Reporting (the standard of the four reports in `~/cbj-work/`): 1 which cases fit the game and the tool, skipped with
 reasons, expectations corrected with reasons; 2 baseline on the code as it was (right / could not / wrong); 3 what was
 built and fixed, per case; 4 final run, one row per case with its proof; 5 honest limits still open. Counts in tables,
 never in prose; file paths once.
@@ -173,7 +173,7 @@ Pixel-exact equality between two films of the same job (about 1 % of frames diff
 proved by game state). A difficulty label calibrated on real players (bands are measured from the solver and a naive
 player). Reading the planner's mind: a wording the post-rules do not cover can still be read differently between runs;
 the edit report is the net that catches it (NOT ASKED fails the edit). A Mac that sleeps mid-pass stalls the player and
-the case reports a timeout (keep the lid open or run `caffeinate`).
+the brief reports a timeout (keep the lid open or run `caffeinate`).
 
 ## 6. Evidence
 This skill is the evidence index; the files it names are the evidence. Spot checks done by hand on 2026-10-14 and

@@ -12,7 +12,7 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const id = (await params).id;
   const d = !catalogueOn() || (await readIndex()).creatives.some((c) => c.id === id) ? await readDetail(id) : null;
-  return { title: d ? `${d.title} · Color Block Jam Studio` : "Showcase · Color Block Jam Studio", description: d?.tagline };
+  return { title: d ? `${d.title} · CBJ Studio` : "Showcase · CBJ Studio", description: d?.tagline };
 }
 
 // The curated ten are static (generateStaticParams). With the catalogue on (SPEC-R2-CATALOGUE) every other id is read

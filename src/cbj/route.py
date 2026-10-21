@@ -14,7 +14,7 @@ say, in code and before any model runs:
   metadata: the clock readings, the moments, the parts. Only when the metadata cannot place it,
   and only if a multimodal model is available, a contact sheet of the ad is read to find the
   second (optional: CBJ_LOCATE_BY_VISION=0 turns it off).
-- Level 2, full: a video the tool did not make (a reference, case p.6; or an uploaded MP4 that
+- Level 2, full: a video the tool did not make (a reference, brief p.6; or an uploaded MP4 that
   matches none of the tool's versions) is read as a whole with the multimodal model. An uploaded
   MP4 that IS one of the tool's versions (matched by its bytes) needs no analysis: the edit is
   routed to that version's metadata.
@@ -301,7 +301,7 @@ def _target_picture(clause: str, m: dict, uploads: list[str], colour_of=None) ->
     if re.search(r"\b(texture|skin|picture|image|pattern)\b", c) and re.search(r"\b(door|gate|exit)s?\b", c) and \
             not re.search(r"\bblock\b", c):
         return {"kind": "picture", "id": None, "name": "a picture on a door", "missing": True, "how": "name",
-                "note": "the game's doors and gates cannot carry a picture: they are the game's own (case p.5); a texture "
+                "note": "the game's doors and gates cannot carry a picture: they are the game's own (brief p.5); a texture "
                         "goes on a block, a picture on the walls"}
     for slot, rx in _PICTURE_NAMES:
         g = re.search(rx, c)
@@ -401,7 +401,7 @@ def decide(prompt: str, manifest: dict | None = None, uploads: list[str] | None 
             out.update(edit_type="adapt_reference", analysis_level=2, requires_video_analysis=True,
                        requires_gameplay_regeneration=True)
             out["notes"].append(f"the attached video ({', '.join(videos)}) is read as a whole: its structure, pacing, hook "
-                                f"and ending are adapted with the game's own gameplay (case p.6)")
+                                f"and ending are adapted with the game's own gameplay (brief p.6)")
             if matched is False:
                 out["notes"].append("the attached video is not one of this tool's creatives, so it cannot be edited in place: "
                                     "a new creative is made from its concept, with the change asked")

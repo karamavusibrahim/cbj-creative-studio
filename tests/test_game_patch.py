@@ -1,4 +1,4 @@
-"""The game patch (unity/game-patch): small, written against Rollic's files, applied only to copies."""
+"""The game patch (unity/game-patch): small, written against the publisher's files, applied only to copies."""
 
 import shutil
 import subprocess
@@ -20,7 +20,7 @@ def fake_project(tmp_path: Path, source: Path) -> Path:
 
 
 @pytest.mark.skipif(not (DEFAULT_PROJECT / "Assets").is_dir(), reason="the Unity project is not at ../CBJ")
-def test_rollics_project_is_untouched_and_matches_the_saved_originals():
+def test_the_publishers_project_is_untouched_and_matches_the_saved_originals():
     for rel in PATCHED_FILES:
         assert (DEFAULT_PROJECT / rel).read_bytes() == (ORIGINAL / rel).read_bytes(), rel
 

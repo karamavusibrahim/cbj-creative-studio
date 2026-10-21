@@ -1,12 +1,12 @@
 # Solver report: level model, exit rules, minimum-drag solver (2026-10-10)
 
-Day 3 of 10. This builds the deterministic gameplay core of the case. The code is
-in `~/rollic-case/cbj-creative/` and is committed (4 commits, author
+Day 3 of 10. This builds the deterministic gameplay core of the brief. The code is
+in `~/cbj-work/cbj-creative/` and is committed (4 commits, author
 karamavusibrahim, no AI attribution). Fable 5.1 reviewed it independently. Its
 findings and what was done about each are in section 4.
 
 > **Status note (added later on 2026-10-10).** This report records day 3 as it was. Since then
-> the repo has grown with the Unity recorder and the case re-check (see
+> the repo has grown with the Unity recorder and the brief re-check (see
 > RUNNER-REPORT-2026-10-10.md). When you redo the steps below, expect today's numbers: step 2
 > ends with `195 passed, 22 skipped`, and step 8 shows more commits (10 or more), all by
 > karamavusibrahim. The recorder has since replayed all six solutions in the real game and
@@ -40,7 +40,7 @@ Run everything in Terminal. Each step says what to run and what you should see.
 ### Step 1. Go to the project and install
 
 ```
-cd ~/rollic-case/cbj-creative
+cd ~/cbj-work/cbj-creative
 uv sync
 ```
 **Check:** no errors. It uses Python 3.12 and needs nothing beyond pytest for tests.

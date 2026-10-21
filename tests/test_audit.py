@@ -92,7 +92,7 @@ def test_feedback_names_the_misses():
 
 def test_a_video_references_segments_get_a_purpose():
     """The reference's structure is kept as {from_s, to_s, purpose, what} with purposes from a fixed
-    list, clamped to the clip and in order (case p.6: the structure and pacing to adapt; 2026-10-15)."""
+    list, clamped to the clip and in order (brief p.6: the structure and pacing to adapt; 2026-10-15)."""
     from cbj.reference import structure, structure_text
     raw = [{"from_s": 3, "to_s": 29, "what": "sliding blocks", "purpose": "gameplay"},
            {"from_s": 0, "to_s": 3, "what": "big text", "purpose": "Hook"},

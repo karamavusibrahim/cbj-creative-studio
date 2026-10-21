@@ -135,7 +135,7 @@ export default function ReferenceCard({ brief }: { brief: Brief }) {
           </div>
           {prov?.hud?.took?.length ? (
             <p>
-              <b>From its HUD</b> (the reference is Color Block Jam): {prov.hud.took.join("; ")}
+              <b>From its HUD</b> (the reference is CBJ): {prov.hud.took.join("; ")}
             </p>
           ) : null}
           {prov?.board?.text ? (
@@ -151,7 +151,7 @@ export default function ReferenceCard({ brief }: { brief: Brief }) {
             </p>
           ) : null}
           <List title="Mechanics translated" items={prov?.mechanics} />
-          <List title="Not used: not in Color Block Jam" items={prov?.not_used} />
+          <List title="Not used: not in CBJ" items={prov?.not_used} />
         </div>
       </div>
       {"ask" in r && typeof (r as { ask?: unknown }).ask === "string" ? (

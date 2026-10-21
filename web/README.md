@@ -1,4 +1,4 @@
-# Color Block Jam Studio — web front end
+# CBJ Studio — web front end
 
 The public face of the `cbj-creative` engine: create an ad from text, from a reference image or from a
 reference video; edit a finished ad one change at a time and read the report that proves what changed; browse
@@ -47,7 +47,7 @@ engine and an unlocked session; offline the button is disabled ("Needs the engin
 
 **Start from a trend (optional)** (Create, between the prompt and the attachments). On *Get ideas* the engine
 (`src/cbj/trends.py`, `POST /api/trends`, 20-40 s the first time, then cached for 6 hours per theme) reads Google's
-trending searches and news search and writes 4-6 Color Block Jam ad ideas, each with its trend, why it is current,
+trending searches and news search and writes 4-6 CBJ ad ideas, each with its trend, why it is current,
 its source (a link, or the search term), how it maps to the game's levers, a hook, and a full prompt. *Use this
 prompt* puts it in the textarea (asking first if there is text) and focuses it. The footer says when it was
 generated, from how many signals, and lists the skipped trends with the reason (the brand-safety rules). The
@@ -204,7 +204,7 @@ pages are generated from `index.json` at build time.
 ## The catalogue on Cloudflare R2
 
 More finished creatives than the ten curated ones, visible with the Mac off and without a redeploy: a catalogue of about
-100 creatives (the ten curated first, every kind of the case present) lives in a public Cloudflare R2 bucket, in exactly
+100 creatives (the ten curated first, every kind of the brief present) lives in a public Cloudflare R2 bucket, in exactly
 the static showcase's layout (`index.json`, `<id>/showcase.json`, `<id>/v<n>/ad/ad.mp4` at 720p, posters, boards,
 `brief.json`, `level.json`, `review.json` and its sheet, `inventory.json`, `uploads/…`, `sprites/…`).
 

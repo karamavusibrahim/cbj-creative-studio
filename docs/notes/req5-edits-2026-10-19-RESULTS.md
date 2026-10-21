@@ -1,7 +1,7 @@
 # Edit test set 2: five one-change requests on today's video-reference creatives (2026-10-19 afternoon)
 
-Why: the owner's next test is the edit workflow (case p.7, "controlled creative editing: one of the most important parts
-of the case"). The creatives made this afternoon from the three reference videos had never been edited; the case's own
+Why: the owner's next test is the edit workflow (brief p.7, "controlled creative editing: one of the most important parts
+of the brief"). The creatives made this afternoon from the three reference videos had never been edited; the brief's own
 example wordings were put on them, one change each, one asset slot or re-run tier each. Everything below was run
 in-process through the edit workflow (`run.py`: `edit.plan`, then `edit.make` with the viewer's review and the loop on),
 and every intermediate step is in `results/<id>.json`: the route decided in code, the planner's declared groups and what
@@ -12,7 +12,7 @@ parent's and the new versions' ad, poster, brief, level and edit report; `COMPAR
 moment the edit shows. The prompts: `PROMPTS.md`. Runs: `plan-r1.log` (all five planned, no make), `run-r1.log` (E1 E2 E3),
 `run-r2.log` (E2 again, E4, E5 on the fixed code), `run-r3.log` (the final pass of all five on the final code).
 
-## 1. What the case asks, and what the workflow does with a request (read before the table)
+## 1. What the brief asks, and what the workflow does with a request (read before the table)
 
 p.4 "Keep this creative exactly the same, but replace this object with the attached asset"; p.6 "Use this object instead of
 the current obstacle"; p.7 "I like this creative. Keep everything exactly the same, but replace this asset ... preserve

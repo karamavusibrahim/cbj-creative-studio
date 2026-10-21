@@ -1,16 +1,16 @@
 # Test assets
 
-Test inputs used while building and testing the tool: Color Block Jam's own trailers, pictures and assets made for this case, and files the tool itself produced. Attach any of them on the Create or Edit page.
+Test inputs used while building and testing the tool: CBJ's own trailers, pictures and assets made for this case, and files the tool itself produced. Attach any of them on the Create or Edit page.
 
 They are published with the catalogue on Cloudflare R2 under `assets/` and offered on the Create page's sample assets; the originals live in the engine's `studio/uploads/`.
 
-## reference videos (Color Block Jam)
+## reference videos (CBJ)
 
 | file | about | size |
 |---|---|---|
-| `cbj_trailer_2.mp4` | Color Block Jam trailer 2 (5x7 board, Level 25, 01:05 clock) | 1.6 MB |
-| `cbj_trailer_3.mp4` | Color Block Jam trailer 3 (7x7 board, no HUD) | 3.7 MB |
-| `cbj_timeout_reference.mp4` | a Color Block Jam creative that ends in a time-out | 6.7 MB |
+| `cbj_trailer_2.mp4` | CBJ trailer 2 (5x7 board, Level 25, 01:05 clock) | 1.6 MB |
+| `cbj_trailer_3.mp4` | CBJ trailer 3 (7x7 board, no HUD) | 3.7 MB |
+| `cbj_timeout_reference.mp4` | a CBJ creative that ends in a time-out | 6.7 MB |
 | `base-creative_perfect-solve_1015-120422_.mp4` | a creative made by this tool (a clean solve), for 'edit this video' requests | 11.1 MB |
 
 ## reference pictures (made with Higgsfield for this case)

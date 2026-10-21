@@ -8,7 +8,7 @@ import { useEngine } from "../EngineProvider";
 import { Badge, Button, Card, CardTitle, ErrorBox, Fold, Muted, cx, type Tone } from "../ui";
 
 // "Start from a trend (optional)" (SPEC-ENHANCE §2): what is trending today, turned by the engine into
-// Color Block Jam prompts. Never fetches on its own: an idea costs a model call. A pasted link (§2b) goes to the
+// CBJ prompts. Never fetches on its own: an idea costs a model call. A pasted link (§2b) goes to the
 // same endpoint with `url`; its ideas are shown above the feed's, each result keeping its own footer.
 
 const CAT_TONE: Record<string, Tone> = { gaming: "violet", culture: "sky", season: "mint", sport: "grey", viral: "grey" };

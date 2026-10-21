@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import EngineProvider from "@/components/EngineProvider";
 import Header from "@/components/Header";
 import "./globals.css";
@@ -9,10 +10,10 @@ const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-inter",
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["500"], variable: "--font-jetbrains", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Color Block Jam Studio",
+  title: "CBJ Studio",
   description:
-    "Text, image or video in, a 30-60 second Color Block Jam ad out: a deterministic game pipeline with an agentic planner and controlled, proven edits.",
-  applicationName: "Color Block Jam Studio",
+    "Text, image or video in, a 30-60 second CBJ ad out: a deterministic game pipeline with an agentic planner and controlled, proven edits.",
+  applicationName: "CBJ Studio",
 };
 
 export const viewport: Viewport = {
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </main>
         </EngineProvider>
+        <Analytics />
       </body>
     </html>
   );

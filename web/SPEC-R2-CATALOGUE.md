@@ -3,7 +3,7 @@
 ## Why
 The static showcase (10 curated creatives in `public/showcase/`) is what reviewers see when the engine is offline.
 The owner wants more finished creatives visible over time without redeploying and without the Mac: a catalogue of
-about 100 creatives (the ten curated first, every kind of the case present) is exported by
+about 100 creatives (the ten curated first, every kind of the brief present) is exported by
 `scripts/r2_publish.py` to a public Cloudflare R2 bucket in exactly the static showcase's layout
 (`index.json`, `<id>/showcase.json`, `<id>/v<n>/ad/ad.mp4` at 720p, posters, boards, `brief.json`, `level.json`,
 `review.json` and its sheet, `inventory.json`, `uploads/…`, `sprites/…`). The bucket's public base URL comes in

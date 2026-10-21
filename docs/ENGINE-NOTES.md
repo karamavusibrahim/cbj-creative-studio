@@ -1,6 +1,6 @@
 # cbj-creative
 
-Tooling for generating Color Block Jam ad creatives. This first part is the
+Tooling for generating CBJ ad creatives. This first part is the
 deterministic gameplay core: a level model that reads the game's own JSON, the
 game's exit and movement rules ported from the Unity C#, and a solver that finds
 the minimum number of drags that clears a level.
@@ -222,8 +222,8 @@ finger path on screen and different pixels.
 - the board takes no input after either ending.
 
 That is 31 added lines in three files, each marked `cbj-creative patch`.
-`game.patch` is the readable diff, and `original/` holds Rollic's files byte for
-byte. `build-player` applies the patch to its copy only, so Rollic's project is
+`game.patch` is the readable diff, and `original/` holds the publisher's files byte for
+byte. `build-player` applies the patch to its copy only, so the publisher's project is
 never changed, and it refuses to patch files that differ from those originals.
 
 For a before/after, `cbj build-player --stock` builds the game exactly as
@@ -392,7 +392,7 @@ level, ending and seed give the same `play.json`.
 blocker) and staying down (`hold_s`). `push_dir` lets a block that cannot move at all be pressed
 into its neighbour. The runner logs the frame on which each cell was entered (`cell_frames`).
 
-**The narrow-centre level.** `data/levels/gen/narrow_center_01.json` is the case's example
+**The narrow-centre level.** `data/levels/gen/narrow_center_01.json` is the brief's example
 prompt ("a difficult level with a narrow center section... the player almost fails"): a 6x8
 hourglass with a two-lane waist, 7 blocks, 9 minimum drags (2 repositioning), naive player 1.26x
 the minimum. Its cliffhanger is two blocks head-on in the waist.
@@ -503,7 +503,7 @@ encoded, exit 1). A render that fails a later check is saved as `ad.FAILED.mp4`,
 
 **Assets.** The game's font (Tobi) and UI sprites are read from the Unity project at run time
 (`../CBJ`, or set `CBJ_PROJECT`) and never copied into this repo; the font is "all rights reserved"
-and licensed to Rollic. Without the project, an open fallback font is used. The sound effects are
+and licensed to the publisher. Without the project, an open fallback font is used. The sound effects are
 synthesized in code, because the project ships no audio; they stand in for the game's own sound
 bank.
 
@@ -514,7 +514,7 @@ about 0.
 ## Text to creative: prompts in, ads out
 
 `uv run cbj ui` opens a local page (http://127.0.0.1:8765). You write what you want; the page
-shows how each of the case's eight prompt controls was read, makes the ad, and plays it. A
+shows how each of the eight prompt controls was read, makes the ad, and plays it. A
 follow-up prompt edits it into a new version, with the proof of what changed.
 
 **The split.** An LLM turns the prompt into a typed **brief** (`brief.py`) and nothing else: it
@@ -583,7 +583,7 @@ ad and its proof.
 
 ## Level & gameplay generation (core requirement 2)
 
-The case asks for gameplay "appropriate for the requested concept": a specific type of level, a
+The brief asks for gameplay "appropriate for the requested concept": a specific type of level, a
 visually interesting board, a difficult or easy level, a gameplay progression, a near-fail moment,
 a satisfying solve, a specific sequence of interactions. The LLM still only writes the brief;
 each of these is a brief field that deterministic code builds, plays in the real game and then
@@ -628,7 +628,7 @@ lines for the feedback analysis and the report. Tests: `tests/test_workflows_com
 
 ## Controlled editing (core requirement 5)
 
-The case: "If a user likes an existing creative and asks for one specific change, the system
+The brief: "If a user likes an existing creative and asks for one specific change, the system
 should avoid unnecessarily changing everything else ... preserve gameplay, timing, camera,
 composition, sequence, visual structure and other assets." An edit here is a change to the
 stored creative, not a new generation:
@@ -655,7 +655,7 @@ stored creative, not a new generation:
    replaces (the end-card picture, the icon beside the hook, the button), in the same place (a
    logo stays in its corner).
 6. **The edit report proves it, item by item** (`editreport.py`): gameplay, timing, camera,
-   composition, sequence, visual structure, other assets (the case's seven), captions and sound.
+   composition, sequence, visual structure, other assets (the brief's seven), captions and sound.
    Each difference is classified on its own: *asked*; *explained*, only when a check on the
    measured difference proves the reason (a caption "names the colours as shown" only if its
    template is the same and only its filled-in facts changed; a caption "waits for the longer
@@ -670,7 +670,7 @@ every caption, with plain names and screen times. The planner gets it with an ed
 "the coin pile" or "this object" resolves to a slot. An attached picture the model does not place
 goes to the slot the prompt names, else to the end-card picture, written as an assumption.
 
-**Added 2026-10-19 (edit test set 2, five one-change requests on video-reference creatives, `~/rollic-case/req5-edits-2026-10-19/`).**
+**Added 2026-10-19 (edit test set 2, five one-change requests on video-reference creatives, `~/cbj-work/req5-edits-2026-10-19/`).**
 A colour word in an edit names the slot *as this creative shows it* (`brief.slot_of_colour_word`): "apply this texture to
 the cyan block" on a trailer copy whose green slot is painted cyan goes on that block (the shown name first, then the game's
 own name when the slot is shown as itself, then the nearest shown shade for "teal", "magenta", "light blue"; restricted to
@@ -692,7 +692,7 @@ uv run cbj edit-report <id> 1 3                                               # 
 ```
 
 **More things an edit can change on its own** (from the 45 control & consistency scenarios, see
-`~/rollic-case/CC-SCENARIOS-REPORT-2026-10-14.md`):
+`~/cbj-work/CC-SCENARIOS-REPORT-2026-10-14.md`):
 
 - **Music** is its own stem: an uploaded WAV/MP3/M4A/AAC/OGG/FLAC (`audio.music`), mixed under the
   effects (about -9 dB, looped or trimmed, faded out over the last second). compose.json keeps a
@@ -751,7 +751,7 @@ src/cbj/checks.py    what was asked, checked on the recording and the level file
 src/cbj/preview.py   a picture of a level, drawn from its file
 src/cbj/studio.py    brief -> level -> recording -> ad, versions, cached stages, edits (pin, closest play)
 src/cbj/edits.py     what an edit can point at (the inventory) and exact edits without the planner
-src/cbj/editreport.py the edit report: the case's seven preserve items, captions and sound, one by one
+src/cbj/editreport.py the edit report: the brief's seven preserve items, captions and sound, one by one
 src/cbj/app.py       the test UI (FastAPI); the page is src/cbj/static/index.html
 src/cbj/enhance.py   prompt enhancement: the request in the planner's words, nothing added, questions for the rest
 src/cbj/trends.py    optional ideas from what is trending (Google Trends + Tavily), as prompts; never touches the workflows
@@ -762,7 +762,7 @@ web/                 the website (Next.js, deployed on Vercel): the same engine 
 scripts/             engine-online.sh: the public engine (:8766, token), the Cloudflare tunnel, the Vercel env update
 src/cbj/cli.py       command line
 unity/CreativeRunner Unity scripts copied into the project copy by build-player
-unity/game-patch     the game fix: Rollic's originals, the patched files, game.patch
+unity/game-patch     the game fix: the publisher's originals, the patched files, game.patch
 data/levels/         the six shipped levels (copied unchanged from the Unity project)
 data/levels/gen/     generated levels (the narrow-centre hourglass)
 data/solutions/      move scripts for the Unity replay
@@ -792,7 +792,7 @@ entry quotes them), and anything it would like to add comes back as a question w
 the rewrite with the engine's own readers (`audit.asked` facts, quoted captions kept, `brief.plain_text`, caption
 length, no statistics); a rewrite that breaks a rule is re-asked once and then the user's own words stand. The result
 also says which workflow will read it (`app.workflow_of`). Module `src/cbj/enhance.py`; tests `tests/test_enhance.py`;
-why it is built this way: `~/rollic-case/PROMPT-ENHANCEMENT-AND-TRENDS-2026-10-18.md`.
+why it is built this way: `~/cbj-work/PROMPT-ENHANCEMENT-AND-TRENDS-2026-10-18.md`.
 
 **Ideas from trends (optional).** `uv run cbj trends [--theme X] [--region US] [-n 4] [--refresh]`, `POST /api/trends`,
 the site's *Start from a trend* card. Google's trending searches (RSS) and Tavily news (`TAVILY_API_KEY` in `.env`),
@@ -866,7 +866,7 @@ listed, one-record lessons are `thin` whatever the model said, a designer entry 
 distillation is a new version in `studio/_lessons/v<N>/` (`lessons.json`, `LESSONS.md`, `meta.json` with the record ids
 and the model); a correction in the owner's words is recorded and applied in the next version; rollback moves the
 pointer and deletes nothing. First live run: 4 test records → LESSONS v1 in 16.5 s with one strong and three thin
-lessons and four open questions. Design and the paper's reading: `~/rollic-case/FEEDBACK-AND-LESSONS-2026-10-18.md`.
+lessons and four open questions. Design and the paper's reading: `~/cbj-work/FEEDBACK-AND-LESSONS-2026-10-18.md`.
 
 **Added 2026-10-19: feedback under every result, tied to the step; the analysis; the report.** A record now carries
 `step` (the engine's own stage names: plan, level, recording, compose, review, revise, proof, result, other; words in
@@ -901,12 +901,12 @@ site's *Audio (optional)* section before Generate) runs the workflow unchanged a
 same music edit, so the creative comes out with audio in one job (the result is v2; v1 is the silent original).
 The result is an ordinary uploaded sound file (`studio/uploads/soundtrack-*.wav`); putting it in the ad is the existing
 music edit (`{"music": name}`), a new version with the edit report. No workflow or compositor code changes. Module
-`src/cbj/soundtrack.py`; tests `tests/test_soundtrack.py`; design and measurements: `~/rollic-case/SOUNDTRACK-2026-10-18.md`.
+`src/cbj/soundtrack.py`; tests `tests/test_soundtrack.py`; design and measurements: `~/cbj-work/SOUNDTRACK-2026-10-18.md`.
 
 ## The website (web/, on Vercel)
 
 `web/` is a Next.js app, live at https://cbj-creative-studio.vercel.app, that puts the same four workflows
-behind the Stitch design ("Color Block Jam Studio": Create, Edit, Showcase). It reimplements nothing: the
+behind the Stitch design ("CBJ Studio": Create, Edit, Showcase). It reimplements nothing: the
 browser calls this engine's HTTP API (`/api/plan`, `/api/make`, `/api/direct`, `/api/review`, `/api/upload`,
 the jobs, the files under `/studio/`) directly, through a tunnel to the Mac that runs `cbj ui`. The web app's
 own server does two things only: the passcode (`STUDIO_PASSCODE`: Generate, Apply, Review and uploads need it
@@ -950,7 +950,7 @@ A viewer's review judges the soft side; the countable side is measured (`audit.p
 the measurable facts from the prompt itself, never from the plan, so a plan that quietly dropped something is
 caught: the block count, how many colours ("six colored blocks" is six colours), how many pieces a viewer can tell
 apart (blocks of one colour that touch read as one), the colours named, the board shape and looks, the difficulty,
-the blocked attempt and which colour stops it, the case's 30-60 s, the asked length, the seconds left, the mistakes,
+the blocked attempt and which colour stops it, the brief's 30-60 s, the asked length, the seconds left, the mistakes,
 the order of interactions, the satisfying finish, the ending, and every quoted caption. Each row says whether it was
 met and, when not, which stage missed it (the plan, the level, the play or the ad). The game's rules are then
 replayed on the game's own record of the drags, as the Unity project defines them (`InputHandler`,
@@ -977,11 +977,11 @@ creative", "Edit a creative"); the Edit side needs a creative chosen from the li
 - **create**: plan (references analysed), level, play, ad, the viewer's review, then the loop: the measured misses and
   the viewer's first fix go back to the planner and a revised take is made (another seed when the board, the play or
   the length missed), up to two rounds. Its evaluation is the text-to-creative profile: the board, the play, the
-  rules, every fact the prompt asks for, the case's rows.
+  rules, every fact the prompt asks for, the brief's rows.
 - **edit**: the route from the version's parts manifest, a direct edit in code or the planner with the route, the edit
   report, the viewer's review against the edit, then its own loop: items the report says changed without being asked,
   the facts the edit asks for that are not so, and the viewer's fix. The rules are re-checked only when the play was
-  re-filmed; the case's rows are not repeated on an edit.
+  re-filmed; the brief's rows are not repeated on an edit.
 
 A third workflow was split off the same day for a prompt plus media (`src/cbj/workflows/guided.py`): a new creative with
 a video attached, or with an image the words make a reference ("inspired by this image"), is guided; a prompt alone stays
@@ -995,9 +995,9 @@ value from the level), the walls (count, "several separate" = two or more groups
 colour, the cursor, the background (the poster's margin pixels against the named colour's family), the music, the
 sequence (the win first, the replay, the end card, the result screen), the game's own look when the prompt asks for
 the original rules, HUD or assets, each quoted caption's moment (at the start, on the wrong move, on the correction,
-when a colour leaves, on the result, in the last seconds, at the cut) read from the parts manifest, and the case's
+when a colour leaves, on the result, in the last seconds, at the cut) read from the parts manifest, and the brief's
 "gameplay at the centre" (p.2: the share of the ad that is play, replay or the result clip; under 40 % fails). The
-check of this coverage against the case and the game's rules is in `../EVAL-COVERAGE-2026-10-16.md`.
+check of this coverage against the brief and the game's rules is in `../EVAL-COVERAGE-2026-10-16.md`.
 
 ### What the 2026-10-16 scenario batch changed in the create workflow
 
@@ -1020,7 +1020,7 @@ run on the Claude planner with the loop on. The real misses were all in the time
 - the level and recording caches carry the generator's and the play planner's versions, so a fix produces new boards
   and films instead of reusing old ones.
 
-## Editing the delivered video, not regenerating it (case p.7)
+## Editing the delivered video, not regenerating it (brief p.7)
 
 An edit is a change to the stored creative (`ad.json`), rendered again from the same cached recording. For an edit
 that only changes layers inside their existing frame windows (a caption's words or colours, a picture swapped in its
@@ -1033,7 +1033,7 @@ says it in words: "1278 of 1350 frames are the approved video's bytes, 1 of 10 G
 sound mix is identical, the approved video's audio stream is copied byte for byte as well (`patched.audio_copied`).
 The report also carries a ten-point preservation checklist (level, moves, move timing, gameplay render reused with the
 recording hash, duration, camera, HUD, captions, pictures, audio; each a fact with its evidence), the edit's "changes
-X; preserves Y" line in the case's words, and the Timing row's numbers before and after (fps, length, the play window,
+X; preserves Y" line in the brief's words, and the Timing row's numbers before and after (fps, length, the play window,
 the first move, the drags, the clock). A test runs three edits in a row and proves nothing unrelated drifts. An edit
 that moves a boundary (timing, a part's length) or re-films the play is rendered in full, as before. Generative video
 editors (Runway Aleph, Kling object replacement, open-source inpainting such as ProPainter or EffectErase) were
@@ -1042,7 +1042,7 @@ true, and offer no proof of what changed; they remain an option for a hook or ou
 
 ### The 48-prompt audit of 2026-10-15 and what it changed
 
-`~/rollic-case/t2c-audit-2026-10-15/` (28 prompts from the case's author plus 20 time-out, near time-out and length
+`~/cbj-work/t2c-audit-2026-10-15/` (28 prompts from the brief's author plus 20 time-out, near time-out and length
 scenarios, all made and reviewed, nothing edited) found seven things, fixed the same day: the audit's count regexes
 (counts of blocks left and near-fail words were read as asks: 9 false flags); an asked caption whose moment the ad
 does not draw (the result caption after a clean win, the fix caption) now goes on the nearest moment the ad has
@@ -1080,7 +1080,7 @@ research note's terms (analyse only what is necessary, modify only what is reque
   the NVIDIA omni model or the Claude backend; off with `CBJ_LOCATE_BY_VISION=0`). This is the optional use of video
   analysis: for a creative the tool made, the metadata is enough.
 - **Level 2, full**: a video the tool did not make is read as a whole with the multimodal model: a reference video
-  (case p.6) or an uploaded MP4 that matches none of the tool's versions. An uploaded MP4 that *is* one of the tool's
+  (brief p.6) or an uploaded MP4 that matches none of the tool's versions. An uploaded MP4 that *is* one of the tool's
   versions (the test folder's base creatives, for example) is recognised by its bytes (`route.match_upload`) and the
   edit is routed to that version's metadata: the UI opens it and plans the edit from there, with no analysis.
 A request that changes the puzzle or the play (a second mistake, a harder level, another ending) is routed as a
@@ -1093,9 +1093,9 @@ gameplay render reused as routed, or a retake as routed). Tests: `tests/test_rou
 ## Pictures an ad can use
 
 Three sources, all by file name in the prompt: files dropped into the UI (`studio/uploads/`, listed as "Uploaded
-before"), the game's own 2D art from the case folder (`Assets/Sprites/UI`: the coin pile, the stopwatch, the blue
+before"), the game's own 2D art from the brief folder (`Assets/Sprites/UI`: the coin pile, the stopwatch, the blue
 toy-brick start background usable behind the board or on the end card, the green button, the Level Completed and
-Out Of Time banners, the icons), and the test pictures in `~/rollic-case/case-test-2026-10-14/assets/` (drawn by a
+Out Of Time banners, the icons), and the test pictures in `~/cbj-work/case-test-2026-10-14/assets/` (drawn by a
 script, plus twelve OpenMoji pictures under CC BY-SA 4.0 for the toy-themed prompts, with the licence next to them).
 Slots: a logo or sticker in the top-left corner, a sticker in the top-right corner, the icon beside the hook, the
 end-card picture, the end card's background, the button, the cursor, and the obstacle: "use this object instead of
@@ -1117,7 +1117,7 @@ in: `draw.cutout` floods the background from the four corners and trims to what 
 logo, sticker, icon, end-card picture, button and cursor slots (never for a wall tile or a background, which fill
 their box). A picture that already has transparency is left as it is.
 
-## Reference images and videos (case p.6)
+## Reference images and videos (brief p.6)
 
 The planner is a text model and sees only file names, so a reference file is analysed first
 (`reference.py`): an image gets a measured palette (PIL, no model) and a multimodal model's
@@ -1131,7 +1131,7 @@ image ..."). A video is never placed in the ad; an image is placed only when the
 to put it somewhere. A file that could not be read is said so, never guessed about. Uploads are
 checked by content (PNG, JPG, WebP; MP4, MOV, WebM up to 80 MB).
 
-**The role of an image** (`imageref.py`, 2026-10-15). The case names four roles for an image, and the tool decides which
+**The role of an image** (`imageref.py`, 2026-10-15). The brief names four roles for an image, and the tool decides which
 from the request's words and from what the model saw (its `kind`: photo, illustration, game screenshot, logo,
 character, pattern; and a `board` object it is asked to fill when the picture shows a puzzle board):
 - *style* ("inspired by this image", "use its colours", "design transfer", "same style", a reference prompt with no
@@ -1151,15 +1151,15 @@ character, pattern; and a `board` object it is asked to fill when the picture sh
 - *asset* ("put our logo", "this mascot beside the hook", a logo the model recognised with "our" or "brand"): placed by
   the planner's placement rules, as before.
 - *modify* ("use this object instead of the current obstacle", "apply this texture to the blue block"): the walls or a
-  block's texture, as before (case p.4 and p.6).
+  block's texture, as before (brief p.4 and p.6).
 An image can carry two roles at once. The page shows the role under "Read from the attached image" and the UI's test
-folder has a set for each role (`~/rollic-case/test-assets-2026-10-15/req3-images/`, plus the image-role set made on
+folder has a set for each role (`~/cbj-work/test-assets-2026-10-15/req3-images/`, plus the image-role set made on
 2026-10-15). Tests: `tests/test_imageref.py`.
 
 ## Video-guided generation (core requirement 4)
 
-The case (p.6) asks that a reference video's concept, structure and pacing be understood and adapted, "e.g. based on
-this video, create a Color Block Jam version of this concept". The tool generates and edits no image and no video: the
+The brief (p.6) asks that a reference video's concept, structure and pacing be understood and adapted, "e.g. based on
+this video, create a CBJ version of this concept". The tool generates and edits no image and no video: the
 reference is read and understood according to the request, the findings become inputs to the plan (the level spec,
 the play, the captions, the look, the timeline), and the ad is still the Unity recording composed by the tool's own
 compositor. The contract is `../REQ4-SPEC-2026-10-16.md`.
@@ -1178,7 +1178,7 @@ word it is an edit as before (`route.upload_intent`, checked before the bytes ro
 video model always analyses the general concept of the reference; when the user says specific things, the model
 focuses on them as well"); the reading plan's focus and level decide what is applied to the brief first (the analysis
 records `read_all: true` and `applied`: the focus), and what the request leaves open is filled from the general reading
-(2026-10-17, round 2 case 14: the board, the ending, the flow, and the screen of a Color Block Jam reference, each only
+(2026-10-17, round 2 case 14: the board, the ending, the flow, and the screen of a CBJ reference, each only
 when the request states nothing about it and has no "only", "just the", "nothing else", "everything else is mine" or
 "the rest is mine"; never the look; `videoref.open_aspects`). The pacing is applied only when the request asks about it,
 and the play is one decision (`videoref.play_levers`): the play seconds first, then the tempo and the moves (the pacing's
@@ -1208,14 +1208,14 @@ it", `videoref.ENDING_STATED`); a request naming the cursor alone takes only the
 2. *The format step.* Any container, codec, orientation, frame rate or size becomes one small copy
    (`reference.normalise_video`): ffprobe for the facts, ffmpeg to H.264, 360 px on the short side, the rotation
    applied, no audio, the whole clip at `max(2, min(8, 200 / length))` fps (about 200 frames). The 24 s cut is gone:
-   `analysed_s` is the clip's length. Uploads over 120 s are refused with the reason (the case's references are 30-60 s).
+   `analysed_s` is the clip's length. Uploads over 120 s are refused with the reason (the brief's references are 30-60 s).
 3. *The prompt the model sees* (`reference.video_ask`): a fixed preamble (adapt, never copy frames; only the clip's
    clock; no invented mechanics; what is seen apart from what is inferred), the request quoted, the plan's questions
    and ignore list, the clip's length as the only time reference (no cuts, no motion: the understanding comes first),
    and the schema with the general fields and the plan's required fields marked REQUIRED (plus `moves_by_third`,
    `mistakes` and `mistakes_shown` whenever the focus covers the pacing or the ending: the code computes from them).
    **The general reading, always** (`reference.GENERAL_QUESTIONS`, `GENERAL_FIELDS`): what the video shows and what
-   happens, in order; which game it is (Color Block Jam itself or another); the concept in one line; the board
+   happens, in order; which game it is (CBJ itself or another); the concept in one line; the board
    (`reference.BOARD_QUESTION`); the ending, with a fifth wording, "it stops mid-level (no result, no question)", read as
    the game's cliffhanger; the hook; the captions word for word; the HUD at the first frame of play (`hud`: the level
    label, the clock, the last clock); the mechanics and anything on screen the game does not have (`extras_seen`:
@@ -1345,12 +1345,12 @@ it", `videoref.ENDING_STATED`); a request naming the cursor alone takes only the
    blocks, 6 colours, bubbles (the still; about 12 blocks and four bubbles on the first frame). The still read takes
    1-72 s (median 1.5 s on one pass and 31.5 s on the next, 13 readings in parallel on the free tier, the long ones
    waiting out HTTP 429).
-   **The owner's three references** (`../req4-e2e-2026-10-16/READING-ACCURACY-refs-v1.md`; two Color Block Jam
-   trailers and another game's ad, each read with "create a similar game in Color Block Jam", against a truth written
+   **The owner's three references** (`../req4-e2e-2026-10-16/READING-ACCURACY-refs-v1.md`; two CBJ
+   trailers and another game's ad, each read with "create a similar game in CBJ", against a truth written
    by hand from frames): the ending, the structure, the captions, the HUD's level and clock, the board's shape, size,
    blocks, colours and gates, and what the game does not have are right on all three (the structure and the captions
    are judged on the two trailers only); which game it is, 2 of 3 (the HUD-less close-up of the game was read as "a
-   brick puzzle game"). The trailer that failed before (one gameplay part) now reads: Color Block Jam, Level 25, 01:05
+   brick puzzle game"). The trailer that failed before (one gameplay part) now reads: CBJ, Level 25, 01:05
    on the clock, a 4x7 board with one inner wall, 10 blocks in teal, magenta, purple and green (to blue, red, purple,
    green), gates on two sides, the booster buttons not used, stopping mid-level. The colours are the weakest part: the
    reader lists more names than there are colours (twelve for seven on the close-up, "cyan" beside "blue" on the other
@@ -1406,20 +1406,20 @@ constraints: a 45 s request stays 45 s, "no replay" stays, a quoted hook stays):
 | structure | the length (brought into 30-60 s, then from the play: `videoref.fit_length` below), `sequence.replay` only when the reference has a replay part or repeats a moment, `sequence.hold_s` from a result part, `sequence.end_card`; a reference that is play from start to end (90% or more play, no end card: round 1's trailers) keeps the ad play: `sequence.intro_s` 0 (the hook caption over the play), `sequence.hold_s` 0 (the question or result held as briefly as the engine allows), `pacing.tempo` calm (studio then records the longest play that fits) and the long play's `level.moves`; the end card keeps what is left; the same for a reference shorter than 90% of the ad (LolTap, 15 s into 30 s): its hook and end card keep their own seconds and the play takes the extra time |
 | board_colours | `level.colours` only: the blocks' colours read, mapped to the game's own (round 2, case 10: "take only the block colours" had been read as the look, its palette put into the background); nothing else of the board |
 | screen (also covered by look) | `visuals.camera_zoom` from the board's share of the frame (none at 55% or less, the most `brief.ZOOM_RANGE` allows, 1.12, at 75% or more), `visuals.hud_level` and `visuals.hud_timer` shown or hidden as the reference shows them, `visuals.cursor` the hand or none as seen; with the clock hidden, a near-fail's or a time-out's seconds go into the hurry caption ("2 seconds left!") and an assumption says so (round 2, case 09: trailer 3's close-up with no HUD) |
-| board, HUD | when the reference is Color Block Jam itself (it says so, or its HUD reads "LEVEL n" with the game's clock and no other game is named: a proper name such as "Wood Color Jam" blocks it, a description such as "another puzzle game" does not, `videoref.named_game`): `level.label` from the HUD's level number and `gameplay.timer_s` from the clock at the first frame of play, each only when the request does not state its own: the clock for a win and a cliffhanger (which stops mid-level), for a near-fail or a time-out only when about the ad's length less 8 s of play can bring it down to the ending's seconds (else an assumption says why); a request that asks for "the same starting time as this video" has it set whatever the ending, the row saying when the ending makes it impossible. brief.validate (not changed) keeps a starting clock for a win only and drops it for the other endings with its own note, so a cliffhanger's 01:05 does not reach the recording (round 2, case 05: result.json `timer_start` 27-28 s) |
+| board, HUD | when the reference is CBJ itself (it says so, or its HUD reads "LEVEL n" with the game's clock and no other game is named: a proper name such as "Wood Color Jam" blocks it, a description such as "another puzzle game" does not, `videoref.named_game`): `level.label` from the HUD's level number and `gameplay.timer_s` from the clock at the first frame of play, each only when the request does not state its own: the clock for a win and a cliffhanger (which stops mid-level), for a near-fail or a time-out only when about the ad's length less 8 s of play can bring it down to the ending's seconds (else an assumption says why); a request that asks for "the same starting time as this video" has it set whatever the ending, the row saying when the ending makes it impossible. brief.validate (not changed) keeps a starting clock for a win only and drops it for the other endings with its own note, so a cliffhanger's 01:05 does not reach the recording (round 2, case 05: result.json `timer_start` 27-28 s) |
 | board | the level's type, part by part, where the request states nothing about it (`videoref.stated`: board shape words, a size, a block count, colours for the blocks, piece words, difficulty words; "the game's own level" or "level 3" takes nothing): `level.source` generate, `level.shape`, `level.width`/`height` clamped to what the generator builds for that shape (4-9 by 4-10; a narrow centre at least 6 rows, lanes 7x6, a ring 6x6, a cross 5x5, a door 5x4), `level.blocks` (2-10, and no more than the board's free cells hold at the generator's packed fill; when the blocks read do not fit the size read, the board first grows a cell a side within what the generator builds for the shape, then the blocks are cut, and the card says which: "the board read 4x7 holds 6; 5x8 is used so 9 fit"), `level.style` "symmetric" when the layout is mirror-symmetric and the request says nothing about the level's look, `level.colours` (each distinct reference colour to its own game colour, at the least total distance: a colour takes its nearest free one, so purple and magenta give purple and red, and the mapping is on the card and in the assumptions, "magenta -> red: the game has no magenta, purple is taken by purple"; more than seven names: the closest two are one colour, never two of the game's own), `level.pieces`. When the block count is capped (more than 10 read), the board shrinks within the shape's sizes so the made board keeps the reference's blocks per cell ("the reference has 16 blocks on 8x8 (0.25 a cell); the brief takes 10 at most, so the board is 7x6"), and a full reference (60% or more of its cells under blocks, as the code measures it on the crop; never from the "busy" word, which scored 2 of 12) takes the generator's packed look when the request says nothing about the look. A cliffhanger reference that stops with 3 or more blocks still on the board (`ending_read.blocks_left`) cuts with 3 blocks left, the most the game's cliffhanger allows (`gameplay.blocks_left`). How busy it looks is recorded and shown, never applied (against the level's difficulty it read 1-2 of 12): the difficulty stays the request's, the ending rule's (hard for a near-fail) or the generator's default. The level is then generated and solved by the generator's own rules; the plan row says "a new board of this type is generated and solved, its cells are not copied", and "its exact layout" goes to not copied |
 
 A mechanic the game does not have (another game's bubbles, ice, keys, locks, boosters, bombs, any other obstacle) is
 never created, drawn, simulated or used (the owner's rule, 2026-10-17): it adds no block, no wall and no shape, the
 level is built only from the shape, size, block count, colours and pieces, and each one is one line "<it>: not used:
-not in Color Block Jam" in the assumptions and on the card, and goes to not copied. The board's obstacles are listed
+not in CBJ" in the assumptions and on the card, and goes to not copied. The board's obstacles are listed
 the same way (a mechanics entry about the same thing gives way to them). A row of `videoref.MECHANICS` only names the
 game's own parameter that the moment shares, when the brief has it ("a hammer booster: not used: not in Color Block
 Jam; the ad keeps the game's own near-fail"; a merge, the game's own fast finish). The game's own things under other
 names stay native: drags, gates, the clock, the result screens, the HUD, wall cells (the board's shape), the grid, the
 hand cursor; a level map or chapters are "not used: an ad shows one level". Booster buttons and anything else on
 screen the build does not have (`extras_seen`, from the whole clip and from the full-resolution still) are "not used:
-not in Color Block Jam" too, once per thing. What the planner's model took from a video's colours
+not in CBJ" too, once per thing. What the planner's model took from a video's colours
 on its own, when the look was not the focus and the request names no colours, is put back to the game's own look.
 `brief.reference` is the provenance, written by code: `file`, `focus`, `level`, `analysed_s`, `adapted` (in words: "the
 challenge hook", "a near-fail ending", "the pacing (normal, speeds up)", "the board (an open 6x6 board with 10 blocks in
@@ -1438,7 +1438,7 @@ unfinished board showed "Board cleared!", trailer 2's "Can you beat the clock?")
 **Round 3 (2026-10-17): the length, the ending and the result as the request words them** (the video workflow only:
 `audit.asked(..., case_range=True)`, `videoref.stated(..., video=True)`, `fit_captions(..., chain=True)`,
 `guided.video_ref`; the text and image workflows keep their behaviour, and create's `keep_asked` still reads "30-60
-second" as 60 s). A range inside the case's 30-60 s ("a new 30–60 second ad", "30-60s", "30 to 60 seconds") is no
+second" as 60 s). A range inside the brief's 30-60 s ("a new 30–60 second ad", "30-60s", "30 to 60 seconds") is no
 stated length (`audit.asked` records it as `length_range`, an info row in the guided evaluation; three ads had been made 60 s long with 10-41 s end cards); a single number ("a 45 second
 ad") is, and is the brief's before the play is planned. With no single length, the length comes from the play
 (`videoref.fit_length`): the reference's own length in the range (or the plan's) is the most, and when the play levers
@@ -1508,7 +1508,7 @@ miss of "Reference: the board" does not unpin the board (that row now measures t
 generator's, fixed by a new take; round 2, case 04 had re-planned the raw "holes 4x7"). The reference's length is kept
 whatever the miss
 (a part-length miss is fixed with the timing fields; round 1's third run had gone 30 s to 45 s). When the play is too
-short (the case's "gameplay at the centre" fails, or the ad has under 60% of the reference's play: an all-play
+short (the brief's "gameplay at the centre" fails, or the ad has under 60% of the reference's play: an all-play
 reference's ad sits near 80% by the engine's cap, and raising its board there only changed the board, round 2 case 05),
 the reference's board yields: the revision raises its blocks by 3 (at most 10) and the size by up to a cell a side to hold them, and says
 "the reference's board was too small to fill the play".
@@ -1518,7 +1518,7 @@ focus, the level, the questions, what was ignored, the why), the parts as a shor
 model's own seconds when they were snapped, and the model's own label beside a relabelled purpose), the confidence (a
 one-line warning when low; it decides nothing), what was adapted and what
 was not copied, the board read and what was taken from it (with the colour mapping), the HUD's level and clock taken
-from a Color Block Jam reference, the mechanics translated and the list "Not used: not in Color Block Jam", and "the
+from a CBJ reference, the mechanics translated and the list "Not used: not in CBJ", and "the
 parts were not usable" when they were dropped; the prompt the model saw is under "What the model was asked".
 
 **Evaluation: the reference rows** (`audit.reference_rows`, group "reference", from "reference"; fed to the loop like the
@@ -1569,7 +1569,7 @@ through `videoref.apply`, the mechanics table, the provenance, the own-creative 
 failing, the guided plan end to end with a fake planner and a fake multimodal model) and the dispatch tests in
 `tests/test_app.py`.
 
-## Length (case p.2: 30-60 s)
+## Length (brief p.2: 30-60 s)
 
 Ads are 30-60 s; a shorter request is raised to 30 with a reason. When a level plays too few
 drags for the length, the showcase or the game's own level is swapped for a generated one of
@@ -1583,7 +1583,7 @@ beyond 6 s and the brief says what filled it. An asked block count that caps the
 must be moving within the first second (viewers decide then). The primary play is never slowed in
 post: the HUD clock is on screen and must tick in real time.
 
-Fixes from the case-requirement test of 2026-10-13 (see ../CASE-TEST-REPORT-2026-10-13.md):
+Fixes from the brief-requirement test of 2026-10-13 (see ../CASE-TEST-REPORT-2026-10-13.md):
 an edit keeps the game's own level file by name (the HUD number stays); an edit that plans the
 same moves reuses the parent's recording; rendering noise on a re-filmed recording with the same
 game state is not a change; hesitations are clamped per ending; "speeding up" and prompts in
@@ -1630,7 +1630,7 @@ cell by cell with the image path (`imageread.read` + `imagecells`), verified on 
 asked changes apply in code (`imageplan.copy_spec`): fewer or more blocks, half the blocks, easier (new today:
 `imagecells.remove_blocks`, `add_blocks`), one more or fewer colour, a recolour, a mirror, harder. "A level like this",
 "the same kind of level" and "a new board of this type" keep the type path. The control row says which, in one line, and
-a revision never changes a copied board. A Turkish request is translated once for the parsers (as the image path does). When the video is Color Block Jam itself, the copied board is shown in the colours the footage shows (the live game's palette differs from the build's: teal, magenta, violet, lime in trailer 2), each slot's block and door repainted together and the mapping said; a request naming block colours keeps its own, and a revision never repaints from a viewer's remark. A cliffhanger keeps an asked starting clock (the trailer's 01:05 with "keep its clock"; brief.check and play.fit_clock, 2026-10-19): the cut comes wherever the clock stands; a near-fail and a time-out still land on their planned second. The cell reading cross-checks the colour count against the whole-frame read and splits one name over two hue clusters (V3: the yellow plus and the orange cubes were both "orange"); a copied board's play is estimated against the stated length at plan time, the fastest fitting tempo is set, and when none fits the plan says the length the ad will need and the loop does not try to shorten what cannot be shortened (videoref.copied_board_pace). Another game's bubbles, covers and counters are not blocks to the reader (their cells are floor, said). Two rows of the image path now run on every workflow: "blocks left at the cut" (a time-out's one-block limit is said in the plan and the row, never silent) and "the end card is a card, not padding" (at most 8 s).
+a revision never changes a copied board. A Turkish request is translated once for the parsers (as the image path does). When the video is CBJ itself, the copied board is shown in the colours the footage shows (the live game's palette differs from the build's: teal, magenta, violet, lime in trailer 2), each slot's block and door repainted together and the mapping said; a request naming block colours keeps its own, and a revision never repaints from a viewer's remark. A cliffhanger keeps an asked starting clock (the trailer's 01:05 with "keep its clock"; brief.check and play.fit_clock, 2026-10-19): the cut comes wherever the clock stands; a near-fail and a time-out still land on their planned second. The cell reading cross-checks the colour count against the whole-frame read and splits one name over two hue clusters (V3: the yellow plus and the orange cubes were both "orange"); a copied board's play is estimated against the stated length at plan time, the fastest fitting tempo is set, and when none fits the plan says the length the ad will need and the loop does not try to shorten what cannot be shortened (videoref.copied_board_pace). Another game's bubbles, covers and counters are not blocks to the reader (their cells are floor, said). Two rows of the image path now run on every workflow: "blocks left at the cut" (a time-out's one-block limit is said in the plan and the row, never silent) and "the end card is a card, not padding" (at most 8 s).
 
 The evaluation gained the game's design rules on EVERY workflow (`audit.door_rows`, `audit.colour_rows`): "Rules: the
 level" no longer claims a door rule it never checked; "Rules: doors and colours" fails a block colour with no door, a
@@ -1639,10 +1639,10 @@ levels); "Rules: colours tell apart" fails two used colours shown closer than th
 with one caption name (two blues through one door); "Rules: doors used" is info. The slot mapping of a read colour now
 weighs the hue too (trailer 2's violet went to dark green by RGB alone; by hue the magenta becomes red and the violet
 stays purple), and a violet at 245-262 degrees counts as blue or purple to the pixel check. Test set:
-`~/rollic-case/req4-video-refs-2026-10-19/` (PROMPTS.md, REFERENCE-VIDEOS-ANALYSIS.md, RESULTS.md).
+`~/cbj-work/req4-video-refs-2026-10-19/` (PROMPTS.md, REFERENCE-VIDEOS-ANALYSIS.md, RESULTS.md).
 
 ### Image-guided: the board IS the picture's (2026-10-19)
-A Color Block Jam board in the reference picture is now read **cell by cell** (`src/cbj/imagecells.py`: the grid's corners,
+A CBJ board in the reference picture is now read **cell by cell** (`src/cbj/imagecells.py`: the grid's corners,
 a perspective warp with a lettered grid, every block, hole, gate and thin wall line in strict JSON, verified against the
 picture's pixels, built into the game's level JSON and solved by the tool's solver). With the board role on, the level
 is that board (`level.source = "picture"`, `level.file` under `studio/levels/picture_*.json`), with the request's own
@@ -1651,7 +1651,7 @@ changes applied in code and said: one more or fewer colour (a block recoloured w
 repair, said in the plan; a thin wall between rooms becomes a line of wall cells; "a new board of this type" keeps the
 old type-generation path. Evidence: `studio/_cells/<picture>.json` + the grid overlay PNG.
 
-The evaluation now measures what it could not before (`~/rollic-case/IMAGE-GUIDED-EVAL-CHECKS-2026-10-19.md`):
+The evaluation now measures what it could not before (`~/cbj-work/IMAGE-GUIDED-EVAL-CHECKS-2026-10-19.md`):
 `Image: the board is the picture's` (the made level against the read board, cell for cell), `more or fewer colours than
 the picture`, `a colour became another`, `the board mirrored`, `looks like the picture (viewer)` (the viewer model on a
 side-by-side), and `Coverage: ...` (every parsed ask has a row, or a `not measured` row names the gap). The loop drops a

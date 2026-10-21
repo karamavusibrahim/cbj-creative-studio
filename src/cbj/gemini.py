@@ -1,7 +1,7 @@
 """Gemini as the reader of a reference video (core requirement 4, 2026-10-16).
 
 Measured first, on the tool's own 12 creatives with neutral file names and the same reading pipeline
-(~/rollic-case/req4-e2e-2026-10-16/READING-ACCURACY-gemini.md): Gemini 3.5 Flash-Lite with low thinking
+(~/cbj-work/req4-e2e-2026-10-16/READING-ACCURACY-gemini.md): Gemini 3.5 Flash-Lite with low thinking
 read the ending, the hook, the call to action, the captions and the mechanics right in 12 of 12, the
 structure in 8 of 12 (37 of 44 boundaries within 1 s, 0.5 s mean error), in 4-26 s a reading with no
 errors; NVIDIA build's super-vl on the same files read the ending in 9 of 12 and the structure in 5 of 12

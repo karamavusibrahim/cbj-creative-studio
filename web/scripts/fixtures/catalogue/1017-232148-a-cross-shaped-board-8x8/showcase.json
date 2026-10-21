@@ -28,7 +28,7 @@
       "asked": "The clock runs out with one block still on the board.",
       "plan": "The player clears the board but the clock hits zero one move short, with one block left.",
       "status": "adjusted",
-      "why": "a staged fail is only used for social channels (Color Block Jam's network ads avoid fails); the channel is set to social.",
+      "why": "a staged fail is only used for social channels (CBJ's network ads avoid fails); the channel is set to social.",
       "engine": []
      },
      {
@@ -386,7 +386,7 @@
    "parts": "1017-232148-a-cross-shaped-board-8x8/v1/parts.json",
    "evaluation": {
     "kind": "text",
-    "what": "text-to-creative: the board, the play, the game's rules, every fact the prompt asks for, the case's rows",
+    "what": "text-to-creative: the board, the play, the game's rules, every fact the prompt asks for, the brief's rows",
     "groups": [
      "board",
      "play",
@@ -519,7 +519,7 @@
       },
       {
        "id": "end_title",
-       "text": "Color Block Jam",
+       "text": "CBJ",
        "from_s": 29.0,
        "to_s": 35.0,
        "needs_s": 1.3,
@@ -624,7 +624,7 @@
     "assumptions": [
      "I made the caption colours white text with the picture's purple outline, matching how the game's own banner text looks in the screenshot. Another option was to colour the text purple, but purple text would be hard to read on the grey background.",
      "I built the background from the picture's two biggest colours, grey and steel blue. Another option was a single flat grey.",
-     "Read from T4_cargo_crossroads.png: Color Block Jam level 61: a cross-shaped grid board with blue and orange blocks, viewed from above over a blurred shipping-yard background, with 00:16 left on the clock; colours grey, violet, grey, grey; mood urgent, busy, industrial, playful.",
+     "Read from T4_cargo_crossroads.png: CBJ level 61: a cross-shaped grid board with blue and orange blocks, viewed from above over a blurred shipping-yard background, with 00:16 left on the clock; colours grey, violet, grey, grey; mood urgent, busy, industrial, playful.",
      "T4_cargo_crossroads.png is used as a board reference: a level like the board in the picture: 8x8, 8 blocks in blue, orange (a similar level is generated in that spirit; the exact layout, doors and solution are the generator's, so the puzzle is playable)"
     ],
     "channel": "social",
@@ -770,7 +770,7 @@
         }
        ],
        "notes": {
-        "subject": "Color Block Jam level 61: a cross-shaped grid board with blue and orange blocks, viewed from above over a blurred shipping-yard background, with 00:16 left on the clock",
+        "subject": "CBJ level 61: a cross-shaped grid board with blue and orange blocks, viewed from above over a blurred shipping-yard background, with 00:16 left on the clock",
         "kind": "game screenshot",
         "style": "glossy 3D casual mobile game, toy-brick blocks, top-down view",
         "mood": "urgent, busy, industrial, playful",
@@ -1284,7 +1284,7 @@
       },
       {
        "id": "end_title",
-       "text": "Color Block Jam",
+       "text": "CBJ",
        "from_s": 29.0,
        "to_s": 35.0,
        "needs_s": 1.3,

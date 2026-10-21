@@ -30,8 +30,8 @@ from cbj.draw import PROJECT, SPRITES  # noqa: E402
 # (creative id, versions, title, kind, tagline)
 SHOWCASE = [
     # text-driven
-    ("1012-235537-create-a-difficult-color-block", [1], "The case's own prompt", "create",
-     "The example prompt from the case brief: a difficult narrow-centre level where the player almost fails before solving it."),
+    ("1012-235537-create-a-difficult-color-block", [1], "The brief's own prompt", "create",
+     "The example prompt from the brief brief: a difficult narrow-centre level where the player almost fails before solving it."),
     ("1017-231258-an-hourglass-board-7x9-10", [3, 4, 5], "Hourglass board with caption edits", "create",
      "A hard hourglass board that ends on a question, then two compose-tier edits: a new caption at the cut, and lime-green captions."),
     # image-driven
@@ -48,7 +48,7 @@ SHOWCASE = [
      "The request is translated once; the video's board is copied, mirrored left to right, one block added in the way, and played to a time-out in the game's own look."),
     # controlled modification
     ("1019-125939-the-board-exactly-as-shown", [1, 3], "Keep everything, replace this object with the attached asset", "edit",
-     "The case's own editing sentence: the end card's picture replaced from an attached file; 1,336 of 1,440 frames reused byte for byte, the changed pixels inside the end card's box."),
+     "The brief's own editing sentence: the end card's picture replaced from an attached file; 1,336 of 1,440 frames reused byte for byte, the changed pixels inside the end card's box."),
     ("1019-130745-same-board-as-this-ad", [1, 4], "A picture behind the board: re-filmed, game state identical", "edit",
      "A background change re-films the same level and the same drags in the game; the report shows the game state equal on every frame and the timing pinned."),
     ("1015-074810-create-a-hard-color-block", [1, 12, 13, 14, 15, 16, 17], "The editing ladder", "edit-ladder",

@@ -187,7 +187,7 @@ needs_stock = pytest.mark.skipif(not PLAYER_STOCK.is_dir(), reason="run `cbj bui
 
 @needs_stock
 def test_the_stock_game_shows_out_of_time_then_level_completed(tmp_path):
-    # Rollic's game as shipped: the clock runs on during the last exit slide.
+    # the publisher's game as shipped: the clock runs on during the last exit slide.
     job = slide_job(tmp_path, "stock")
     job["stop_clock_on_last_exit"] = False
     r = run_player(job, app=PLAYER_STOCK)

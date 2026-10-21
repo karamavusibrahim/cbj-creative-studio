@@ -1,4 +1,4 @@
-"""Ideas from trends (2026-10-18, an optional extra beyond the case): what is trending right now,
+"""Ideas from trends (2026-10-18, an optional extra beyond the brief): what is trending right now,
 turned into Color Block Jam ad prompts the engine can make.
 
 Why. A performance-marketing team starts many creatives from a current moment (a season, a game

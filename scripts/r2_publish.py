@@ -11,7 +11,7 @@ brief.json, level.json, review.json + sheet, inventory.json, uploads/ and sprite
 <id>/showcase.json, exactly as the static showcase does, so the web app can read the bucket as a second showcase.
 
   uv run python scripts/r2_publish.py select [--limit 100]            # print the selection (no files touched)
-  uv run python scripts/r2_publish.py export [--limit 100] [--out DIR] # write the files locally (default ~/rollic-case/r2-export)
+  uv run python scripts/r2_publish.py export [--limit 100] [--out DIR] # write the files locally (default ~/cbj-work/r2-export)
   uv run python scripts/r2_publish.py upload [--out DIR] [--bucket cbj-creatives] [--prefix ""]
                                                                       # upload DIR to R2; needs R2_ACCOUNT_ID,
                                                                       # R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY in .env
@@ -193,7 +193,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=("select", "export", "upload"))
     ap.add_argument("--limit", type=int, default=100)
-    ap.add_argument("--out", default=str(Path.home() / "rollic-case" / "r2-export"))
+    ap.add_argument("--out", default=str(Path.home() / "cbj-work" / "r2-export"))
     ap.add_argument("--bucket", default="cbj-creatives")
     ap.add_argument("--prefix", default="")
     a = ap.parse_args()

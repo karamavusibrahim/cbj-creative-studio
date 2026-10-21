@@ -1,7 +1,7 @@
 """Designer feedback (2026-10-18): what the people using the studio say went wrong, kept as
 structured records the owner reads to adjust the agentic workflows by hand.
 
-Why. The case tool will be used by many designers. The workflows are prompt-as-contract code the
+Why. The brief tool will be used by many designers. The workflows are prompt-as-contract code the
 owner tunes; the fastest way to find what to tune is to hear, per creative and per version, what a
 designer expected and what they got. So every record is a correction record in the sense of
 COLLEAGUE.SKILL (Zhou et al., 2026, arXiv:2605.31264, section 4.2): {scene, wrong, correct}, where

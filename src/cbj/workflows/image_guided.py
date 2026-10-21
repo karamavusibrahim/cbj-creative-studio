@@ -1,5 +1,5 @@
-"""Image-guided creative generation: a prompt plus a reference picture in, a new creative out (the case's core
-requirement 3, case p.6; rules I1-I16 in ~/rollic-case/REQ3-IMAGE-GUIDED-RULES-2026-10-17.md), with its own evaluate /
+"""Image-guided creative generation: a prompt plus a reference picture in, a new creative out (the brief's core
+requirement 3, brief p.6; rules I1-I16 in ~/cbj-work/REQ3-IMAGE-GUIDED-RULES-2026-10-17.md), with its own evaluate /
 feed back / revise loop. See workflows/__init__.py.
 
 The input is a prompt AND a picture (no video: a video, with or without a picture, is the video-guided workflow). The
@@ -822,7 +822,7 @@ def pin_level(prompt: str, before: dict, after: dict, misses: list[dict]) -> lis
 
 
 def revise_once(log: studio.Log, prompt: str, v: dict, review_on: bool) -> dict:
-    """One round of the loop (the case p.10), as guided.revise_once, with the picture's board and look kept (the
+    """One round of the loop (the brief p.10), as guided.revise_once, with the picture's board and look kept (the
     reading is not repeated). A miss of a board row is the generator's: it makes a new take (another seed) even when the
     planner finds nothing to change."""
     from .. import audit, videoref

@@ -646,7 +646,7 @@ def _clock(seconds: float) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="cbj", description="Color Block Jam level tools")
+    p = argparse.ArgumentParser(prog="cbj", description="CBJ level tools")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("show", help="draw a level")
@@ -674,7 +674,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="the Unity project to copy (default: ../CBJ)")
     s.add_argument("--unity", default="/Applications/Unity/Hub/Editor/6000.3.5f1/Unity.app/Contents/MacOS/Unity")
     s.add_argument("--stock", action="store_true",
-                   help="build the game as Rollic shipped it, without the game patch (build/CBJRunner-stock.app)")
+                   help="build the game as shipped, without the game patch (build/CBJRunner-stock.app)")
     s.set_defaults(func=_cmd_build_player)
 
     s = sub.add_parser("render", help="record a move script in the real game as a 9:16 video")

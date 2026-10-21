@@ -1,6 +1,6 @@
 # Video-guided test set 3: the owner's three reference videos, seven hard asks (2026-10-19 afternoon)
 
-Why: the owner's creative of 10:37 ("use same game design, same scenario just use fewer blocks" on Color Block Jam
+Why: the owner's creative of 10:37 ("use same game design, same scenario just use fewer blocks" on CBJ
 Trailer 2) came back as a board of the trailer's TYPE, and he reported "two different blues through one gate, one colour
 with no gate". Replaying that creative through the game's rules found one blue, every colour with a door and every exit
 legal, so the report could not be reproduced on that file; what WAS found: the evaluation's "Rules: the level" row claimed
